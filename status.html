@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<title>Application Status — HAF CleverPay</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Montserrat:wght@700;800;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="status.css">
+</head>
+<body>
+
+<header class="bar">
+  <a href="/" class="logo">
+    <div class="logo-m">H</div>
+    <div class="logo-t">Clever<span>Pay</span></div>
+  </a>
+  <button class="theme-btn" onclick="toggleTheme()">
+    <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+  </button>
+</header>
+
+<nav class="steps" id="step-bar">
+  <div class="step done"><div class="step-n">✓</div>Account</div>
+  <div class="step-sep done"></div>
+  <div class="step done"><div class="step-n">✓</div>Documents</div>
+  <div class="step-sep done" id="sep-3"></div>
+  <div class="step active" id="step-3"><div class="step-n" id="step3-n">3</div>Review</div>
+  <div class="step-sep" id="sep-4"></div>
+  <div class="step" id="step-4"><div class="step-n" id="step4-n">4</div>Access</div>
+</nav>
+
+<main class="page">
+
+  <!-- STATUS CARD -->
+  <div class="status-card" id="status-card">
+    <div class="status-icon pending" id="status-icon">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+    </div>
+    <div class="status-title pending" id="status-title">Under Review</div>
+    <div class="status-body" id="status-body">Your application has been submitted. The HAF compliance team usually responds within 24 hours.</div>
+
+    <div class="ref-box" onclick="copyRef()">
+      <div>
+        <div class="rb-label">Your reference</div>
+        <div class="rb-val" id="ref-display">—</div>
+        <div class="rb-hint">Keep this — you may need it if you contact us.</div>
+      </div>
+      <div class="copy-btn" id="copy-btn">Copy</div>
+    </div>
+  </div>
+
+  <!-- ACCESS PANEL (shown when approved) -->
+  <div class="access-panel" id="access-panel">
+    <div class="ap-head">Access granted</div>
+    <div class="ap-sub">Your account is verified and active. Log in to your platforms below using your HAF username.</div>
+    <div class="ap-username" id="ap-username">—</div>
+    <div class="ap-uname-label">Your HAF username</div>
+    <div class="access-links">
+      <a href="https://plna.usehaf.co.uk" target="_blank" class="access-link" id="plna-link">
+        <div class="al-icon">
+          <svg viewBox="0 0 24 24"><rect x="1" y="3" width="15" height="13" rx="1"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
+        </div>
+        <div class="al-name">HAF PLNA</div>
+        <div class="al-url">plna.usehaf.co.uk</div>
+      </a>
+      <a href="https://knect.usehaf.co.uk" target="_blank" class="access-link">
+        <div class="al-icon">
+          <svg viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+        </div>
+        <div class="al-name">HAF KNECT</div>
+        <div class="al-url">knect.usehaf.co.uk</div>
+      </a>
+    </div>
+  </div>
+
+  <!-- REBATE PANEL (freight approved) -->
+  <div class="rebate-panel" id="rebate-panel">
+    <div class="rbt-head">Your rebate account</div>
+    <div class="rbt-row"><span class="rbt-label">Payment method</span><span class="rbt-val">Pay upfront</span></div>
+    <div class="rbt-row"><span class="rbt-label">Rebate tier</span><span class="rbt-val or" id="rebate-tier">Standard (3%)</span></div>
+    <div class="rbt-row"><span class="rbt-label">Rebate wallet balance</span><span class="rbt-val gn">£0.00</span></div>
+    <div class="rbt-row"><span class="rbt-label">Credit limit</span><span class="rbt-val">None — upfront only</span></div>
+  </div>
+
+  <!-- REJECTION PANEL -->
+  <div class="reject-panel" id="reject-panel">
+    <div class="rp-head">Application not approved</div>
+    <div class="rp-reason" id="reject-reason">The compliance team will contact you with further details.</div>
+    <button class="btn-restart" onclick="window.location.href='index.html'">
+      <svg viewBox="0 0 24 24"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.5"/></svg>
+      Start new application
+    </button>
+  </div>
+
+  <!-- TIMELINE -->
+  <div class="timeline" id="timeline">
+    <div class="tl-item">
+      <div class="tl-dot done">
+        <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+      </div>
+      <div class="tl-body">
+        <div class="tl-title">Account details submitted</div>
+        <div class="tl-sub" id="tl-submitted">—</div>
+      </div>
+    </div>
+    <div class="tl-item">
+      <div class="tl-dot done">
+        <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+      </div>
+      <div class="tl-body">
+        <div class="tl-title">Documents uploaded</div>
+        <div class="tl-sub" id="tl-docs-count">—</div>
+      </div>
+    </div>
+    <div class="tl-item">
+      <div class="tl-dot active" id="tl-review-dot">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      </div>
+      <div class="tl-body">
+        <div class="tl-title" id="tl-review-title">Compliance review</div>
+        <div class="tl-sub" id="tl-review-sub">HAF team checking your documents — usually within 24 hours.</div>
+      </div>
+    </div>
+    <div class="tl-item">
+      <div class="tl-dot" id="tl-access-dot">
+        <svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+      </div>
+      <div class="tl-body">
+        <div class="tl-title">Access granted</div>
+        <div class="tl-sub" id="tl-access-sub">You will receive a WhatsApp message with your login details.</div>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<script>
+function toggleTheme(){
+  const h = document.documentElement;
+  h.dataset.theme = h.dataset.theme === 'dark' ? 'light' : 'dark';
+}
+
+function copyRef(){
+  const ref = document.getElementById('ref-display').textContent;
+  if(navigator.clipboard) navigator.clipboard.writeText(ref);
+  const btn = document.getElementById('copy-btn');
+  btn.textContent = 'Copied!';
+  setTimeout(() => { btn.textContent = 'Copy'; }, 2000);
+}
+
+function fmtDate(iso){
+  if(!iso) return '—';
+  const d = new Date(iso);
+  return d.toLocaleDateString('en-GB', {day:'numeric', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit'});
+}
+
+function loadPage(){
+  const raw = localStorage.getItem('cp_application');
+  if(!raw){ window.location.href='index.html'; return; }
+  const app = JSON.parse(raw);
+
+  document.getElementById('ref-display').textContent = app.ref;
+  document.getElementById('tl-submitted').textContent = fmtDate(app.submitted);
+
+  const docCount = (app.docs || []).length;
+  document.getElementById('tl-docs-count').textContent = docCount + ' document' + (docCount !== 1 ? 's' : '') + ' uploaded';
+
+  /* Hide driver PLNA link for freight, keep both for drivers */
+  if(app.type === 'freight'){
+    const plna = document.getElementById('plna-link');
+    if(plna) plna.style.display = 'none';
+  }
+
+  renderStatus(app);
+}
+
+function renderStatus(app){
+  const status = app.status || 'pending';
+  const icon = document.getElementById('status-icon');
+  const title = document.getElementById('status-title');
+  const body = document.getElementById('status-body');
+
+  icon.className = 'status-icon ' + status;
+  title.className = 'status-title ' + status;
+
+  if(status === 'pending'){
+    icon.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>';
+    title.textContent = 'Under Review';
+    body.textContent = 'Your application has been submitted. The HAF compliance team usually responds within 24 hours.';
+  } else if(status === 'reviewing'){
+    icon.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
+    title.textContent = 'In Review';
+    body.textContent = 'The team is actively reviewing your documents. You will be notified by WhatsApp shortly.';
+  } else if(status === 'approved'){
+    icon.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+    title.textContent = 'Approved';
+    body.textContent = 'You\'re all set! Your HAF account is verified and ready to use.';
+
+    document.getElementById('access-panel').classList.add('show');
+    document.getElementById('ap-username').textContent = app.username;
+
+    /* Update steps */
+    const s3 = document.getElementById('step-3');
+    s3.className = 'step done';
+    s3.querySelector('.step-n').textContent = '✓';
+    document.getElementById('sep-4').className = 'step-sep done';
+    const s4 = document.getElementById('step-4');
+    s4.className = 'step granted';
+    s4.querySelector('.step-n').textContent = '✓';
+
+    /* Timeline */
+    document.getElementById('tl-review-dot').className = 'tl-dot done';
+    document.getElementById('tl-review-dot').innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+    document.getElementById('tl-review-title').textContent = 'Compliance approved';
+    document.getElementById('tl-review-sub').textContent = 'All documents verified by the HAF compliance team.';
+    document.getElementById('tl-access-dot').className = 'tl-dot done';
+    document.getElementById('tl-access-dot').innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+    document.getElementById('tl-access-sub').textContent = 'Log in to PLNA and HAF KNECT using your username above.';
+
+    /* Freight rebate panel */
+    if(app.type === 'freight'){
+      const rp = document.getElementById('rebate-panel');
+      rp.classList.add('show');
+      const cfg = JSON.parse(localStorage.getItem('cp_config')||'null');
+      const stdRate = cfg?.rebate?.standard ? cfg.rebate.standard + '%' : 'TBC';
+      const knectRate = cfg?.rebate?.knect ? cfg.rebate.knect + '%' : 'TBC';
+      const tier = app.knect ? `KNECT member (${knectRate})` : `Standard (${stdRate})`;
+      document.getElementById('rebate-tier').textContent = tier;
+    }
+
+  } else if(status === 'rejected'){
+    icon.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>';
+    title.textContent = 'Not Approved';
+    body.textContent = 'Unfortunately your application was not successful. See below for details.';
+
+    document.getElementById('reject-panel').classList.add('show');
+    if(app.rejectReason){
+      document.getElementById('reject-reason').textContent = app.rejectReason;
+    }
+  }
+}
+
+loadPage();
+
+/* Poll every 8s so status updates from team.html reflect here without page reload */
+setInterval(() => {
+  const raw = localStorage.getItem('cp_application');
+  if(raw) renderStatus(JSON.parse(raw));
+}, 8000);
+</script>
+</body>
+</html>

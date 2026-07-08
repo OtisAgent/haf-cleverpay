@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<title>Upload Documents — HAF CleverPay</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Montserrat:wght@700;800;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="docs.css">
+</head>
+<body>
+
+<header class="bar">
+  <a href="/" class="logo">
+    <div class="logo-m">H</div>
+    <div class="logo-t">Clever<span>Pay</span></div>
+  </a>
+  <button class="theme-btn" onclick="toggleTheme()" title="Toggle theme">
+    <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+  </button>
+</header>
+
+<nav class="steps">
+  <div class="step done"><div class="step-n">✓</div>Account</div>
+  <div class="step-sep done"></div>
+  <div class="step active"><div class="step-n">2</div>Documents</div>
+  <div class="step-sep"></div>
+  <div class="step"><div class="step-n">3</div>Review</div>
+  <div class="step-sep"></div>
+  <div class="step"><div class="step-n">4</div>Access</div>
+</nav>
+
+<main class="page">
+  <div class="page-head">
+    <div class="page-kicker" id="page-kicker">Driver Account</div>
+    <h1 class="page-title">Upload your documents</h1>
+    <p class="page-sub" id="page-sub">We need these to verify your compliance before activating your account. All files are encrypted.</p>
+  </div>
+
+  <div class="ref-strip">
+    <div>
+      <div class="ref-label">Application reference</div>
+      <div class="ref-val" id="ref-val">Loading…</div>
+    </div>
+    <div>
+      <div class="ref-label">Account type</div>
+      <div class="ref-val" id="type-val">—</div>
+    </div>
+  </div>
+
+  <div class="upload-progress">
+    <div class="up-head">
+      <span class="up-label">Documents uploaded</span>
+      <span class="up-count" id="up-count">0 / 0</span>
+    </div>
+    <div class="up-bar"><div class="up-fill" id="up-fill" style="width:0%"></div></div>
+  </div>
+
+  <div id="doc-section"></div>
+
+  <div class="info-box">
+    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+    <span>Optional documents can be uploaded later via your CleverPay account. Required documents must be in place before activation.</span>
+  </div>
+
+  <div class="btn-row">
+    <button class="btn btn-gh" onclick="history.back()">
+      <svg viewBox="0 0 24 24"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+      Back
+    </button>
+    <button class="btn btn-or" id="submit-btn" onclick="submitDocs()" disabled>
+      Submit application
+      <svg viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+    </button>
+  </div>
+</main>
+
+<script>
+function toggleTheme(){
+  const h = document.documentElement;
+  h.dataset.theme = h.dataset.theme === 'dark' ? 'light' : 'dark';
+}
+
+/* Full UK-compliant document sets — mirrors team.html DEFAULT_CONFIG */
+const DEFAULT_DRIVER_DOCS = [
+  {id:'dl-front',     name:"Driving licence — front",           hint:"Front of your DVLA photocard. Must show the correct category (B for vans, C1 for vehicles 3.5–7.5T, C for lorries).",            req:true},
+  {id:'dl-back',      name:"Driving licence — back",            hint:"Back of the photocard showing your vehicle categories and any endorsements.",                                                       req:true},
+  {id:'h-r-ins',      name:"Hire & Reward insurance",           hint:"A specific courier/delivery policy is required. Standard business use or social/domestic policies do not cover paid delivery work.", req:true},
+  {id:'mot',          name:"MOT certificate",                   hint:"Must be current and valid. All vehicles over 3 years old must hold a valid annual MOT.",                                            req:true},
+  {id:'right-work',   name:"Right to work evidence",            hint:"UK or Irish passport, biometric residence permit, or your Home Office online share code.",                                         req:true},
+  {id:'git-ins',      name:"Goods in Transit insurance",        hint:"Covers cargo in your vehicle against theft, loss or damage. Minimum £10,000 recommended; most HAF contracts require more.",       req:false},
+  {id:'pub-liability',name:"Public liability insurance",        hint:"Minimum £1 million per claim. Covers third-party injury or property damage arising from your work.",                               req:false},
+  {id:'dbs',          name:"DBS check certificate",             hint:"Basic DBS disclosing unspent convictions. Enhanced DBS required if delivering to schools or care homes.",                          req:false},
+  {id:'hmrc-utr',     name:"HMRC self-employment registration", hint:"Your UTR (Unique Taxpayer Reference) from HMRC — a 10-digit number confirming you are registered as self-employed.",              req:false},
+  {id:'driver-cpc',   name:"Driver CPC / DQC card",            hint:"Required only if you drive vehicles over 3,500kg (lorries, HGVs). Not needed for standard van drivers.",                         req:false},
+  {id:'operator-lic', name:"Operator's licence",               hint:"Required for vehicles over 3,500kg used for hire-and-reward work. Not needed for standard van/car couriers.",                     req:false},
+];
+const DEFAULT_FREIGHT_DOCS = [
+  {id:'incorp',       name:"Certificate of Incorporation",      hint:"Your Companies House certificate confirming the business is registered in the UK.",                                                req:true},
+  {id:'pub-liability',name:"Public liability insurance",        hint:"Minimum £1 million per claim. GOV.UK guidance requires all freight forwarding businesses to hold this.",                          req:true},
+  {id:'emp-liability',name:"Employer's liability insurance",    hint:"Minimum £5 million per claim. Required by law if your company employs anyone — even one member of staff.",                        req:true},
+  {id:'biz-address',  name:"Proof of business address",        hint:"Utility bill or bank letter dated within 3 months, showing your registered trading address.",                                      req:true},
+  {id:'eori',         name:"EORI number confirmation",         hint:"Your GB EORI number from HMRC (format: GB + 12 digits). Required if you make or arrange customs declarations.",                    req:false},
+  {id:'prof-indem',   name:"Professional indemnity insurance", hint:"Covers claims arising from errors or omissions in your customs or logistics services causing client loss.",                         req:false},
+  {id:'git-cargo',    name:"Goods in Transit / cargo insurance",hint:"Covers clients' cargo for loss, theft or damage while in your care. Required under BIFA Standard Trading Conditions.",            req:false},
+  {id:'cmr-ins',      name:"CMR insurance certificate",        hint:"Required for international road freight. Covers liability under the CMR Convention (8.33 SDR per kg for loss or damage).",        req:false},
+  {id:'vat-cert',     name:"VAT registration certificate",     hint:"Required if your business is VAT registered. Threshold from April 2024: £90,000 taxable turnover in 12 months.",                  req:false},
+  {id:'bifa',         name:"BIFA membership certificate",      hint:"British International Freight Association membership — industry standard and expected by most commercial clients.",                  req:false},
+];
+
+function getDocList(type){
+  const cfg=JSON.parse(localStorage.getItem('cp_config')||'null');
+  if(cfg&&cfg[type]&&cfg[type].docs){
+    return cfg[type].docs.filter(d=>d.status!=='hidden').map(d=>({id:d.id,name:d.name,hint:d.hint,req:d.status==='required'}));
+  }
+  return type==='driver'?DEFAULT_DRIVER_DOCS:DEFAULT_FREIGHT_DOCS;
+}
+
+const DRIVER_DOCS = [];   /* populated at load time from config */
+const FREIGHT_DOCS = [];  /* populated at load time from config */
+
+const uploaded = {};
+let totalReq = 0;
+let app = null;
+
+function loadPage(){
+  const raw = localStorage.getItem('cp_application');
+  if(!raw){ window.location.href='index.html'; return; }
+  app = JSON.parse(raw);
+
+  document.getElementById('ref-val').textContent = app.ref;
+  document.getElementById('type-val').textContent = app.type === 'driver' ? 'Driver' : 'Freight Forwarder';
+
+  const isDriver = app.type === 'driver';
+  document.getElementById('page-kicker').textContent = isDriver ? 'Driver Account' : 'Freight Forwarder Account';
+  document.getElementById('page-sub').textContent = isDriver
+    ? 'We need these to verify your eligibility as an HAF driver. All files are held securely.'
+    : 'A few documents to confirm your business before we activate your freight account.';
+
+  const docs = getDocList(app.type);
+  totalReq = docs.filter(d => d.req).length;
+
+  const section = document.getElementById('doc-section');
+  const reqDocs = docs.filter(d => d.req);
+  const optDocs = docs.filter(d => !d.req);
+
+  let html = '';
+
+  if(reqDocs.length){
+    html += '<div class="section-label">Required documents</div><div class="doc-list" id="req-list">';
+    reqDocs.forEach(d => { html += docCardHtml(d); });
+    html += '</div>';
+  }
+  if(optDocs.length){
+    html += '<div class="section-label" style="margin-top:.5rem">Optional documents</div><div class="doc-list" id="opt-list">';
+    optDocs.forEach(d => { html += docCardHtml(d); });
+    html += '</div>';
+  }
+
+  section.innerHTML = html;
+
+  docs.forEach(d => {
+    const card = document.getElementById('card-' + d.id);
+    const input = document.getElementById('input-' + d.id);
+    if(!card || !input) return;
+    input.addEventListener('change', () => handleUpload(d.id, d.name, d.req, input, card));
+  });
+
+  updateProgress();
+}
+
+function docCardHtml(d){
+  return `
+  <div class="doc-card" id="card-${d.id}" onclick="document.getElementById('input-${d.id}').click()">
+    <input type="file" id="input-${d.id}" accept=".pdf,.jpg,.jpeg,.png,.heic" style="display:none" onclick="event.stopPropagation()">
+    <div class="doc-icon" id="icon-${d.id}">
+      <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+    </div>
+    <div class="doc-body">
+      <div class="doc-name">${d.name}<span class="${d.req ? 'doc-req' : 'doc-opt'}">${d.req ? 'Required' : 'Optional'}</span></div>
+      <div class="doc-hint" id="hint-${d.id}">${d.hint}</div>
+      <div class="doc-filename" id="fname-${d.id}"></div>
+    </div>
+    <div class="doc-status" id="status-${d.id}">
+      <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+    </div>
+  </div>`;
+}
+
+function handleUpload(id, name, req, input, card){
+  const file = input.files[0];
+  if(!file) return;
+
+  uploaded[id] = {name: file.name, req};
+
+  card.classList.add('uploaded');
+  document.getElementById('fname-' + id).textContent = file.name;
+  document.getElementById('status-' + id).innerHTML = '<svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>';
+
+  updateProgress();
+}
+
+function updateProgress(){
+  const reqUploaded = Object.values(uploaded).filter(u => u.req).length;
+  const total = document.querySelectorAll('.doc-card').length;
+  const totalUp = Object.keys(uploaded).length;
+
+  document.getElementById('up-count').textContent = totalUp + ' / ' + total;
+  const pct = total ? (totalUp / total * 100) : 0;
+  const fill = document.getElementById('up-fill');
+  fill.style.width = pct + '%';
+  fill.classList.toggle('complete', reqUploaded >= totalReq);
+
+  const btn = document.getElementById('submit-btn');
+  btn.disabled = reqUploaded < totalReq;
+  if(reqUploaded >= totalReq){
+    btn.textContent = '';
+    btn.innerHTML = 'Submit application <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>';
+  }
+}
+
+function submitDocs(){
+  const docList = Object.entries(uploaded).map(([id, d]) => ({id, filename: d.name, req: d.req}));
+  app.docs = docList;
+  app.status = 'pending';
+  localStorage.setItem('cp_application', JSON.stringify(app));
+
+  /* Save to team queue */
+  const queue = JSON.parse(localStorage.getItem('cp_team_queue') || '[]');
+  const existing = queue.findIndex(q => q.ref === app.ref);
+  if(existing >= 0) queue[existing] = app;
+  else queue.unshift(app);
+  localStorage.setItem('cp_team_queue', JSON.stringify(queue));
+
+  window.location.href = 'status.html';
+}
+
+loadPage();
+</script>
+</body>
+</html>

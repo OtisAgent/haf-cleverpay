@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<title>Create Account — HAF CleverPay</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Montserrat:wght@700;800;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="index.css">
+</head>
+<body>
+
+<header class="bar">
+  <a href="/" class="logo">
+    <div class="logo-m">H</div>
+    <div class="logo-t">Clever<span>Pay</span></div>
+  </a>
+  <div class="bar-r">
+    <button class="theme-btn" onclick="toggleTheme()" title="Toggle theme">
+      <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+    </button>
+  </div>
+</header>
+
+<nav class="steps">
+  <div class="step active"><div class="step-n">1</div>Account</div>
+  <div class="step-sep"></div>
+  <div class="step"><div class="step-n">2</div>Documents</div>
+  <div class="step-sep"></div>
+  <div class="step"><div class="step-n">3</div>Review</div>
+  <div class="step-sep"></div>
+  <div class="step"><div class="step-n">4</div>Access</div>
+</nav>
+
+<main class="page">
+
+  <!-- STEP A: Choose account type -->
+  <div id="view-type">
+    <div class="page-head">
+      <div class="page-kicker">HAF CleverPay</div>
+      <h1 class="page-title">Create your HAF account</h1>
+      <p class="page-sub">Choose your account type to get started. Compliance checks take up to 24 hours.</p>
+    </div>
+
+    <div class="type-grid">
+      <div class="type-card" id="card-driver" onclick="selectType('driver')">
+        <div class="type-icon">
+          <svg viewBox="0 0 24 24"><rect x="1" y="3" width="15" height="13" rx="1"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
+        </div>
+        <div class="type-name">Driver Account</div>
+        <div class="type-desc">Join the HAF driver network. Take courier and delivery jobs on your terms.</div>
+      </div>
+      <div class="type-card" id="card-freight" onclick="selectType('freight')">
+        <div class="type-icon">
+          <svg viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+        </div>
+        <div class="type-name">Freight Forwarder</div>
+        <div class="type-desc">Move loads on the HAF network. Pay per job, earn rebates as you go.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- STEP B: Driver form -->
+  <div id="view-driver" class="form-section">
+    <div class="page-head" style="text-align:left;margin-bottom:1.4rem">
+      <div class="page-kicker">Driver Account</div>
+      <h1 class="page-title" style="font-size:1.35rem">Your details</h1>
+      <p class="page-sub" style="font-size:.8rem">All fields are required. Your information is held securely.</p>
+    </div>
+
+    <form id="driver-form" onsubmit="submitDriver(event)" novalidate>
+      <div class="section-label">Personal details</div>
+
+      <div class="fi-row">
+        <div class="fg">
+          <label class="fl">First name <span class="req">*</span></label>
+          <input class="fi" id="d-fname" type="text" placeholder="e.g. Alex" autocomplete="given-name" required>
+        </div>
+        <div class="fg">
+          <label class="fl">Last name <span class="req">*</span></label>
+          <input class="fi" id="d-lname" type="text" placeholder="e.g. Johnson" autocomplete="family-name" required>
+        </div>
+      </div>
+
+      <div class="fg">
+        <label class="fl">Email address <span class="req">*</span></label>
+        <input class="fi" id="d-email" type="email" placeholder="your@email.com" autocomplete="email" required>
+      </div>
+
+      <div class="fi-row">
+        <div class="fg">
+          <label class="fl">Mobile number <span class="req">*</span></label>
+          <input class="fi" id="d-phone" type="tel" placeholder="+44 7700 000000" autocomplete="tel" required>
+        </div>
+        <div class="fg">
+          <label class="fl">Date of birth <span class="req">*</span></label>
+          <input class="fi" id="d-dob" type="date" required>
+        </div>
+      </div>
+
+      <div class="section-label" style="margin-top:.5rem">Vehicle details</div>
+
+      <div class="fi-row">
+        <div class="fg">
+          <label class="fl">Vehicle type <span class="req">*</span></label>
+          <select class="fi" id="d-vtype" required>
+            <option value="">Select type</option>
+            <option>Small van</option>
+            <option>Luton van</option>
+            <option>7.5T truck</option>
+            <option>Car / hatchback</option>
+            <option>Motorcycle</option>
+            <option>Bicycle / e-bike</option>
+          </select>
+        </div>
+        <div class="fg">
+          <label class="fl">Vehicle registration <span class="req">*</span></label>
+          <input class="fi" id="d-vreg" type="text" placeholder="e.g. AB12 CDE" style="text-transform:uppercase" required>
+        </div>
+      </div>
+
+      <div class="uname-preview" id="d-uname-preview">
+        <div class="up-label">Your HAF username</div>
+        <div class="up-val" id="d-uname-val">—</div>
+        <div class="up-hint">Save this — you'll use it to log in to PLNA and HAF KNECT.</div>
+      </div>
+
+      <div class="btn-row">
+        <button type="button" class="btn btn-gh" onclick="backToType()">
+          <svg viewBox="0 0 24 24"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+          Back
+        </button>
+        <button type="submit" class="btn btn-or">
+          Continue to documents
+          <svg viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+        </button>
+      </div>
+
+      <div class="sec-note">
+        <svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        <p>Your data is encrypted and only used for compliance verification. It will not be shared with third parties.</p>
+      </div>
+    </form>
+  </div>
+
+  <!-- STEP C: Freight forwarder form -->
+  <div id="view-freight" class="form-section">
+    <div class="page-head" style="text-align:left;margin-bottom:1.4rem">
+      <div class="page-kicker">Freight Forwarder Account</div>
+      <h1 class="page-title" style="font-size:1.35rem">Company details</h1>
+      <p class="page-sub" style="font-size:.8rem">All accounts operate on a pay-upfront basis. No credit lines.</p>
+    </div>
+
+    <form id="freight-form" onsubmit="submitFreight(event)" novalidate>
+      <div class="section-label">Company information</div>
+
+      <div class="fg">
+        <label class="fl">Company name <span class="req">*</span></label>
+        <input class="fi" id="f-company" type="text" placeholder="e.g. NorthFreight UK Ltd" required>
+      </div>
+
+      <div class="fi-row">
+        <div class="fg">
+          <label class="fl">Companies House no. <span class="req">*</span></label>
+          <input class="fi" id="f-crn" type="text" placeholder="e.g. 12345678" required>
+        </div>
+        <div class="fg">
+          <label class="fl">VAT number</label>
+          <input class="fi" id="f-vat" type="text" placeholder="e.g. GB123456789">
+          <div class="fi-hint">Optional — helps with invoice processing.</div>
+        </div>
+      </div>
+
+      <div class="section-label" style="margin-top:.5rem">Contact details</div>
+
+      <div class="fi-row">
+        <div class="fg">
+          <label class="fl">Your name <span class="req">*</span></label>
+          <input class="fi" id="f-name" type="text" placeholder="Full name" autocomplete="name" required>
+        </div>
+        <div class="fg">
+          <label class="fl">Job title</label>
+          <input class="fi" id="f-title" type="text" placeholder="e.g. Operations Manager">
+        </div>
+      </div>
+
+      <div class="fg">
+        <label class="fl">Email address <span class="req">*</span></label>
+        <input class="fi" id="f-email" type="email" placeholder="ops@yourcompany.com" autocomplete="email" required>
+      </div>
+
+      <div class="fg">
+        <label class="fl">Mobile number <span class="req">*</span></label>
+        <input class="fi" id="f-phone" type="tel" placeholder="+44 7700 000000" autocomplete="tel" required>
+      </div>
+
+      <div class="section-label" style="margin-top:.5rem">HAF KNECT membership</div>
+
+      <div class="knect-toggle" id="knect-toggle" onclick="toggleKnect()">
+        <div class="kt-icon">
+          <svg viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+        </div>
+        <div class="kt-body">
+          <div class="kt-label">I have a HAF KNECT membership</div>
+          <div class="kt-sub" id="knect-sub">Tap to confirm — earns you a higher rebate rate on every job.</div>
+        </div>
+        <div class="kt-pill"><div class="kt-thumb"></div></div>
+      </div>
+
+      <div class="rebate-info" id="rebate-info">
+        <div class="ri-row"><span class="ri-label">Standard rebate rate</span><span class="ri-val" id="ri-standard">Loading…</span></div>
+        <div class="ri-row"><span class="ri-label">Your KNECT member rate</span><span class="ri-val highlight" id="ri-knect">Loading…</span></div>
+        <div class="ri-row" style="border-top:1px solid var(--or-g);margin-top:.35rem;padding-top:.5rem"><span class="ri-label">Rebates accumulate in your wallet and reduce future job costs.</span></div>
+      </div>
+
+      <div class="uname-preview" id="f-uname-preview">
+        <div class="up-label">Your HAF company username</div>
+        <div class="up-val" id="f-uname-val">—</div>
+        <div class="up-hint">Save this — you'll use it to log in to HAF KNECT and post loads.</div>
+      </div>
+
+      <div class="btn-row">
+        <button type="button" class="btn btn-gh" onclick="backToType()">
+          <svg viewBox="0 0 24 24"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+          Back
+        </button>
+        <button type="submit" class="btn btn-or">
+          Continue to documents
+          <svg viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+        </button>
+      </div>
+
+      <div class="sec-note">
+        <svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        <p>Your data is encrypted and only used for compliance verification. All freight accounts are pay-upfront — no credit terms, no surprise invoices.</p>
+      </div>
+    </form>
+  </div>
+
+</main>
+
+<script>
+let selectedType = null;
+let knectOn = false;
+
+function toggleTheme(){
+  const h = document.documentElement;
+  h.dataset.theme = h.dataset.theme === 'dark' ? 'light' : 'dark';
+}
+
+function selectType(type){
+  selectedType = type;
+  document.getElementById('card-driver').classList.toggle('selected', type === 'driver');
+  document.getElementById('card-freight').classList.toggle('selected', type === 'freight');
+  setTimeout(() => {
+    document.getElementById('view-type').style.display = 'none';
+    document.getElementById(type === 'driver' ? 'view-driver' : 'view-freight').classList.add('visible');
+    window.scrollTo({top:0, behavior:'smooth'});
+  }, 120);
+}
+
+function backToType(){
+  document.querySelectorAll('.form-section').forEach(s => s.classList.remove('visible'));
+  document.getElementById('view-type').style.display = '';
+  document.getElementById('card-driver').classList.remove('selected');
+  document.getElementById('card-freight').classList.remove('selected');
+  window.scrollTo({top:0, behavior:'smooth'});
+}
+
+function toggleKnect(){
+  knectOn = !knectOn;
+  const tog = document.getElementById('knect-toggle');
+  const sub = document.getElementById('knect-sub');
+  const info = document.getElementById('rebate-info');
+  tog.classList.toggle('on', knectOn);
+  const cfg = JSON.parse(localStorage.getItem('cp_config')||'null');
+  const rStd = cfg?.rebate?.standard ? cfg.rebate.standard + '% per job' : 'Confirmed after signup';
+  const rKnect = cfg?.rebate?.knect ? cfg.rebate.knect + '% per job' : 'Higher rate — TBC';
+  document.getElementById('ri-standard').textContent = rStd;
+  document.getElementById('ri-knect').textContent = rKnect;
+  sub.textContent = knectOn
+    ? 'KNECT member rate applied — you earn a higher rebate on every job.'
+    : 'Tap to confirm — earns you a higher rebate rate on every job.';
+  sub.classList.toggle('highlight', knectOn);
+  info.classList.toggle('show', knectOn);
+}
+
+/* Generate HAF username: 2 initials + last 4 digits of phone + last 2 of birth year */
+function genDriverUsername(fname, lname, phone, dob){
+  const i1 = (fname[0] || '').toUpperCase();
+  const i2 = (lname[0] || '').toUpperCase();
+  const ph = phone.replace(/\D/g,'').slice(-4);
+  const yr = (dob || '').split('-')[0]?.slice(-2) || '00';
+  return i1 + i2 + ph + yr;
+}
+
+/* Business username: abbreviated name + last 4 of phone */
+function genFreightUsername(company, phone){
+  const words = company.trim().split(/\s+/);
+  const abbr = words.length === 1
+    ? company.replace(/\s+/g,'').substring(0,4).toUpperCase()
+    : words.filter(w => !['ltd','limited','uk','plc','llp'].includes(w.toLowerCase()))
+             .map(w => w[0]).join('').substring(0,4).toUpperCase();
+  const ph = phone.replace(/\D/g,'').slice(-4);
+  return abbr + ph;
+}
+
+/* Live username preview for driver form */
+['d-fname','d-lname','d-phone','d-dob'].forEach(id => {
+  document.getElementById(id).addEventListener('input', () => {
+    const fn = document.getElementById('d-fname').value;
+    const ln = document.getElementById('d-lname').value;
+    const ph = document.getElementById('d-phone').value;
+    const dob = document.getElementById('d-dob').value;
+    if(fn && ln && ph.replace(/\D/g,'').length >= 4 && dob){
+      const u = genDriverUsername(fn, ln, ph, dob);
+      document.getElementById('d-uname-val').textContent = u;
+      document.getElementById('d-uname-preview').classList.add('show');
+    } else {
+      document.getElementById('d-uname-preview').classList.remove('show');
+    }
+  });
+});
+
+/* Live username preview for freight form */
+['f-company','f-phone'].forEach(id => {
+  document.getElementById(id).addEventListener('input', () => {
+    const co = document.getElementById('f-company').value;
+    const ph = document.getElementById('f-phone').value;
+    if(co && ph.replace(/\D/g,'').length >= 4){
+      const u = genFreightUsername(co, ph);
+      document.getElementById('f-uname-val').textContent = u;
+      document.getElementById('f-uname-preview').classList.add('show');
+    } else {
+      document.getElementById('f-uname-preview').classList.remove('show');
+    }
+  });
+});
+
+function submitDriver(e){
+  e.preventDefault();
+  const fn = document.getElementById('d-fname').value.trim();
+  const ln = document.getElementById('d-lname').value.trim();
+  const email = document.getElementById('d-email').value.trim();
+  const phone = document.getElementById('d-phone').value.trim();
+  const dob = document.getElementById('d-dob').value;
+  const vtype = document.getElementById('d-vtype').value;
+  const vreg = document.getElementById('d-vreg').value.trim().toUpperCase();
+
+  if(!fn||!ln||!email||!phone||!dob||!vtype||!vreg){
+    alert('Please fill in all required fields.');
+    return;
+  }
+
+  const username = genDriverUsername(fn, ln, phone, dob);
+  const ref = 'HAF-CP-' + Math.random().toString(36).substring(2,6).toUpperCase();
+
+  const data = {
+    type: 'driver', ref, username,
+    fname: fn, lname: ln, email, phone, dob,
+    vtype, vreg,
+    submitted: new Date().toISOString(),
+    status: 'pending'
+  };
+
+  localStorage.setItem('cp_application', JSON.stringify(data));
+  window.location.href = 'docs.html';
+}
+
+function submitFreight(e){
+  e.preventDefault();
+  const company = document.getElementById('f-company').value.trim();
+  const crn = document.getElementById('f-crn').value.trim();
+  const vat = document.getElementById('f-vat').value.trim();
+  const name = document.getElementById('f-name').value.trim();
+  const title = document.getElementById('f-title').value.trim();
+  const email = document.getElementById('f-email').value.trim();
+  const phone = document.getElementById('f-phone').value.trim();
+
+  if(!company||!crn||!name||!email||!phone){
+    alert('Please fill in all required fields.');
+    return;
+  }
+
+  const username = genFreightUsername(company, phone);
+  const ref = 'HAF-CP-' + Math.random().toString(36).substring(2,6).toUpperCase();
+
+  const data = {
+    type: 'freight', ref, username,
+    company, crn, vat, name, title, email, phone,
+    knect: knectOn,
+    rebateRate: knectOn ? 5 : 3,
+    submitted: new Date().toISOString(),
+    status: 'pending'
+  };
+
+  localStorage.setItem('cp_application', JSON.stringify(data));
+  window.location.href = 'docs.html';
+}
+</script>
+</body>
+</html>
