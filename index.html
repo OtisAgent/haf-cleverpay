@@ -47,9 +47,12 @@
     <!-- LOG IN -->
     <div class="login-card">
       <div class="lc-title">Log in</div>
-      <div class="lc-sub">Already applied? Enter your HAF username or application reference to upload documents and check your status.</div>
-      <div class="lc-row">
+      <div class="lc-sub">Already applied? Enter your HAF username or application reference and your security PIN to upload documents and check your status.</div>
+      <div class="lc-row" style="margin-bottom:.55rem">
         <input class="fi" id="login-id" type="text" placeholder="HAF username or reference" autocomplete="username" onkeydown="if(event.key==='Enter')doLogin()">
+      </div>
+      <div class="lc-row">
+        <input class="fi" id="login-pin" type="password" inputmode="numeric" maxlength="6" placeholder="Security PIN" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()">
         <button class="btn btn-or" onclick="doLogin()">Log in</button>
       </div>
       <div class="lc-err" id="login-err">No application found with that username or reference — check it, or sign up below.</div>
@@ -136,10 +139,24 @@
         </div>
       </div>
 
+      <div class="section-label" style="margin-top:.5rem">Account security</div>
+
+      <div class="fi-row">
+        <div class="fg">
+          <label class="fl">Create a PIN <span class="req">*</span></label>
+          <input class="fi" id="d-pin" type="password" inputmode="numeric" maxlength="6" placeholder="4–6 digits" autocomplete="new-password" required>
+        </div>
+        <div class="fg">
+          <label class="fl">Confirm PIN <span class="req">*</span></label>
+          <input class="fi" id="d-pin2" type="password" inputmode="numeric" maxlength="6" placeholder="Re-enter PIN" autocomplete="new-password" required>
+        </div>
+      </div>
+      <div class="fi-hint" style="margin-top:-.4rem;margin-bottom:.8rem">You'll use this PIN with your HAF username every time you log in. Keep it private.</div>
+
       <div class="uname-preview" id="d-uname-preview">
         <div class="up-label">Your HAF username</div>
         <div class="up-val" id="d-uname-val">—</div>
-        <div class="up-hint">Save this — you'll use it to log in to PLNA and HAF KNECT.</div>
+        <div class="up-hint">Save this — you'll log in to PLNA and HAF KNECT with it, plus your PIN.</div>
       </div>
 
       <div class="btn-row">
@@ -230,10 +247,24 @@
         <div class="ri-row" style="border-top:1px solid var(--or-g);margin-top:.35rem;padding-top:.5rem"><span class="ri-label">Rebates accumulate in your wallet and reduce future job costs.</span></div>
       </div>
 
+      <div class="section-label" style="margin-top:.5rem">Account security</div>
+
+      <div class="fi-row">
+        <div class="fg">
+          <label class="fl">Create a PIN <span class="req">*</span></label>
+          <input class="fi" id="f-pin" type="password" inputmode="numeric" maxlength="6" placeholder="4–6 digits" autocomplete="new-password" required>
+        </div>
+        <div class="fg">
+          <label class="fl">Confirm PIN <span class="req">*</span></label>
+          <input class="fi" id="f-pin2" type="password" inputmode="numeric" maxlength="6" placeholder="Re-enter PIN" autocomplete="new-password" required>
+        </div>
+      </div>
+      <div class="fi-hint" style="margin-top:-.4rem;margin-bottom:.8rem">You'll use this PIN with your company username every time you log in. Keep it private.</div>
+
       <div class="uname-preview" id="f-uname-preview">
         <div class="up-label">Your HAF company username</div>
         <div class="up-val" id="f-uname-val">—</div>
-        <div class="up-hint">Save this — you'll use it to log in to HAF KNECT and post loads.</div>
+        <div class="up-hint">Save this — you'll log in to HAF KNECT with it, plus your PIN.</div>
       </div>
 
       <div class="btn-row">
