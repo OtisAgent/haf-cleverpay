@@ -25,7 +25,7 @@ a{color:var(--or);text-decoration:none}
 .bar{height:60px;display:flex;align-items:center;justify-content:space-between;padding:0 1.4rem;background:rgba(14,17,19,.92);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-bottom:1px solid var(--ln);position:sticky;top:0;z-index:50}
 [data-theme=light] .bar{background:rgba(244,242,239,.94)}
 .logo{display:flex;align-items:center;gap:.6rem;text-decoration:none}
-.logo-m{width:34px;height:34px;background:var(--or);border-radius:10px;display:flex;align-items:center;justify-content:justify-content:center;font-family:var(--dp);font-weight:900;font-size:.95rem;color:#0e1113;letter-spacing:-.04em;box-shadow:0 4px 14px var(--or-g);flex-shrink:0;display:flex;align-items:center;justify-content:center}
+.logo-m{width:34px;height:34px;background:var(--or);border-radius:10px;display:flex;align-items:center;justify-content:center;font-family:var(--dp);font-weight:900;font-size:.95rem;color:#0e1113;letter-spacing:-.04em;box-shadow:0 4px 14px var(--or-g);flex-shrink:0;display:flex;align-items:center;justify-content:center}
 .logo-t{font-family:var(--dp);font-weight:900;font-size:1.05rem;letter-spacing:-.04em;color:var(--tx)}
 .logo-t span{color:var(--or)}
 .theme-btn{width:34px;height:34px;border-radius:var(--rx);background:var(--p2);border:1px solid var(--ln);display:flex;align-items:center;justify-content:center;color:var(--mu);transition:color .15s}
