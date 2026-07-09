@@ -95,7 +95,26 @@ function genFreightUsername(company, phone){
   });
 });
 
-function submitDriver(e){
+/* PIN is stored only as a salted SHA-256 hash — never in plain text */
+async function hashPin(username, pin){
+  const data = new TextEncoder().encode('HAF-CP|' + username + '|' + pin);
+  const buf = await crypto.subtle.digest('SHA-256', data);
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join('');
+}
+
+function validPin(pin, pin2){
+  if(!/^\d{4,6}$/.test(pin)){
+    alert('Your PIN must be 4 to 6 digits (numbers only).');
+    return false;
+  }
+  if(pin !== pin2){
+    alert('The two PINs do not match — please re-enter them.');
+    return false;
+  }
+  return true;
+}
+
+async function submitDriver(e){
   e.preventDefault();
   const fn = document.getElementById('d-fname').value.trim();
   const ln = document.getElementById('d-lname').value.trim();
@@ -105,16 +124,21 @@ function submitDriver(e){
   const vtype = document.getElementById('d-vtype').value;
   const vreg = document.getElementById('d-vreg').value.trim().toUpperCase();
 
-  if(!fn||!ln||!email||!phone||!dob||!vtype||!vreg){
+  const pin = document.getElementById('d-pin').value.trim();
+  const pin2 = document.getElementById('d-pin2').value.trim();
+
+  if(!fn||!ln||!email||!phone||!dob||!vtype||!vreg||!pin||!pin2){
     alert('Please fill in all required fields.');
     return;
   }
+  if(!validPin(pin, pin2)) return;
 
   const username = genDriverUsername(fn, ln, phone, dob);
   const ref = 'HAF-CP-' + Math.random().toString(36).substring(2,6).toUpperCase();
+  const pinHash = await hashPin(username, pin);
 
   const data = {
-    type: 'driver', ref, username,
+    type: 'driver', ref, username, pinHash,
     fname: fn, lname: ln, email, phone, dob,
     vtype, vreg,
     submitted: new Date().toISOString(),
@@ -125,7 +149,7 @@ function submitDriver(e){
   window.location.href = 'docs.html';
 }
 
-function submitFreight(e){
+async function submitFreight(e){
   e.preventDefault();
   const company = document.getElementById('f-company').value.trim();
   const crn = document.getElementById('f-crn').value.trim();
@@ -135,16 +159,21 @@ function submitFreight(e){
   const email = document.getElementById('f-email').value.trim();
   const phone = document.getElementById('f-phone').value.trim();
 
-  if(!company||!crn||!name||!email||!phone){
+  const pin = document.getElementById('f-pin').value.trim();
+  const pin2 = document.getElementById('f-pin2').value.trim();
+
+  if(!company||!crn||!name||!email||!phone||!pin||!pin2){
     alert('Please fill in all required fields.');
     return;
   }
+  if(!validPin(pin, pin2)) return;
 
   const username = genFreightUsername(company, phone);
   const ref = 'HAF-CP-' + Math.random().toString(36).substring(2,6).toUpperCase();
+  const pinHash = await hashPin(username, pin);
 
   const data = {
-    type: 'freight', ref, username,
+    type: 'freight', ref, username, pinHash,
     company, crn, vat, name, title, email, phone,
     knect: knectOn,
     rebateRate: knectOn ? 5 : 3,
@@ -156,21 +185,35 @@ function submitFreight(e){
   window.location.href = 'docs.html';
 }
 
-/* ── LOG IN: find an existing application by HAF username or reference ── */
-function doLogin(){
-  const raw = document.getElementById('login-id').value.trim().toUpperCase();
+/* ── LOG IN: find an existing application by HAF username or reference, then check the PIN ── */
+function showLoginErr(msg){
   const err = document.getElementById('login-err');
-  if(!raw){ err.classList.remove('show'); return; }
+  err.textContent = msg;
+  err.classList.add('show');
+}
+
+async function doLogin(){
+  const raw = document.getElementById('login-id').value.trim().toUpperCase();
+  const pin = document.getElementById('login-pin').value.trim();
+  document.getElementById('login-err').classList.remove('show');
+  if(!raw) return;
   const queue = JSON.parse(localStorage.getItem('cp_team_queue')||'[]');
   const cur = JSON.parse(localStorage.getItem('cp_application')||'null');
   let app = null;
   if(cur && (String(cur.ref).toUpperCase()===raw || String(cur.username||'').toUpperCase()===raw)) app = cur;
   if(!app) app = queue.find(a => String(a.ref).toUpperCase()===raw || String(a.username||'').toUpperCase()===raw);
-  if(!app){ err.classList.add('show'); return; }
+  if(!app){ showLoginErr('No application found with that username or reference — check it, or sign up below.'); return; }
+  if(app.pinHash){
+    if(!pin){ showLoginErr('Enter your security PIN to log in.'); return; }
+    const attempt = await hashPin(app.username || app.ref, pin);
+    if(attempt !== app.pinHash){ showLoginErr('Incorrect PIN — check it and try again.'); return; }
+  }
   localStorage.setItem('cp_application', JSON.stringify(app));
   if(!app.docs || !app.docs.length) window.location.href = 'docs.html';
   else window.location.href = 'status.html';
 }
-document.getElementById('login-id').addEventListener('input', () => {
-  document.getElementById('login-err').classList.remove('show');
+['login-id','login-pin'].forEach(id => {
+  document.getElementById(id).addEventListener('input', () => {
+    document.getElementById('login-err').classList.remove('show');
+  });
 });
