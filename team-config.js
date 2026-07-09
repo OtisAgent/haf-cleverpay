@@ -1,6 +1,7 @@
 /* ── USERS ── */
 /* Temp passwords — update these once Brent provides Gemma's login details */
 const USERS = [
+  {username: 'brent',  password: 'Brent2026',  name: 'Brent Ford',  role: 'admin'},
   {username: 'gemma',  password: 'Gemma2026',  name: 'Gemma Vale',  role: 'compliance'},
   {username: 'admin',  password: 'HAF2026',     name: 'Admin',        role: 'admin'},
 ];

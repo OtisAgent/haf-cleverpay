@@ -36,20 +36,33 @@
 
 <main class="page">
 
-  <!-- STEP A: Choose account type -->
+  <!-- STEP A: Log in or sign up -->
   <div id="view-type">
     <div class="page-head">
       <div class="page-kicker">HAF CleverPay</div>
-      <h1 class="page-title">Create your HAF account</h1>
-      <p class="page-sub">Choose your account type to get started. Compliance checks take up to 24 hours.</p>
+      <h1 class="page-title">Welcome to CleverPay</h1>
+      <p class="page-sub">Log in to continue your application, or sign up for a new HAF account.</p>
     </div>
 
+    <!-- LOG IN -->
+    <div class="login-card">
+      <div class="lc-title">Log in</div>
+      <div class="lc-sub">Already applied? Enter your HAF username or application reference to upload documents and check your status.</div>
+      <div class="lc-row">
+        <input class="fi" id="login-id" type="text" placeholder="HAF username or reference" autocomplete="username" onkeydown="if(event.key==='Enter')doLogin()">
+        <button class="btn btn-or" onclick="doLogin()">Log in</button>
+      </div>
+      <div class="lc-err" id="login-err">No application found with that username or reference — check it, or sign up below.</div>
+    </div>
+
+    <!-- SIGN UP -->
+    <div class="signup-label">New to HAF? Sign up</div>
     <div class="type-grid">
       <div class="type-card" id="card-driver" onclick="selectType('driver')">
         <div class="type-icon">
           <svg viewBox="0 0 24 24"><rect x="1" y="3" width="15" height="13" rx="1"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
         </div>
-        <div class="type-name">Driver Account</div>
+        <div class="type-name">Owner Driver</div>
         <div class="type-desc">Join the HAF driver network. Take courier and delivery jobs on your terms.</div>
       </div>
       <div class="type-card" id="card-freight" onclick="selectType('freight')">
@@ -60,12 +73,14 @@
         <div class="type-desc">Move loads on the HAF network. Pay per job, earn rebates as you go.</div>
       </div>
     </div>
+
+    <div class="team-link">HAF team? <a href="team.html">Sign in to the team portal</a></div>
   </div>
 
   <!-- STEP B: Driver form -->
   <div id="view-driver" class="form-section">
     <div class="page-head" style="text-align:left;margin-bottom:1.4rem">
-      <div class="page-kicker">Driver Account</div>
+      <div class="page-kicker">Owner Driver Account</div>
       <h1 class="page-title" style="font-size:1.35rem">Your details</h1>
       <p class="page-sub" style="font-size:.8rem">All fields are required. Your information is held securely.</p>
     </div>
@@ -241,164 +256,6 @@
 
 </main>
 
-<script>
-let selectedType = null;
-let knectOn = false;
-
-function toggleTheme(){
-  const h = document.documentElement;
-  h.dataset.theme = h.dataset.theme === 'dark' ? 'light' : 'dark';
-}
-
-function selectType(type){
-  selectedType = type;
-  document.getElementById('card-driver').classList.toggle('selected', type === 'driver');
-  document.getElementById('card-freight').classList.toggle('selected', type === 'freight');
-  setTimeout(() => {
-    document.getElementById('view-type').style.display = 'none';
-    document.getElementById(type === 'driver' ? 'view-driver' : 'view-freight').classList.add('visible');
-    window.scrollTo({top:0, behavior:'smooth'});
-  }, 120);
-}
-
-function backToType(){
-  document.querySelectorAll('.form-section').forEach(s => s.classList.remove('visible'));
-  document.getElementById('view-type').style.display = '';
-  document.getElementById('card-driver').classList.remove('selected');
-  document.getElementById('card-freight').classList.remove('selected');
-  window.scrollTo({top:0, behavior:'smooth'});
-}
-
-function toggleKnect(){
-  knectOn = !knectOn;
-  const tog = document.getElementById('knect-toggle');
-  const sub = document.getElementById('knect-sub');
-  const info = document.getElementById('rebate-info');
-  tog.classList.toggle('on', knectOn);
-  const cfg = JSON.parse(localStorage.getItem('cp_config')||'null');
-  const rStd = cfg?.rebate?.standard ? cfg.rebate.standard + '% per job' : 'Confirmed after signup';
-  const rKnect = cfg?.rebate?.knect ? cfg.rebate.knect + '% per job' : 'Higher rate — TBC';
-  document.getElementById('ri-standard').textContent = rStd;
-  document.getElementById('ri-knect').textContent = rKnect;
-  sub.textContent = knectOn
-    ? 'KNECT member rate applied — you earn a higher rebate on every job.'
-    : 'Tap to confirm — earns you a higher rebate rate on every job.';
-  sub.classList.toggle('highlight', knectOn);
-  info.classList.toggle('show', knectOn);
-}
-
-/* Generate HAF username: 2 initials + last 4 digits of phone + last 2 of birth year */
-function genDriverUsername(fname, lname, phone, dob){
-  const i1 = (fname[0] || '').toUpperCase();
-  const i2 = (lname[0] || '').toUpperCase();
-  const ph = phone.replace(/\D/g,'').slice(-4);
-  const yr = (dob || '').split('-')[0]?.slice(-2) || '00';
-  return i1 + i2 + ph + yr;
-}
-
-/* Business username: abbreviated name + last 4 of phone */
-function genFreightUsername(company, phone){
-  const words = company.trim().split(/\s+/);
-  const abbr = words.length === 1
-    ? company.replace(/\s+/g,'').substring(0,4).toUpperCase()
-    : words.filter(w => !['ltd','limited','uk','plc','llp'].includes(w.toLowerCase()))
-             .map(w => w[0]).join('').substring(0,4).toUpperCase();
-  const ph = phone.replace(/\D/g,'').slice(-4);
-  return abbr + ph;
-}
-
-/* Live username preview for driver form */
-['d-fname','d-lname','d-phone','d-dob'].forEach(id => {
-  document.getElementById(id).addEventListener('input', () => {
-    const fn = document.getElementById('d-fname').value;
-    const ln = document.getElementById('d-lname').value;
-    const ph = document.getElementById('d-phone').value;
-    const dob = document.getElementById('d-dob').value;
-    if(fn && ln && ph.replace(/\D/g,'').length >= 4 && dob){
-      const u = genDriverUsername(fn, ln, ph, dob);
-      document.getElementById('d-uname-val').textContent = u;
-      document.getElementById('d-uname-preview').classList.add('show');
-    } else {
-      document.getElementById('d-uname-preview').classList.remove('show');
-    }
-  });
-});
-
-/* Live username preview for freight form */
-['f-company','f-phone'].forEach(id => {
-  document.getElementById(id).addEventListener('input', () => {
-    const co = document.getElementById('f-company').value;
-    const ph = document.getElementById('f-phone').value;
-    if(co && ph.replace(/\D/g,'').length >= 4){
-      const u = genFreightUsername(co, ph);
-      document.getElementById('f-uname-val').textContent = u;
-      document.getElementById('f-uname-preview').classList.add('show');
-    } else {
-      document.getElementById('f-uname-preview').classList.remove('show');
-    }
-  });
-});
-
-function submitDriver(e){
-  e.preventDefault();
-  const fn = document.getElementById('d-fname').value.trim();
-  const ln = document.getElementById('d-lname').value.trim();
-  const email = document.getElementById('d-email').value.trim();
-  const phone = document.getElementById('d-phone').value.trim();
-  const dob = document.getElementById('d-dob').value;
-  const vtype = document.getElementById('d-vtype').value;
-  const vreg = document.getElementById('d-vreg').value.trim().toUpperCase();
-
-  if(!fn||!ln||!email||!phone||!dob||!vtype||!vreg){
-    alert('Please fill in all required fields.');
-    return;
-  }
-
-  const username = genDriverUsername(fn, ln, phone, dob);
-  const ref = 'HAF-CP-' + Math.random().toString(36).substring(2,6).toUpperCase();
-
-  const data = {
-    type: 'driver', ref, username,
-    fname: fn, lname: ln, email, phone, dob,
-    vtype, vreg,
-    submitted: new Date().toISOString(),
-    status: 'pending'
-  };
-
-  localStorage.setItem('cp_application', JSON.stringify(data));
-  window.location.href = 'docs.html';
-}
-
-function submitFreight(e){
-  e.preventDefault();
-  const company = document.getElementById('f-company').value.trim();
-  const crn = document.getElementById('f-crn').value.trim();
-  const vat = document.getElementById('f-vat').value.trim();
-  const name = document.getElementById('f-name').value.trim();
-  const title = document.getElementById('f-title').value.trim();
-  const email = document.getElementById('f-email').value.trim();
-  const phone = document.getElementById('f-phone').value.trim();
-
-  if(!company||!crn||!name||!email||!phone){
-    alert('Please fill in all required fields.');
-    return;
-  }
-
-  const username = genFreightUsername(company, phone);
-  const ref = 'HAF-CP-' + Math.random().toString(36).substring(2,6).toUpperCase();
-
-  const data = {
-    type: 'freight', ref, username,
-    company, crn, vat, name, title, email, phone,
-    knect: knectOn,
-    rebateRate: knectOn ? 5 : 3,
-    submitted: new Date().toISOString(),
-    status: 'pending'
-  };
-
-  localStorage.setItem('cp_application', JSON.stringify(data));
-  window.location.href = 'docs.html';
-}
-</script>
+<script src="index.js"></script>
 </body>
 </html>

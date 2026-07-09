@@ -124,3 +124,19 @@ select.fi{appearance:none;-webkit-appearance:none;background-image:url("data:ima
   .type-grid{grid-template-columns:1fr}
   .fi-row{grid-template-columns:1fr}
 }
+
+/* ── LOG IN CARD ── */
+.login-card{background:var(--p);border:1.5px solid var(--lns);border-radius:var(--r);padding:1.4rem 1.3rem;margin-bottom:1.6rem}
+.lc-title{font-family:var(--dp);font-size:1.05rem;font-weight:900;letter-spacing:-.03em;margin-bottom:.25rem}
+.lc-sub{font-size:.76rem;color:var(--mu);line-height:1.6;margin-bottom:.9rem}
+.lc-row{display:flex;gap:.55rem}
+.lc-row .fi{flex:1;margin:0}
+.lc-row .btn{flex-shrink:0;padding:.6rem 1.3rem}
+.lc-err{display:none;font-size:.74rem;color:var(--rd);margin-top:.6rem}
+.lc-err.show{display:block}
+.signup-label{font-size:.66rem;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--mu);margin-bottom:.75rem;display:flex;align-items:center;gap:.5rem}
+.signup-label::after{content:'';flex:1;height:1px;background:var(--ln)}
+.team-link{text-align:center;margin-top:2rem;font-size:.76rem;color:var(--mu)}
+.team-link a{color:var(--or);font-weight:700;text-decoration:none}
+.team-link a:hover{text-decoration:underline}
+@media(max-width:480px){.lc-row{flex-direction:column}.lc-row .btn{width:100%}}
