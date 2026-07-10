@@ -40,6 +40,10 @@
     <div class="bar-r">
       <span class="welcome">Welcome, <strong id="welcome-name">—</strong></span>
       <div class="bar-badge" id="pending-badge">0 pending</div>
+      <button class="add-btn" onclick="openAdd()" title="Manually add a driver or freight forwarder">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Add account
+      </button>
       <button class="icon-btn" onclick="refreshQueue()" title="Refresh">
         <svg viewBox="0 0 24 24"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.5"/></svg>
       </button>
@@ -84,9 +88,91 @@
   </div>
 </div>
 
+<!-- Add account modal -->
+<div class="modal-ov" id="add-ov">
+  <div class="modal" style="max-width:560px">
+    <h2>Add an account manually</h2>
+    <p>For current drivers and partners who are already working with HAF — they get the same HAF username and can log in to CleverPay like anyone else.</p>
+
+    <div class="add-type-row">
+      <button class="add-type active" id="at-driver" onclick="setAddType('driver')">Owner Driver</button>
+      <button class="add-type" id="at-freight" onclick="setAddType('freight')">Freight Forwarder</button>
+    </div>
+
+    <div id="add-driver-fields">
+      <div class="add-grid">
+        <div><label class="fl">First name *</label><input class="fi" id="ad-fname" type="text"></div>
+        <div><label class="fl">Last name *</label><input class="fi" id="ad-lname" type="text"></div>
+        <div><label class="fl">Mobile *</label><input class="fi" id="ad-phone" type="tel" placeholder="07…"></div>
+        <div><label class="fl">Date of birth *</label><input class="fi" id="ad-dob" type="date"></div>
+        <div><label class="fl">Email</label><input class="fi" id="ad-email" type="email"></div>
+        <div><label class="fl">Vehicle type</label>
+          <select class="fi" id="ad-vtype">
+            <option value="">—</option><option value="van">Van</option><option value="luton">Luton</option>
+            <option value="7.5t">7.5 Tonne</option><option value="car">Car</option>
+            <option value="motorcycle">Motorcycle</option><option value="bicycle">Bicycle</option>
+          </select>
+        </div>
+        <div><label class="fl">Vehicle reg</label><input class="fi" id="ad-vreg" type="text" placeholder="AB12 CDE"></div>
+        <div><label class="fl">PIN (optional, 4–6 digits)</label><input class="fi" id="ad-pin" type="text" inputmode="numeric" maxlength="6" placeholder="for their login"></div>
+      </div>
+    </div>
+
+    <div id="add-freight-fields" style="display:none">
+      <div class="add-grid">
+        <div><label class="fl">Company name *</label><input class="fi" id="af-company" type="text"></div>
+        <div><label class="fl">Companies House no.</label><input class="fi" id="af-crn" type="text"></div>
+        <div><label class="fl">Contact name *</label><input class="fi" id="af-name" type="text"></div>
+        <div><label class="fl">Job title</label><input class="fi" id="af-title" type="text"></div>
+        <div><label class="fl">Phone *</label><input class="fi" id="af-phone" type="tel"></div>
+        <div><label class="fl">Email</label><input class="fi" id="af-email" type="email"></div>
+        <div><label class="fl">VAT no. (optional)</label><input class="fi" id="af-vat" type="text"></div>
+      </div>
+    </div>
+
+    <div class="add-meta-row">
+      <div class="add-uname-box">
+        <div class="fl" style="margin:0 0 .15rem">HAF username</div>
+        <div class="add-uname" id="add-uname">—</div>
+      </div>
+      <div style="flex:1">
+        <label class="fl">Starting status</label>
+        <select class="fi" id="add-status" style="margin-bottom:0">
+          <option value="approved">Approved — active straight away</option>
+          <option value="pending">Pending — review documents first</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="gate-err" id="add-err" style="margin-top:.6rem"></div>
+
+    <div class="modal-btns">
+      <button class="mbt mbt-gh" onclick="closeAdd()">Cancel</button>
+      <button class="mbt mbt-or" id="add-submit" onclick="addSubmit()">Add account</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
+<style>
+.add-btn{display:inline-flex;align-items:center;gap:.35rem;background:var(--or);color:#0e1113;border:none;border-radius:9px;padding:.42rem .8rem;font-family:inherit;font-size:.76rem;font-weight:700;cursor:pointer;transition:filter .15s}
+.add-btn:hover{filter:brightness(1.08)}
+.add-type-row{display:flex;gap:.5rem;margin:.9rem 0 .9rem}
+.add-type{flex:1;padding:.55rem;border-radius:10px;border:1.5px solid var(--bd);background:transparent;color:var(--tx);font-family:inherit;font-size:.78rem;font-weight:600;cursor:pointer}
+.add-type.active{border-color:var(--or);color:var(--or);background:rgba(241,142,0,.07)}
+.add-grid{display:grid;grid-template-columns:1fr 1fr;gap:.15rem .7rem}
+.add-meta-row{display:flex;gap:.7rem;align-items:flex-end;margin-top:.5rem}
+.add-uname-box{background:rgba(241,142,0,.07);border:1px solid rgba(241,142,0,.25);border-radius:10px;padding:.5rem .8rem}
+.add-uname{font-family:'SF Mono',Consolas,monospace;font-weight:700;font-size:.95rem;color:var(--or);letter-spacing:.04em}
+.mbt-or{background:var(--or);color:#0e1113}
+#add-ov .modal{max-height:88vh;overflow-y:auto}
+@media(max-width:560px){.add-grid{grid-template-columns:1fr}.add-meta-row{flex-direction:column;align-items:stretch}}
+</style>
+
+<script src="api.js"></script>
 <script src="team-config.js"></script>
 <script src="team.js"></script>
+<script src="team-add.js"></script>
 </body>
 </html>

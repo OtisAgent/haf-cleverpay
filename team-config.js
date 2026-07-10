@@ -1,12 +1,6 @@
-/* ── USERS ── */
-/* Temp passwords — update these once Brent provides Gemma's login details */
-const USERS = [
-  {username: 'brent',  password: 'Brent2026',  name: 'Brent Ford',  role: 'admin'},
-  {username: 'gemma',  password: 'Gemma2026',  name: 'Gemma Vale',  role: 'compliance'},
-  {username: 'admin',  password: 'HAF2026',     name: 'Admin',        role: 'admin'},
-];
+/* Team sign-in is verified server-side by the CleverPay API — no passwords live in this code. */
 
-/* ── DEFAULT COMPLIANCE CONFIG ── */
+/* ── DEFAULT COMPLIANCE CONFIG (fallback if the live config can't be reached) ── */
 /* Based on UK regulatory research (Road Traffic Act 1988, Employers' Liability Act 1969, etc.) */
 const DEFAULT_CONFIG = {
   driver: {
@@ -41,9 +35,87 @@ const DEFAULT_CONFIG = {
   rebate: {standard: '', knect: ''}
 };
 
-/* ── STATE ── */
-let currentUser = null;
-let currentTab = 'pending';
-let rejectTarget = null;
+/* ── SETTINGS TAB (uses getConfig/CFG/TEAM from team.js) ── */
+function renderSettings(){
+  const cfg=getConfig();
+  const el=document.getElementById('main-content');
+  el.innerHTML=`<div class="settings-panel">
+    ${renderDocSection('Driver Accounts','Compliance documents required from courier and delivery drivers before their account is activated. Grounded in UK law — see the legal basis for each.',cfg,'driver')}
+    ${renderDocSection('Freight Forwarder Accounts','Compliance documents required from freight forwarding businesses. Based on UK Companies House, HMRC, and insurance requirements.',cfg,'freight')}
+    ${renderRebateSection(cfg)}
+  </div>`;
 
-/* ── HELPERS ── */
+  cfg.driver.docs.forEach(d=>{
+    document.getElementById('sel-driver-'+d.id)?.addEventListener('change',function(){updateDocSel('driver',d.id,this.value,this)});
+  });
+  cfg.freight.docs.forEach(d=>{
+    document.getElementById('sel-freight-'+d.id)?.addEventListener('change',function(){updateDocSel('freight',d.id,this.value,this)});
+  });
+}
+
+function renderDocSection(title,sub,cfg,type){
+  const docs=cfg[type].docs;
+  const rows=docs.map(d=>`
+    <div class="dc-config-row">
+      <div class="dc-config-body">
+        <div class="dc-config-name">${d.name}</div>
+        <div class="dc-config-legal">${d.legal}</div>
+        <div class="dc-config-hint">${d.hint}</div>
+      </div>
+      <select id="sel-${type}-${d.id}" class="dc-sel ${d.status==='required'?'req':d.status==='hidden'?'hid':'opt'}">
+        <option value="required"${d.status==='required'?' selected':''}>Required</option>
+        <option value="optional"${d.status==='optional'?' selected':''}>Optional</option>
+        <option value="hidden"${d.status==='hidden'?' selected':''}>Not needed</option>
+      </select>
+    </div>`).join('');
+  return`<div class="set-section">
+    <div class="set-section-head"><div class="set-section-title">${title}</div><div class="set-section-sub">${sub}</div></div>
+    ${rows}
+    <div class="save-row"><button class="btn-save" onclick="saveDocConfig('${type}')"><svg viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>Save ${type} requirements</button></div>
+  </div>`;
+}
+
+function renderRebateSection(cfg){
+  const r=cfg.rebate||{standard:'',knect:''};
+  return`<div class="set-section">
+    <div class="set-section-head"><div class="set-section-title">Rebate rates — Freight Forwarders</div><div class="set-section-sub">Set the rebate percentages shown to freight forwarder applicants after approval. Leave blank to display "TBC" until confirmed.</div></div>
+    <div class="rebate-fields">
+      <div class="rf-row">
+        <div><div class="rf-label">Standard rebate rate</div><div class="rf-sub">Applies to all freight forwarder accounts</div></div>
+        <div class="rf-input-wrap"><input class="rf-input" id="rb-standard" type="text" placeholder="e.g. 3" value="${r.standard}"><span class="rf-unit">% per job</span></div>
+      </div>
+      <div class="rf-row">
+        <div><div class="rf-label">HAF KNECT member rate</div><div class="rf-sub">Higher rate for forwarders who hold a KNECT membership</div></div>
+        <div class="rf-input-wrap"><input class="rf-input" id="rb-knect" type="text" placeholder="e.g. 5" value="${r.knect}"><span class="rf-unit">% per job</span></div>
+      </div>
+    </div>
+    <div class="save-row"><button class="btn-save" onclick="saveRebates()"><svg viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>Save rebate rates</button></div>
+  </div>`;
+}
+
+function updateDocSel(type,id,val,sel){
+  sel.className='dc-sel '+(val==='required'?'req':val==='hidden'?'hid':'opt');
+}
+
+async function pushConfig(okMsg){
+  const r=await cpApi('/team/config',{method:'PUT',body:CFG,token:TEAM.token});
+  if(r.status===401){showToast('Session expired — please sign in again',true);doSignOut();return;}
+  showToast(r.ok?okMsg:(r.body?.error||'Could not save — try again'),!r.ok);
+}
+
+function saveDocConfig(type){
+  const cfg=getConfig();
+  cfg[type].docs.forEach(d=>{
+    const sel=document.getElementById('sel-'+type+'-'+d.id);
+    if(sel)d.status=sel.value;
+  });
+  CFG=cfg;
+  pushConfig(type==='driver'?'Driver requirements saved':'Freight requirements saved');
+}
+
+function saveRebates(){
+  const cfg=getConfig();
+  cfg.rebate={standard:document.getElementById('rb-standard').value.trim(),knect:document.getElementById('rb-knect').value.trim()};
+  CFG=cfg;
+  pushConfig('Rebate rates saved');
+}

@@ -1,37 +1,63 @@
+/* Team portal — all data lives in the shared HAF database via the CleverPay API (api.js).
+   Sign-in is checked server-side; the browser only ever holds a session token. */
+
+let TEAM = null;        /* {token, username, name, role} */
+let QUEUE = [];         /* applications cache, refreshed from the API */
+let CFG = null;         /* portal config (doc requirements + rebates) */
+let currentTab = 'pending';
+let rejectTarget = null;
+
 function toggleTheme(){document.documentElement.dataset.theme=document.documentElement.dataset.theme==='dark'?'light':'dark'}
-function getQueue(){return JSON.parse(localStorage.getItem('cp_team_queue')||'[]')}
-function saveQueue(q){localStorage.setItem('cp_team_queue',JSON.stringify(q))}
-function getConfig(){return JSON.parse(localStorage.getItem('cp_config')||'null')||JSON.parse(JSON.stringify(DEFAULT_CONFIG))}
-function saveConfig(c){localStorage.setItem('cp_config',JSON.stringify(c))}
 function showToast(msg,err){const t=document.getElementById('toast');t.textContent=msg;t.className='toast'+(err?' error':'')+' show';setTimeout(()=>{t.classList.remove('show')},3000)}
 function fmtDate(iso){if(!iso)return'—';const d=new Date(iso);return d.toLocaleDateString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}
+function getConfig(){return CFG||JSON.parse(JSON.stringify(DEFAULT_CONFIG))}
 
 /* ── AUTH ── */
-function gateLogin(){
+async function gateLogin(){
   const u=document.getElementById('gate-user').value.trim().toLowerCase();
   const p=document.getElementById('gate-pw').value;
-  const user=USERS.find(x=>x.username===u&&x.password===p);
-  if(user){
-    currentUser=user;
-    sessionStorage.setItem('cp_team_user',JSON.stringify(user));
-    document.getElementById('gate').style.display='none';
-    document.getElementById('shell').classList.add('show');
-    document.getElementById('welcome-name').textContent=user.name;
-    renderView();
-  }else{
-    document.getElementById('gate-err').classList.add('show');
+  const err=document.getElementById('gate-err');
+  const r=await cpApi('/team/login',{method:'POST',body:{username:u,password:p}});
+  if(!r.ok){
+    err.textContent=r.body?.error||'Could not sign in — try again.';
+    err.classList.add('show');
     document.getElementById('gate-pw').value='';
+    return;
   }
+  TEAM=r.body;
+  sessionStorage.setItem('cp_team_session',JSON.stringify(TEAM));
+  enterShell();
+}
+function enterShell(){
+  document.getElementById('gate').style.display='none';
+  document.getElementById('shell').classList.add('show');
+  document.getElementById('welcome-name').textContent=TEAM.name;
+  loadConfig();
+  loadQueue();
 }
 function doSignOut(){
-  sessionStorage.removeItem('cp_team_user');
-  currentUser=null;
+  sessionStorage.removeItem('cp_team_session');
+  TEAM=null;QUEUE=[];
   document.getElementById('shell').classList.remove('show');
   document.getElementById('gate').style.display='';
   document.getElementById('gate-user').value='';
   document.getElementById('gate-pw').value='';
   document.getElementById('gate-err').classList.remove('show');
 }
+
+/* ── DATA ── */
+async function loadConfig(){
+  const r=await cpApi('/config');
+  if(r.ok&&r.body)CFG=r.body;
+}
+async function loadQueue(silent){
+  if(!TEAM)return;
+  const r=await cpApi('/team/applications',{token:TEAM.token});
+  if(r.status===401){showToast('Session expired — please sign in again',true);doSignOut();return;}
+  if(r.ok){QUEUE=(r.body||[]).map(a=>({...a,rejectReason:a.reject_reason}));renderView();}
+  else if(!silent)showToast(r.body?.error||'Could not load the queue',true);
+}
+function refreshQueue(){loadQueue();showToast('Queue refreshed')}
 
 /* ── TABS ── */
 function setTab(t){
@@ -61,9 +87,8 @@ function updateKPIs(q){
 }
 
 /* ── QUEUE RENDER ── */
-function refreshQueue(){renderQueue();showToast('Queue refreshed')}
 function renderQueue(){
-  const q=getQueue();
+  const q=QUEUE;
   updateKPIs(q);
   const filtered=currentTab==='all'?q:q.filter(a=>a.status===currentTab);
   const el=document.getElementById('main-content');
@@ -96,21 +121,17 @@ function appCardHtml(a){
   const cfg=getConfig();
   const docDefs=isF?cfg.freight.docs:cfg.driver.docs;
 
-  /* Build doc rows: required docs that WEREN'T uploaded are flagged missing */
   const uploaded=a.docs||[];
   const uploadedIds=uploaded.map(d=>d.id);
   const reqDefs=docDefs.filter(d=>d.status==='required');
   const missingReq=reqDefs.filter(d=>!uploadedIds.includes(d.id));
 
   const allDocRows=[
-    /* Required docs that were uploaded */
     ...uploaded.filter(d=>{const def=docDefs.find(x=>x.id===d.id);return def&&def.status==='required';}).map(d=>{
       const def=docDefs.find(x=>x.id===d.id);
       return`<div class="doc-row"><div class="dc-chk${a.status==='approved'?' on':''}" id="chk-${a.ref}-${d.id}" onclick="tickDoc('${a.ref}','${d.id}')"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></div><div class="doc-row-name">${def?def.name:d.id}</div><div class="doc-row-file">${d.filename}</div><span class="doc-row-badge badge-ok">Uploaded</span></div>`;
     }),
-    /* Required docs that are MISSING */
     ...missingReq.map(d=>`<div class="doc-row missing"><div class="dc-chk" style="opacity:.4"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></div><div class="doc-row-name">${d.name}</div><div class="doc-row-file">—</div><span class="doc-row-badge badge-missing">Missing</span></div>`),
-    /* Optional uploaded docs */
     ...uploaded.filter(d=>{const def=docDefs.find(x=>x.id===d.id);return !def||def.status==='optional';}).map(d=>{
       const def=docDefs.find(x=>x.id===d.id);
       return`<div class="doc-row"><div class="dc-chk${a.status==='approved'?' on':''}" id="chk-${a.ref}-${d.id}" onclick="tickDoc('${a.ref}','${d.id}')"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></div><div class="doc-row-name">${def?def.name:d.id}</div><div class="doc-row-file">${d.filename}</div><span class="doc-row-badge badge-opt">Optional</span></div>`;
@@ -160,6 +181,7 @@ function appCardHtml(a){
       <div class="app-right">
         <span class="chip ${isF?'chip-freight':'chip-driver'}">${isF?'Freight':'Driver'}</span>
         ${statusChip(a.status)}
+        ${a.added_by?`<span class="chip chip-reviewing" title="Added manually by the HAF team">Added by ${a.added_by}</span>`:''}
         ${missingReq.length?`<span class="chip" style="background:rgba(208,64,64,.1);color:var(--rd);border:1px solid rgba(208,64,64,.2)">${missingReq.length} doc${missingReq.length!==1?'s':''} missing</span>`:''}
       </div>
       <div class="chevron"><svg viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg></div>
@@ -184,115 +206,33 @@ function toggleCard(ref){
   if(!was)c.classList.add('expanded');
 }
 function tickDoc(ref,id){document.getElementById('chk-'+ref+'-'+id)?.classList.toggle('on')}
-function markReviewing(ref){update(ref,{status:'reviewing'});showToast('Marked as in review')}
-function approve(ref){update(ref,{status:'approved',approvedAt:new Date().toISOString()});showToast('Application approved — access granted')}
-function update(ref,patch){
-  const q=getQueue();const i=q.findIndex(a=>a.ref===ref);if(i<0)return;
-  Object.assign(q[i],patch);saveQueue(q);syncApplicant(q[i]);renderQueue();
-}
-function syncApplicant(app){
-  const c=JSON.parse(localStorage.getItem('cp_application')||'null');
-  if(c&&c.ref===app.ref)localStorage.setItem('cp_application',JSON.stringify(app));
+function markReviewing(ref){update(ref,{status:'reviewing'},'Marked as in review')}
+function approve(ref){update(ref,{status:'approved'},'Application approved — access granted')}
+async function update(ref,patch,okMsg){
+  const r=await cpApi('/team/applications/'+ref,{method:'PATCH',body:patch,token:TEAM.token});
+  if(r.status===401){showToast('Session expired — please sign in again',true);doSignOut();return;}
+  if(!r.ok){showToast(r.body?.error||'Update failed — try again',true);return;}
+  const i=QUEUE.findIndex(a=>a.ref===ref);
+  if(i>=0)QUEUE[i]={...r.body,rejectReason:r.body.reject_reason};
+  renderQueue();
+  if(okMsg)showToast(okMsg,patch.status==='rejected');
 }
 function openReject(ref){rejectTarget=ref;document.getElementById('reject-reason-text').value='';document.getElementById('modal-ov').classList.add('open')}
 function closeModal(){document.getElementById('modal-ov').classList.remove('open');rejectTarget=null}
 function confirmReject(){
   if(!rejectTarget)return;
   const reason=document.getElementById('reject-reason-text').value.trim()||'The compliance team will be in touch with further details.';
-  update(rejectTarget,{status:'rejected',rejectReason:reason,rejectedAt:new Date().toISOString()});
-  closeModal();showToast('Application rejected',true);
+  update(rejectTarget,{status:'rejected',rejectReason:reason},'Application rejected');
+  closeModal();
 }
 document.getElementById('modal-ov').addEventListener('click',function(e){if(e.target===this)closeModal()});
 
-/* ── SETTINGS ── */
-function renderSettings(){
-  const cfg=getConfig();
-  const el=document.getElementById('main-content');
-  el.innerHTML=`<div class="settings-panel">
-    ${renderDocSection('Driver Accounts','Compliance documents required from courier and delivery drivers before their account is activated. Grounded in UK law — see the legal basis for each.',cfg,'driver')}
-    ${renderDocSection('Freight Forwarder Accounts','Compliance documents required from freight forwarding businesses. Based on UK Companies House, HMRC, and insurance requirements.',cfg,'freight')}
-    ${renderRebateSection(cfg)}
-  </div>`;
-
-  /* Wire dropdowns */
-  cfg.driver.docs.forEach(d=>{
-    document.getElementById('sel-driver-'+d.id)?.addEventListener('change',function(){updateDocSel('driver',d.id,this.value,this)});
-  });
-  cfg.freight.docs.forEach(d=>{
-    document.getElementById('sel-freight-'+d.id)?.addEventListener('change',function(){updateDocSel('freight',d.id,this.value,this)});
-  });
-}
-
-function renderDocSection(title,sub,cfg,type){
-  const docs=cfg[type].docs;
-  const rows=docs.map(d=>`
-    <div class="dc-config-row">
-      <div class="dc-config-body">
-        <div class="dc-config-name">${d.name}</div>
-        <div class="dc-config-legal">${d.legal}</div>
-        <div class="dc-config-hint">${d.hint}</div>
-      </div>
-      <select id="sel-${type}-${d.id}" class="dc-sel ${d.status==='required'?'req':d.status==='hidden'?'hid':'opt'}">
-        <option value="required"${d.status==='required'?' selected':''}>Required</option>
-        <option value="optional"${d.status==='optional'?' selected':''}>Optional</option>
-        <option value="hidden"${d.status==='hidden'?' selected':''}>Not needed</option>
-      </select>
-    </div>`).join('');
-  return`<div class="set-section">
-    <div class="set-section-head"><div class="set-section-title">${title}</div><div class="set-section-sub">${sub}</div></div>
-    ${rows}
-    <div class="save-row"><button class="btn-save" onclick="saveDocConfig('${type}')"><svg viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>Save ${type} requirements</button></div>
-  </div>`;
-}
-
-function renderRebateSection(cfg){
-  const r=cfg.rebate||{standard:'',knect:''};
-  return`<div class="set-section">
-    <div class="set-section-head"><div class="set-section-title">Rebate rates — Freight Forwarders</div><div class="set-section-sub">Set the rebate percentages shown to freight forwarder applicants after approval. Leave blank to display "TBC" until confirmed.</div></div>
-    <div class="rebate-fields">
-      <div class="rf-row">
-        <div><div class="rf-label">Standard rebate rate</div><div class="rf-sub">Applies to all freight forwarder accounts</div></div>
-        <div class="rf-input-wrap"><input class="rf-input" id="rb-standard" type="text" placeholder="e.g. 3" value="${r.standard}"><span class="rf-unit">% per job</span></div>
-      </div>
-      <div class="rf-row">
-        <div><div class="rf-label">HAF KNECT member rate</div><div class="rf-sub">Higher rate for forwarders who hold a KNECT membership</div></div>
-        <div class="rf-input-wrap"><input class="rf-input" id="rb-knect" type="text" placeholder="e.g. 5" value="${r.knect}"><span class="rf-unit">% per job</span></div>
-      </div>
-    </div>
-    <div class="save-row"><button class="btn-save" onclick="saveRebates()"><svg viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>Save rebate rates</button></div>
-  </div>`;
-}
-
-function updateDocSel(type,id,val,sel){
-  sel.className='dc-sel '+(val==='required'?'req':val==='hidden'?'hid':'opt');
-}
-
-function saveDocConfig(type){
-  const cfg=getConfig();
-  cfg[type].docs.forEach(d=>{
-    const sel=document.getElementById('sel-'+type+'-'+d.id);
-    if(sel)d.status=sel.value;
-  });
-  saveConfig(cfg);
-  showToast(type==='driver'?'Driver requirements saved':'Freight requirements saved');
-}
-
-function saveRebates(){
-  const cfg=getConfig();
-  cfg.rebate={standard:document.getElementById('rb-standard').value.trim(),knect:document.getElementById('rb-knect').value.trim()};
-  saveConfig(cfg);
-  showToast('Rebate rates saved');
-}
-
 /* ── INIT ── */
-const stored=sessionStorage.getItem('cp_team_user');
+const stored=sessionStorage.getItem('cp_team_session');
 if(stored){
-  currentUser=JSON.parse(stored);
-  document.getElementById('gate').style.display='none';
-  document.getElementById('shell').classList.add('show');
-  document.getElementById('welcome-name').textContent=currentUser.name;
-  renderView();
+  TEAM=JSON.parse(stored);
+  enterShell();
 }
 
 /* Auto-refresh queue every 15s */
-setInterval(()=>{if(currentTab!=='settings')renderQueue()},15000);
+setInterval(()=>{if(TEAM&&currentTab!=='settings')loadQueue(true)},15000);

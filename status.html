@@ -137,11 +137,14 @@
 
 </main>
 
+<script src="api.js"></script>
 <script>
 function toggleTheme(){
   const h = document.documentElement;
   h.dataset.theme = h.dataset.theme === 'dark' ? 'light' : 'dark';
 }
+
+let CFG = null; /* portal config (rebate rates) — fetched once from the API */
 
 function copyRef(){
   const ref = document.getElementById('ref-display').textContent;
@@ -224,9 +227,8 @@ function renderStatus(app){
     if(app.type === 'freight'){
       const rp = document.getElementById('rebate-panel');
       rp.classList.add('show');
-      const cfg = JSON.parse(localStorage.getItem('cp_config')||'null');
-      const stdRate = cfg?.rebate?.standard ? cfg.rebate.standard + '%' : 'TBC';
-      const knectRate = cfg?.rebate?.knect ? cfg.rebate.knect + '%' : 'TBC';
+      const stdRate = CFG?.rebate?.standard ? CFG.rebate.standard + '%' : 'TBC';
+      const knectRate = CFG?.rebate?.knect ? CFG.rebate.knect + '%' : 'TBC';
       const tier = app.knect ? `KNECT member (${knectRate})` : `Standard (${stdRate})`;
       document.getElementById('rebate-tier').textContent = tier;
     }
@@ -243,13 +245,24 @@ function renderStatus(app){
   }
 }
 
-loadPage();
-
-/* Poll every 8s so status updates from team.html reflect here without page reload */
-setInterval(() => {
+/* Pull the latest application state from the live database */
+async function refreshFromApi(){
   const raw = localStorage.getItem('cp_application');
-  if(raw) renderStatus(JSON.parse(raw));
-}, 8000);
+  if(!raw) return;
+  const local = JSON.parse(raw);
+  const r = await cpApi('/application?ref=' + encodeURIComponent(local.ref) + '&k=' + encodeURIComponent(local.pinHash || ''));
+  if(r.ok && r.body){
+    const fresh = {...r.body, pinHash: local.pinHash, rejectReason: r.body.reject_reason};
+    localStorage.setItem('cp_application', JSON.stringify(fresh));
+    renderStatus(fresh);
+  }
+}
+
+loadPage();
+cpApi('/config').then(r => { if(r.ok) CFG = r.body; refreshFromApi(); });
+
+/* Poll every 8s so team approvals/rejections reflect here without a reload */
+setInterval(refreshFromApi, 8000);
 </script>
 </body>
 </html>

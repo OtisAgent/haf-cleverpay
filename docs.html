@@ -77,13 +77,14 @@
   </div>
 </main>
 
+<script src="api.js"></script>
 <script>
 function toggleTheme(){
   const h = document.documentElement;
   h.dataset.theme = h.dataset.theme === 'dark' ? 'light' : 'dark';
 }
 
-/* Full UK-compliant document sets — mirrors team.html DEFAULT_CONFIG */
+/* Full UK-compliant document sets — fallback if the live config can't be reached */
 const DEFAULT_DRIVER_DOCS = [
   {id:'dl-front',     name:"Driving licence — front",           hint:"Front of your DVLA photocard. Must show the correct category (B for vans, C1 for vehicles 3.5–7.5T, C for lorries).",            req:true},
   {id:'dl-back',      name:"Driving licence — back",            hint:"Back of the photocard showing your vehicle categories and any endorsements.",                                                       req:true},
@@ -110,8 +111,9 @@ const DEFAULT_FREIGHT_DOCS = [
   {id:'bifa',         name:"BIFA membership certificate",      hint:"British International Freight Association membership — industry standard and expected by most commercial clients.",                  req:false},
 ];
 
-function getDocList(type){
-  const cfg=JSON.parse(localStorage.getItem('cp_config')||'null');
+async function getDocList(type){
+  const r = await cpApi('/config');
+  const cfg = r.ok ? r.body : null;
   if(cfg&&cfg[type]&&cfg[type].docs){
     return cfg[type].docs.filter(d=>d.status!=='hidden').map(d=>({id:d.id,name:d.name,hint:d.hint,req:d.status==='required'}));
   }
@@ -125,7 +127,7 @@ const uploaded = {};
 let totalReq = 0;
 let app = null;
 
-function loadPage(){
+async function loadPage(){
   const raw = localStorage.getItem('cp_application');
   if(!raw){ window.location.href='index.html'; return; }
   app = JSON.parse(raw);
@@ -139,7 +141,7 @@ function loadPage(){
     ? 'We need these to verify your eligibility as an HAF driver. All files are held securely.'
     : 'A few documents to confirm your business before we activate your freight account.';
 
-  const docs = getDocList(app.type);
+  const docs = await getDocList(app.type);
   totalReq = docs.filter(d => d.req).length;
 
   const section = document.getElementById('doc-section');
@@ -221,19 +223,11 @@ function updateProgress(){
   }
 }
 
-function submitDocs(){
+async function submitDocs(){
   const docList = Object.entries(uploaded).map(([id, d]) => ({id, filename: d.name, req: d.req}));
-  app.docs = docList;
-  app.status = 'pending';
-  localStorage.setItem('cp_application', JSON.stringify(app));
-
-  /* Save to team queue */
-  const queue = JSON.parse(localStorage.getItem('cp_team_queue') || '[]');
-  const existing = queue.findIndex(q => q.ref === app.ref);
-  if(existing >= 0) queue[existing] = app;
-  else queue.unshift(app);
-  localStorage.setItem('cp_team_queue', JSON.stringify(queue));
-
+  const r = await cpApi('/docs', { method: 'POST', body: { ref: app.ref, pinHash: app.pinHash, docs: docList } });
+  if(!r.ok){ alert(r.body?.error || 'Could not submit — please try again.'); return; }
+  localStorage.setItem('cp_application', JSON.stringify({...r.body, pinHash: app.pinHash}));
   window.location.href = 'status.html';
 }
 

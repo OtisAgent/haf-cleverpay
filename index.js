@@ -95,12 +95,8 @@ function genFreightUsername(company, phone){
   });
 });
 
-/* PIN is stored only as a salted SHA-256 hash — never in plain text */
-async function hashPin(username, pin){
-  const data = new TextEncoder().encode('HAF-CP|' + username + '|' + pin);
-  const buf = await crypto.subtle.digest('SHA-256', data);
-  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join('');
-}
+/* PIN is stored only as a salted SHA-256 hash — never in plain text (see api.js) */
+const hashPin = cpHashPin;
 
 function validPin(pin, pin2){
   if(!/^\d{4,6}$/.test(pin)){
@@ -134,18 +130,15 @@ async function submitDriver(e){
   if(!validPin(pin, pin2)) return;
 
   const username = genDriverUsername(fn, ln, phone, dob);
-  const ref = 'HAF-CP-' + Math.random().toString(36).substring(2,6).toUpperCase();
   const pinHash = await hashPin(username, pin);
 
-  const data = {
-    type: 'driver', ref, username, pinHash,
-    fname: fn, lname: ln, email, phone, dob,
-    vtype, vreg,
-    submitted: new Date().toISOString(),
-    status: 'pending'
-  };
+  const r = await cpApi('/apply', { method: 'POST', body: {
+    type: 'driver', username, pinHash,
+    fname: fn, lname: ln, email, phone, dob, vtype, vreg
+  }});
+  if(!r.ok){ alert(r.body?.error || 'Something went wrong — please try again.'); return; }
 
-  localStorage.setItem('cp_application', JSON.stringify(data));
+  localStorage.setItem('cp_application', JSON.stringify({...r.body, pinHash}));
   window.location.href = 'docs.html';
 }
 
@@ -169,19 +162,16 @@ async function submitFreight(e){
   if(!validPin(pin, pin2)) return;
 
   const username = genFreightUsername(company, phone);
-  const ref = 'HAF-CP-' + Math.random().toString(36).substring(2,6).toUpperCase();
   const pinHash = await hashPin(username, pin);
 
-  const data = {
-    type: 'freight', ref, username, pinHash,
+  const r = await cpApi('/apply', { method: 'POST', body: {
+    type: 'freight', username, pinHash,
     company, crn, vat, name, title, email, phone,
-    knect: knectOn,
-    rebateRate: knectOn ? 5 : 3,
-    submitted: new Date().toISOString(),
-    status: 'pending'
-  };
+    knect: knectOn
+  }});
+  if(!r.ok){ alert(r.body?.error || 'Something went wrong — please try again.'); return; }
 
-  localStorage.setItem('cp_application', JSON.stringify(data));
+  localStorage.setItem('cp_application', JSON.stringify({...r.body, pinHash}));
   window.location.href = 'docs.html';
 }
 
@@ -197,17 +187,16 @@ async function doLogin(){
   const pin = document.getElementById('login-pin').value.trim();
   document.getElementById('login-err').classList.remove('show');
   if(!raw) return;
-  const queue = JSON.parse(localStorage.getItem('cp_team_queue')||'[]');
-  const cur = JSON.parse(localStorage.getItem('cp_application')||'null');
-  let app = null;
-  if(cur && (String(cur.ref).toUpperCase()===raw || String(cur.username||'').toUpperCase()===raw)) app = cur;
-  if(!app) app = queue.find(a => String(a.ref).toUpperCase()===raw || String(a.username||'').toUpperCase()===raw);
-  if(!app){ showLoginErr('No application found with that username or reference — check it, or sign up below.'); return; }
-  if(app.pinHash){
-    if(!pin){ showLoginErr('Enter your security PIN to log in.'); return; }
-    const attempt = await hashPin(app.username || app.ref, pin);
-    if(attempt !== app.pinHash){ showLoginErr('Incorrect PIN — check it and try again.'); return; }
+  const r = await cpApi('/login', { method: 'POST', body: { id: raw, pin } });
+  if(!r.ok){
+    if(r.status === 404) showLoginErr('No application found with that username or reference — check it, or sign up below.');
+    else if(r.status === 401) showLoginErr(pin ? 'Incorrect PIN — check it and try again.' : 'Enter your security PIN to log in.');
+    else showLoginErr(r.body?.error || 'Could not log in — please try again.');
+    return;
   }
+  const app = r.body;
+  /* keep the PIN hash locally so the docs/status pages can authenticate */
+  app.pinHash = app.username && pin ? await hashPin(app.username, pin) : null;
   localStorage.setItem('cp_application', JSON.stringify(app));
   if(!app.docs || !app.docs.length) window.location.href = 'docs.html';
   else window.location.href = 'status.html';
