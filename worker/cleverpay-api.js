@@ -59,7 +59,7 @@ async function teamUser(env, req) {
 }
 
 const APP_FIELDS = ['type','username','pin_hash','fname','lname','email','phone','dob','vtype','vreg',
-  'company','crn','vat','name','title','knect','docs','status'];
+  'company','crn','vat','name','title','knect','docs','status','notes'];
 function pickFields(b) {
   const row = {};
   for (const k of APP_FIELDS) if (b[k] !== undefined) row[k] = b[k];
@@ -93,6 +93,21 @@ export default {
         const r = await sb(env, `/${APPS}`, { method: 'POST', body: JSON.stringify(row) });
         if (!r.ok) return J({ error: 'Could not save your application. Please try again.' }, 500, cors);
         return J(strip(r.body[0]), 200, cors);
+      }
+
+      /* ── public: business account enquiry (no login created — HAF team follows up) ── */
+      if (p === '/enquiry' && req.method === 'POST') {
+        if (!b.company || !b.name || !b.email || !b.phone) return J({ error: 'Please fill in company, contact name, email and mobile.' }, 400, cors);
+        if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(b.email)) return J({ error: 'That email address doesn’t look right.' }, 400, cors);
+        const row = {
+          type: 'business', status: 'enquiry', ref: newRef(), docs: [],
+          company: String(b.company).slice(0, 120), name: String(b.name).slice(0, 120),
+          email: String(b.email).slice(0, 160), phone: String(b.phone).slice(0, 40),
+          notes: String(b.notes || '').slice(0, 1500),
+        };
+        const r = await sb(env, `/${APPS}`, { method: 'POST', body: JSON.stringify(row) });
+        if (!r.ok) return J({ error: 'Could not send your enquiry. Please try again.' }, 500, cors);
+        return J({ ok: true, ref: row.ref }, 200, cors);
       }
 
       /* ── applicant: log in ── */

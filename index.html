@@ -66,22 +66,33 @@
           <svg viewBox="0 0 24 24"><rect x="1" y="3" width="15" height="13" rx="1"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
         </div>
         <div class="type-name">Owner Driver</div>
-        <div class="type-desc">Join the HAF driver network. Take courier and delivery jobs on your terms.</div>
+        <div class="type-desc">Single-person teams. Take courier and delivery jobs on your terms.</div>
+      </div>
+      <div class="type-card" id="card-fleet" onclick="selectType('fleet')">
+        <div class="type-icon">
+          <svg viewBox="0 0 24 24"><rect x="1" y="6" width="13" height="9" rx="1"/><polygon points="14 10 18 10 21 13 21 15 14 15 14 10"/><circle cx="5" cy="17.5" r="2"/><circle cx="17" cy="17.5" r="2"/><rect x="4" y="2" width="13" height="2.5" rx="1"/></svg>
+        </div>
+        <div class="type-name">Fleet / Courier Company</div>
+        <div class="type-desc">Courier companies with fleets — or drivers with excess work. Put your drivers on the network.</div>
       </div>
       <div class="type-card" id="card-freight" onclick="selectType('freight')">
         <div class="type-icon">
           <svg viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
         </div>
         <div class="type-name">Freight Forwarder</div>
-        <div class="type-desc">Move loads on the HAF network. Pay per job, earn rebates as you go.</div>
+        <div class="type-desc">Process third-party goods for your customers through the HAF network.</div>
       </div>
-      <div class="type-card" id="card-business" onclick="selectType('business')">
-        <div class="type-icon">
-          <svg viewBox="0 0 24 24"><path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/><path d="M9 21v-4h6v4"/><path d="M9 10h.01M15 10h.01M9 14h.01M15 14h.01"/></svg>
-        </div>
+    </div>
+
+    <div class="biz-band" id="card-business" onclick="selectType('business')">
+      <div class="type-icon" style="width:44px;height:44px;flex:none">
+        <svg viewBox="0 0 24 24"><path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/><path d="M9 21v-4h6v4"/><path d="M9 10h.01M15 10h.01M9 14h.01M15 14h.01"/></svg>
+      </div>
+      <div class="bb-body">
         <div class="type-name">Business Account</div>
-        <div class="type-desc">Send your own goods with HAF. Apply through HAF KNECT or the useHAF website.</div>
+        <div class="type-desc">Use HAF KNECT to process your deliveries and put HAF drivers on your work. Purpose-built set up — <b>contact the HAF team</b> and we'll be in touch.</div>
       </div>
+      <div class="bb-arrow"><svg viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></div>
     </div>
 
     <div class="team-link">HAF team? <a href="team.html">Sign in to the team portal</a></div>
@@ -91,37 +102,38 @@
   <div id="view-business" class="form-section">
     <div class="page-head" style="text-align:left;margin-bottom:1.4rem">
       <div class="page-kicker">Business Account</div>
-      <h1 class="page-title" style="font-size:1.35rem">Apply for your business account</h1>
-      <p class="page-sub" style="font-size:.8rem">Business accounts are set up on the HAF KNECT platform or the useHAF website — pick whichever suits you. It's free to start, and you can upgrade any time.</p>
+      <h1 class="page-title" style="font-size:1.35rem">Contact the HAF team</h1>
+      <p class="page-sub" style="font-size:.8rem">Business accounts are purpose-built around how your company moves goods. Tell us a little about you, and the HAF team will be in contact to set everything up.</p>
     </div>
 
-    <a class="biz-route" href="https://knect.usehaf.co.uk" target="_blank" rel="noopener">
-      <div class="br-icon">
-        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+    <div id="biz-form">
+      <div class="fg"><label class="fl" for="b-company">Company name *</label><input class="fi" id="b-company" type="text" autocomplete="organization"></div>
+      <div class="fi-row">
+        <div class="fg"><label class="fl" for="b-name">Your name *</label><input class="fi" id="b-name" type="text" autocomplete="name"></div>
+        <div class="fg"><label class="fl" for="b-phone">Mobile number *</label><input class="fi" id="b-phone" type="tel" autocomplete="tel"></div>
       </div>
-      <div class="br-body">
-        <div class="br-name">Apply on HAF KNECT</div>
-        <div class="br-sub">The full platform — post deliveries, get quotes, track jobs live.</div>
+      <div class="fg"><label class="fl" for="b-email">Email address *</label><input class="fi" id="b-email" type="email" autocomplete="email"></div>
+      <div class="fg"><label class="fl" for="b-notes">What do you need to move?</label><textarea class="fi" id="b-notes" rows="3" placeholder="e.g. daily stock transfers between two sites, ad-hoc pallet deliveries to customers…" style="resize:vertical;min-height:70px"></textarea></div>
+      <div class="lc-err" id="biz-err" style="display:none"></div>
+      <div class="btn-row" style="margin-top:1rem">
+        <button type="button" class="btn btn-gh" onclick="backToType()">
+          <svg viewBox="0 0 24 24"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+          Back
+        </button>
+        <button type="button" class="btn btn-or" id="biz-send" onclick="submitEnquiry()">Send to the HAF team →</button>
       </div>
-      <div class="br-arrow"><svg viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></div>
-    </a>
+    </div>
 
-    <a class="biz-route" href="https://usehaf.co.uk" target="_blank" rel="noopener">
-      <div class="br-icon">
-        <svg viewBox="0 0 24 24"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
+    <div id="biz-done" style="display:none;text-align:center;padding:1.6rem 0">
+      <div style="width:52px;height:52px;border-radius:50%;background:rgba(45,171,96,.12);border:1.5px solid rgba(45,171,96,.4);display:flex;align-items:center;justify-content:center;margin:0 auto 1rem">
+        <svg viewBox="0 0 24 24" style="width:24px;height:24px;fill:none;stroke:#2dab60;stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round"><polyline points="20 6 9 17 4 12"/></svg>
       </div>
-      <div class="br-body">
-        <div class="br-name">Apply at usehaf.co.uk</div>
-        <div class="br-sub">Start from the useHAF website — quick and simple.</div>
+      <div class="page-title" style="font-size:1.15rem;margin-bottom:.35rem">Enquiry sent — we'll be in contact</div>
+      <p class="page-sub" style="font-size:.8rem;margin-bottom:.5rem">The HAF team has your details and will get back to you to set up your business account.</p>
+      <p class="page-sub" style="font-size:.74rem">Your reference: <b id="biz-ref"></b></p>
+      <div class="btn-row" style="margin-top:1.2rem;justify-content:center">
+        <button type="button" class="btn btn-gh" onclick="backToType()">← Back to account types</button>
       </div>
-      <div class="br-arrow"><svg viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></div>
-    </a>
-
-    <div class="btn-row" style="margin-top:1rem">
-      <button type="button" class="btn btn-gh" onclick="backToType()">
-        <svg viewBox="0 0 24 24"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
-        Back
-      </button>
     </div>
   </div>
 

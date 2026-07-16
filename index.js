@@ -8,17 +8,28 @@ function toggleTheme(){
   h.dataset.theme = h.dataset.theme === 'dark' ? 'light' : 'dark';
 }
 
-const TYPE_VIEWS = { driver:'view-driver', freight:'view-freight', business:'view-business' };
+const TYPE_VIEWS = { driver:'view-driver', fleet:'view-driver', freight:'view-freight', business:'view-business' };
+const ALL_CARDS = ['driver','fleet','freight','business'];
 
 function selectType(type){
   selectedType = type;
-  ['driver','freight','business'].forEach(t => {
+  ALL_CARDS.forEach(t => {
     const card = document.getElementById('card-' + t);
     if (card) card.classList.toggle('selected', type === t);
   });
   setTimeout(() => {
     document.getElementById('view-type').style.display = 'none';
     document.getElementById(TYPE_VIEWS[type]).classList.add('visible');
+    // Fleet / courier company route: same verified driver application,
+    // with the fleet section switched on and required from the start.
+    const kicker = document.querySelector('#view-driver .page-kicker');
+    if (type === 'fleet') {
+      if (kicker) kicker.textContent = 'Fleet / Courier Company Account';
+      if (!fleetOn) toggleFleet();
+    } else if (type === 'driver') {
+      if (kicker) kicker.textContent = 'Owner Driver Account';
+      if (fleetOn) toggleFleet();
+    }
     window.scrollTo({top:0, behavior:'smooth'});
   }, 120);
 }
@@ -26,11 +37,57 @@ function selectType(type){
 function backToType(){
   document.querySelectorAll('.form-section').forEach(s => s.classList.remove('visible'));
   document.getElementById('view-type').style.display = '';
-  ['driver','freight','business'].forEach(t => {
+  ALL_CARDS.forEach(t => {
     const card = document.getElementById('card-' + t);
     if (card) card.classList.remove('selected');
   });
   window.scrollTo({top:0, behavior:'smooth'});
+}
+
+/* Business account enquiry — no login created; the HAF team follows up.
+   Writes through a database policy that ONLY allows business enquiries in
+   (insert-only, public key) — enquiries appear in the team portal list. */
+const ENQ_URL = 'https://jsdwvogsxlnczzbefwgp.supabase.co/rest/v1/cleverpay_applications';
+const ENQ_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpzZHd2b2dzeGxuY3p6YmVmd2dwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEzODgyMzYsImV4cCI6MjA5Njk2NDIzNn0.pxqM-Oh4f_3PlqCbKIKvcKZnNRUZ1ASKqqdNg78M_4M';
+
+async function submitEnquiry(){
+  const company = document.getElementById('b-company').value.trim();
+  const name    = document.getElementById('b-name').value.trim();
+  const phone   = document.getElementById('b-phone').value.trim();
+  const email   = document.getElementById('b-email').value.trim();
+  const notes   = document.getElementById('b-notes').value.trim();
+  const err     = document.getElementById('biz-err');
+  err.style.display = 'none';
+  if (!company || !name || !phone || !email) {
+    err.textContent = 'Please fill in company, your name, mobile and email.';
+    err.style.display = ''; return;
+  }
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+    err.textContent = 'That email address doesn’t look right.';
+    err.style.display = ''; return;
+  }
+  const ref = 'HAF-CP-' + [...crypto.getRandomValues(new Uint8Array(4))].map(b => 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'[b % 32]).join('');
+  const btn = document.getElementById('biz-send');
+  btn.disabled = true; btn.textContent = 'Sending…';
+  let ok = false;
+  try {
+    const res = await fetch(ENQ_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', apikey: ENQ_KEY, Authorization: 'Bearer ' + ENQ_KEY, Prefer: 'return=minimal' },
+      body: JSON.stringify({ type:'business', status:'enquiry', ref, docs:[],
+        company: company.slice(0,120), name: name.slice(0,120), email: email.slice(0,160),
+        phone: phone.slice(0,40), notes: notes.slice(0,1500) }),
+    });
+    ok = res.ok;
+  } catch (e) {}
+  btn.disabled = false; btn.textContent = 'Send to the HAF team →';
+  if (!ok) {
+    err.textContent = 'Could not send just now — please check your connection and try again.';
+    err.style.display = ''; return;
+  }
+  document.getElementById('biz-ref').textContent = ref;
+  document.getElementById('biz-form').style.display = 'none';
+  document.getElementById('biz-done').style.display = '';
 }
 
 function toggleKnect(){

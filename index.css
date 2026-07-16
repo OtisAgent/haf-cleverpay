@@ -149,3 +149,12 @@ select.fi{appearance:none;-webkit-appearance:none;background-image:url("data:ima
 .team-link a{color:var(--or);font-weight:700;text-decoration:none}
 .team-link a:hover{text-decoration:underline}
 @media(max-width:480px){.lc-row{flex-direction:column}.lc-row .btn{width:100%}}
+
+/* ── BUSINESS BAND (purpose-built route under the tiles) ── */
+.biz-band{display:flex;align-items:center;gap:.9rem;background:var(--p);border:2px solid var(--lns);border-radius:var(--r);padding:1.1rem 1.2rem;margin:-.6rem 0 1.5rem;cursor:pointer;text-align:left;transition:border-color .15s,background .15s}
+.biz-band:hover{border-color:rgba(241,142,0,.35);background:var(--p2)}
+.biz-band .bb-body{flex:1;min-width:0}
+.biz-band .type-name{margin-bottom:.15rem}
+.biz-band .bb-arrow{flex:none;color:var(--or)}
+.biz-band .bb-arrow svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+@media (max-width:560px){.biz-band{flex-direction:row;align-items:flex-start}.biz-band .type-icon{margin-top:.1rem}}
