@@ -75,9 +75,54 @@
         <div class="type-name">Freight Forwarder</div>
         <div class="type-desc">Move loads on the HAF network. Pay per job, earn rebates as you go.</div>
       </div>
+      <div class="type-card" id="card-business" onclick="selectType('business')">
+        <div class="type-icon">
+          <svg viewBox="0 0 24 24"><path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/><path d="M9 21v-4h6v4"/><path d="M9 10h.01M15 10h.01M9 14h.01M15 14h.01"/></svg>
+        </div>
+        <div class="type-name">Business Account</div>
+        <div class="type-desc">Send your own goods with HAF. Apply through HAF KNECT or the useHAF website.</div>
+      </div>
     </div>
 
     <div class="team-link">HAF team? <a href="team.html">Sign in to the team portal</a></div>
+  </div>
+
+  <!-- STEP B0: Business account routing -->
+  <div id="view-business" class="form-section">
+    <div class="page-head" style="text-align:left;margin-bottom:1.4rem">
+      <div class="page-kicker">Business Account</div>
+      <h1 class="page-title" style="font-size:1.35rem">Apply for your business account</h1>
+      <p class="page-sub" style="font-size:.8rem">Business accounts are set up on the HAF KNECT platform or the useHAF website — pick whichever suits you. It's free to start, and you can upgrade any time.</p>
+    </div>
+
+    <a class="biz-route" href="https://knect.usehaf.co.uk" target="_blank" rel="noopener">
+      <div class="br-icon">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+      </div>
+      <div class="br-body">
+        <div class="br-name">Apply on HAF KNECT</div>
+        <div class="br-sub">The full platform — post deliveries, get quotes, track jobs live.</div>
+      </div>
+      <div class="br-arrow"><svg viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></div>
+    </a>
+
+    <a class="biz-route" href="https://usehaf.co.uk" target="_blank" rel="noopener">
+      <div class="br-icon">
+        <svg viewBox="0 0 24 24"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
+      </div>
+      <div class="br-body">
+        <div class="br-name">Apply at usehaf.co.uk</div>
+        <div class="br-sub">Start from the useHAF website — quick and simple.</div>
+      </div>
+      <div class="br-arrow"><svg viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></div>
+    </a>
+
+    <div class="btn-row" style="margin-top:1rem">
+      <button type="button" class="btn btn-gh" onclick="backToType()">
+        <svg viewBox="0 0 24 24"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+        Back
+      </button>
+    </div>
   </div>
 
   <!-- STEP B: Driver form -->

@@ -6,13 +6,17 @@ function toggleTheme(){
   h.dataset.theme = h.dataset.theme === 'dark' ? 'light' : 'dark';
 }
 
+const TYPE_VIEWS = { driver:'view-driver', freight:'view-freight', business:'view-business' };
+
 function selectType(type){
   selectedType = type;
-  document.getElementById('card-driver').classList.toggle('selected', type === 'driver');
-  document.getElementById('card-freight').classList.toggle('selected', type === 'freight');
+  ['driver','freight','business'].forEach(t => {
+    const card = document.getElementById('card-' + t);
+    if (card) card.classList.toggle('selected', type === t);
+  });
   setTimeout(() => {
     document.getElementById('view-type').style.display = 'none';
-    document.getElementById(type === 'driver' ? 'view-driver' : 'view-freight').classList.add('visible');
+    document.getElementById(TYPE_VIEWS[type]).classList.add('visible');
     window.scrollTo({top:0, behavior:'smooth'});
   }, 120);
 }
@@ -20,8 +24,10 @@ function selectType(type){
 function backToType(){
   document.querySelectorAll('.form-section').forEach(s => s.classList.remove('visible'));
   document.getElementById('view-type').style.display = '';
-  document.getElementById('card-driver').classList.remove('selected');
-  document.getElementById('card-freight').classList.remove('selected');
+  ['driver','freight','business'].forEach(t => {
+    const card = document.getElementById('card-' + t);
+    if (card) card.classList.remove('selected');
+  });
   window.scrollTo({top:0, behavior:'smooth'});
 }
 
