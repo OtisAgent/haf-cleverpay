@@ -124,6 +124,13 @@ select.fi{appearance:none;-webkit-appearance:none;background-image:url("data:ima
 .btn-gh:hover{border-color:rgba(241,142,0,.35)}
 .btn svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
 
+/* ── TERMS ACCEPTANCE ── */
+.terms-row{display:flex;align-items:flex-start;gap:.7rem;margin-top:1.3rem;padding:.85rem 1rem;background:var(--p2);border:1px solid var(--ln);border-radius:var(--rx)}
+.terms-row input[type=checkbox]{flex-shrink:0;width:17px;height:17px;accent-color:var(--or);cursor:pointer;margin-top:.15rem}
+.terms-row label{font-size:.73rem;color:var(--mu);line-height:1.55;cursor:pointer}
+.terms-row a{color:var(--or);text-decoration:none}
+.terms-row a:hover{text-decoration:underline}
+
 /* ── SECURITY NOTE ── */
 .sec-note{display:flex;align-items:flex-start;gap:.65rem;background:var(--p2);border:1px solid var(--ln);border-radius:var(--rx);padding:.75rem .9rem;margin-top:1.1rem}
 .sec-note svg{flex-shrink:0;color:var(--mu);width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;margin-top:.1rem}
