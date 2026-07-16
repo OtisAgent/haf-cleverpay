@@ -101,6 +101,7 @@ a{color:var(--or);text-decoration:none}
 .chip-rejected{background:var(--rd-d);color:var(--rd);border:1px solid rgba(208,64,64,.22)}.chip-rejected::before{background:var(--rd)}
 .chip-driver{background:var(--bl-d);color:#7db3f5;border:1px solid rgba(61,125,202,.22)}.chip-driver::before{background:#7db3f5}
 .chip-freight{background:var(--or-d);color:var(--or);border:1px solid rgba(241,142,0,.18)}.chip-freight::before{background:var(--or)}
+.chip-business{background:rgba(139,92,246,.1);color:#a78bfa;border:1px solid rgba(139,92,246,.25)}.chip-business::before{background:#a78bfa}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
 
 /* ── DETAIL ── */

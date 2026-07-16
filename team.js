@@ -75,12 +75,14 @@ function renderView(){
 /* ── KPI ── */
 function updateKPIs(q){
   const n=(s)=>q.filter(a=>a.status===s).length;
-  document.getElementById('kpi-pending').textContent=n('pending');
+  /* business enquiries arrive as status 'enquiry' — they queue with pending */
+  const nPending=n('pending')+n('enquiry');
+  document.getElementById('kpi-pending').textContent=nPending;
   document.getElementById('kpi-reviewing').textContent=n('reviewing');
   document.getElementById('kpi-approved').textContent=n('approved');
   document.getElementById('kpi-total').textContent=q.length;
-  document.getElementById('pending-badge').textContent=n('pending')+' pending';
-  document.getElementById('tc-pending').textContent=n('pending');
+  document.getElementById('pending-badge').textContent=nPending+' pending';
+  document.getElementById('tc-pending').textContent=nPending;
   document.getElementById('tc-reviewing').textContent=n('reviewing');
   document.getElementById('tc-approved').textContent=n('approved');
   document.getElementById('tc-rejected').textContent=n('rejected');
@@ -90,7 +92,7 @@ function updateKPIs(q){
 function renderQueue(){
   const q=QUEUE;
   updateKPIs(q);
-  const filtered=currentTab==='all'?q:q.filter(a=>a.status===currentTab);
+  const filtered=currentTab==='all'?q:q.filter(a=>a.status===currentTab||(currentTab==='pending'&&a.status==='enquiry'));
   const el=document.getElementById('main-content');
   if(!filtered.length){
     el.innerHTML=`<div class="empty"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>No ${currentTab==='all'?'':currentTab} applications yet.</div>`;
@@ -103,7 +105,7 @@ function renderQueue(){
 }
 
 function ini(a){
-  if(a.type==='freight'){
+  if(a.type==='freight'||a.type==='business'){
     const w=(a.company||'').split(' ').filter(x=>!['ltd','limited','uk','plc','llp'].includes(x.toLowerCase()));
     return w.slice(0,2).map(x=>x[0]?.toUpperCase()||'').join('');
   }
@@ -111,15 +113,17 @@ function ini(a){
 }
 function displayName(a){return a.type==='driver'?(a.fname+' '+a.lname):(a.company||a.name)}
 function statusChip(s){
-  const m={pending:'chip-pending',reviewing:'chip-reviewing',approved:'chip-approved',rejected:'chip-rejected'};
-  const l={pending:'Pending',reviewing:'In Review',approved:'Approved',rejected:'Rejected'};
+  const m={pending:'chip-pending',enquiry:'chip-pending',reviewing:'chip-reviewing',approved:'chip-approved',rejected:'chip-rejected'};
+  const l={pending:'Pending',enquiry:'New enquiry',reviewing:'In Review',approved:'Approved',rejected:'Rejected'};
   return`<span class="chip ${m[s]||'chip-pending'}">${l[s]||s}</span>`;
 }
 
 function appCardHtml(a){
   const isF=a.type==='freight';
+  const isB=a.type==='business';
   const cfg=getConfig();
-  const docDefs=isF?cfg.freight.docs:cfg.driver.docs;
+  /* business enquiries carry no compliance docs — never flag them as missing */
+  const docDefs=isB?[]:(isF?cfg.freight.docs:cfg.driver.docs);
 
   const uploaded=a.docs||[];
   const uploadedIds=uploaded.map(d=>d.id);
@@ -159,6 +163,14 @@ function appCardHtml(a){
     <div class="dg"><div class="dl">VAT No.</div><div class="dv">${a.vat||'Not provided'}</div></div>
     <div class="dg"><div class="dl">Submitted</div><div class="dv">${fmtDate(a.submitted)}</div></div>
   `;
+  const businessRows=`
+    <div class="dg"><div class="dl">Company</div><div class="dv">${a.company||'—'}</div></div>
+    <div class="dg"><div class="dl">Contact name</div><div class="dv">${a.name||'—'}</div></div>
+    <div class="dg"><div class="dl">Email</div><div class="dv">${a.email||'—'}</div></div>
+    <div class="dg"><div class="dl">Phone</div><div class="dv">${a.phone||'—'}</div></div>
+    <div class="dg" style="grid-column:1/-1"><div class="dl">What they need to move</div><div class="dv">${a.notes||'—'}</div></div>
+    <div class="dg"><div class="dl">Submitted</div><div class="dv">${fmtDate(a.submitted)}</div></div>
+  `;
   const freightExtras=isF?`
     <div class="info-row"><span class="ir-label">KNECT member</span><span class="ir-val">${a.knect?'Yes':'No'}</span></div>
     <div class="info-row"><span class="ir-label">Payment model</span><span class="ir-val">Pay upfront — no credit</span></div>
@@ -167,7 +179,7 @@ function appCardHtml(a){
   const actions=(()=>{
     if(a.status==='approved')return`<button class="btn btn-gh btn-done">Approved ✓</button>`;
     if(a.status==='rejected')return`<button class="btn btn-gh btn-done">Rejected</button>`;
-    const rev=a.status==='pending'?`<button class="btn btn-review" onclick="markReviewing('${a.ref}')"><svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>Mark in review</button>`:'';
+    const rev=(a.status==='pending'||a.status==='enquiry')?`<button class="btn btn-review" onclick="markReviewing('${a.ref}')"><svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>Mark in review</button>`:'';
     return`${rev}<button class="btn btn-approve" onclick="approve('${a.ref}')"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>Approve</button><button class="btn btn-reject" onclick="openReject('${a.ref}')"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>Reject</button>`;
   })();
 
@@ -179,7 +191,7 @@ function appCardHtml(a){
         <div class="app-meta">${a.ref} · ${fmtDate(a.submitted)}</div>
       </div>
       <div class="app-right">
-        <span class="chip ${isF?'chip-freight':'chip-driver'}">${isF?'Freight':'Driver'}</span>
+        <span class="chip ${isB?'chip-business':isF?'chip-freight':'chip-driver'}">${isB?'Business':isF?'Freight':'Driver'}</span>
         ${statusChip(a.status)}
         ${a.added_by?`<span class="chip chip-reviewing" title="Added manually by the HAF team">Added by ${a.added_by}</span>`:''}
         ${missingReq.length?`<span class="chip" style="background:rgba(208,64,64,.1);color:var(--rd);border:1px solid rgba(208,64,64,.2)">${missingReq.length} doc${missingReq.length!==1?'s':''} missing</span>`:''}
@@ -187,11 +199,11 @@ function appCardHtml(a){
       <div class="chevron"><svg viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg></div>
     </div>
     <div class="app-detail">
-      <div class="detail-sec">Applicant details</div>
-      <div class="detail-grid">${isF?freightRows:driverRows}</div>
+      <div class="detail-sec">${isB?'Enquiry details':'Applicant details'}</div>
+      <div class="detail-grid">${isB?businessRows:isF?freightRows:driverRows}</div>
       ${freightExtras}
-      <div class="detail-sec">Compliance documents</div>
-      <div class="doc-rows">${allDocRows.join('')||'<div style="font-size:.74rem;color:var(--mu);padding:.2rem 0">No documents submitted yet.</div>'}</div>
+      ${isB?'':`<div class="detail-sec">Compliance documents</div>
+      <div class="doc-rows">${allDocRows.join('')||'<div style="font-size:.74rem;color:var(--mu);padding:.2rem 0">No documents submitted yet.</div>'}</div>`}
       <div class="detail-sec">Actions</div>
       <div class="action-bar">${actions}</div>
     </div>
