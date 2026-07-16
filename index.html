@@ -184,6 +184,44 @@
         </div>
       </div>
 
+      <div class="section-label" style="margin-top:.5rem">Fleet operators</div>
+
+      <div class="knect-toggle" id="fleet-toggle" onclick="toggleFleet()">
+        <div class="kt-icon">
+          <svg viewBox="0 0 24 24"><rect x="1" y="3" width="15" height="13" rx="1"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
+        </div>
+        <div class="kt-body">
+          <div class="kt-label">I operate a fleet</div>
+          <div class="kt-sub" id="fleet-sub">Tap if you run more than one driver — we'll set your fleet up properly.</div>
+        </div>
+        <div class="kt-pill"><div class="kt-thumb"></div></div>
+      </div>
+
+      <div class="fg" id="fleet-size-wrap" style="display:none">
+        <label class="fl">How many drivers do you currently have? <span class="req">*</span></label>
+        <select class="fi" id="d-fleet-size">
+          <option value="">Select</option>
+          <option>2–3</option>
+          <option>4–10</option>
+          <option>11–25</option>
+          <option>26+</option>
+        </select>
+        <div class="fi-hint">Fleet payment tiers are being finalised — we'll confirm yours after sign-up. Nothing to pay now.</div>
+      </div>
+
+      <div class="section-label" style="margin-top:.5rem">HAF KNECT membership</div>
+
+      <div class="knect-toggle" id="d-knect-toggle" onclick="toggleKnectDriver()">
+        <div class="kt-icon">
+          <svg viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+        </div>
+        <div class="kt-body">
+          <div class="kt-label">I have a HAF KNECT membership</div>
+          <div class="kt-sub" id="d-knect-sub">Tap to confirm — members get priority access to work on the network. You can also join after you're approved.</div>
+        </div>
+        <div class="kt-pill"><div class="kt-thumb"></div></div>
+      </div>
+
       <div class="section-label" style="margin-top:.5rem">Account security</div>
 
       <div class="fi-row">

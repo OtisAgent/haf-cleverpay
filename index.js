@@ -1,5 +1,7 @@
 let selectedType = null;
 let knectOn = false;
+let fleetOn = false;
+let knectDriverOn = false;
 
 function toggleTheme(){
   const h = document.documentElement;
@@ -47,6 +49,27 @@ function toggleKnect(){
     : 'Tap to confirm — earns you a higher rebate rate on every job.';
   sub.classList.toggle('highlight', knectOn);
   info.classList.toggle('show', knectOn);
+}
+
+function toggleFleet(){
+  fleetOn = !fleetOn;
+  document.getElementById('fleet-toggle').classList.toggle('on', fleetOn);
+  document.getElementById('fleet-size-wrap').style.display = fleetOn ? '' : 'none';
+  const sub = document.getElementById('fleet-sub');
+  sub.textContent = fleetOn
+    ? 'Fleet noted — tell us how many drivers you currently have below.'
+    : 'Tap if you run more than one driver — we\'ll set your fleet up properly.';
+  sub.classList.toggle('highlight', fleetOn);
+}
+
+function toggleKnectDriver(){
+  knectDriverOn = !knectDriverOn;
+  document.getElementById('d-knect-toggle').classList.toggle('on', knectDriverOn);
+  const sub = document.getElementById('d-knect-sub');
+  sub.textContent = knectDriverOn
+    ? 'KNECT membership noted — we\'ll link it to your driver account.'
+    : 'Tap to confirm — members get priority access to work on the network. You can also join after you\'re approved.';
+  sub.classList.toggle('highlight', knectDriverOn);
 }
 
 /* Generate HAF username: 2 initials + last 4 digits of phone + last 2 of birth year */
@@ -133,6 +156,11 @@ async function submitDriver(e){
     alert('Please fill in all required fields.');
     return;
   }
+  const fleetSize = document.getElementById('d-fleet-size').value;
+  if(fleetOn && !fleetSize){
+    alert('Please tell us how many drivers you currently have.');
+    return;
+  }
   if(!validPin(pin, pin2)) return;
 
   const username = genDriverUsername(fn, ln, phone, dob);
@@ -140,7 +168,9 @@ async function submitDriver(e){
 
   const r = await cpApi('/apply', { method: 'POST', body: {
     type: 'driver', username, pinHash,
-    fname: fn, lname: ln, email, phone, dob, vtype, vreg
+    fname: fn, lname: ln, email, phone, dob, vtype, vreg,
+    fleet: fleetOn, fleetSize: fleetOn ? fleetSize : null,
+    knect: knectDriverOn
   }});
   if(!r.ok){ alert(r.body?.error || 'Something went wrong — please try again.'); return; }
 
