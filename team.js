@@ -113,8 +113,8 @@ function ini(a){
 }
 function displayName(a){return a.type==='driver'?(a.fname+' '+a.lname):(a.company||a.name)}
 function statusChip(s){
-  const m={pending:'chip-pending',enquiry:'chip-pending',reviewing:'chip-reviewing',approved:'chip-approved',rejected:'chip-rejected'};
-  const l={pending:'Pending',enquiry:'New enquiry',reviewing:'In Review',approved:'Approved',rejected:'Rejected'};
+  const m={pending:'chip-pending',enquiry:'chip-pending',reviewing:'chip-reviewing',approved:'chip-approved',rejected:'chip-rejected',blocked:'chip-rejected'};
+  const l={pending:'Pending',enquiry:'New enquiry',reviewing:'In Review',approved:'Approved',rejected:'Rejected',blocked:'Blocked'};
   return`<span class="chip ${m[s]||'chip-pending'}">${l[s]||s}</span>`;
 }
 
@@ -177,10 +177,13 @@ function appCardHtml(a){
   `:'';
 
   const actions=(()=>{
-    if(a.status==='approved')return`<button class="btn btn-gh btn-done">Approved ✓</button>`;
-    if(a.status==='rejected')return`<button class="btn btn-gh btn-done">Rejected</button>`;
+    if(a.status==='blocked')return`<button class="btn btn-approve" onclick="unblockAcc('${a.ref}')"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>Unblock (back to pending)</button>`;
+    const blockBtn=isB?'':`<button class="btn btn-reject" onclick="blockAcc('${a.ref}')" title="Refuse this account all access — including PLNA"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>Block</button>`;
+    const emailBtn=(!isB&&!a.email_verified)?`<button class="btn btn-review" onclick="confirmEmail('${a.ref}')" title="Mark this applicant's email address as confirmed"><svg viewBox="0 0 24 24"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>Confirm email</button>`:'';
+    if(a.status==='approved')return`${emailBtn}<button class="btn btn-gh btn-done">Approved ✓</button>${blockBtn}`;
+    if(a.status==='rejected')return`<button class="btn btn-gh btn-done">Rejected</button>${blockBtn}`;
     const rev=(a.status==='pending'||a.status==='enquiry')?`<button class="btn btn-review" onclick="markReviewing('${a.ref}')"><svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>Mark in review</button>`:'';
-    return`${rev}<button class="btn btn-approve" onclick="approve('${a.ref}')"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>Approve</button><button class="btn btn-reject" onclick="openReject('${a.ref}')"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>Reject</button>`;
+    return`${rev}${emailBtn}<button class="btn btn-approve" onclick="approve('${a.ref}')"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>Approve</button><button class="btn btn-reject" onclick="openReject('${a.ref}')"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>Reject</button>${blockBtn}`;
   })();
 
   return`<div class="app-card" id="card-${a.ref}">
@@ -193,6 +196,7 @@ function appCardHtml(a){
       <div class="app-right">
         <span class="chip ${isB?'chip-business':isF?'chip-freight':'chip-driver'}">${isB?'Business':isF?'Freight':'Driver'}</span>
         ${statusChip(a.status)}
+        ${isB?'':(a.email_verified?`<span class="chip chip-approved" title="Email address confirmed">Email ✓</span>`:`<span class="chip chip-pending" title="Access stays locked until the email is confirmed">Email unconfirmed</span>`)}
         ${a.added_by?`<span class="chip chip-reviewing" title="Added manually by the HAF team">Added by ${a.added_by}</span>`:''}
         ${missingReq.length?`<span class="chip" style="background:rgba(208,64,64,.1);color:var(--rd);border:1px solid rgba(208,64,64,.2)">${missingReq.length} doc${missingReq.length!==1?'s':''} missing</span>`:''}
       </div>
@@ -219,7 +223,31 @@ function toggleCard(ref){
 }
 function tickDoc(ref,id){document.getElementById('chk-'+ref+'-'+id)?.classList.toggle('on')}
 function markReviewing(ref){update(ref,{status:'reviewing'},'Marked as in review')}
-function approve(ref){update(ref,{status:'approved'},'Application approved — access granted')}
+function approve(ref){update(ref,{status:'approved'},'Approved — access unlocks once their email is confirmed')}
+function blockAcc(ref){update(ref,{status:'blocked'},'Account blocked — all access refused')}
+function unblockAcc(ref){update(ref,{status:'pending'},'Unblocked — returned to pending for re-review')}
+
+/* Email confirmation goes through a database function that checks the team
+   session token server-side — the public key alone cannot flip this flag. */
+const SB_URL='https://jsdwvogsxlnczzbefwgp.supabase.co';
+const SB_ANON='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpzZHd2b2dzeGxuY3p6YmVmd2dwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEzODgyMzYsImV4cCI6MjA5Njk2NDIzNn0.pxqM-Oh4f_3PlqCbKIKvcKZnNRUZ1ASKqqdNg78M_4M';
+async function confirmEmail(ref){
+  if(!TEAM)return;
+  let ok=false;
+  try{
+    const res=await fetch(SB_URL+'/rest/v1/rpc/cleverpay_team_set_email_verified',{
+      method:'POST',
+      headers:{'Content-Type':'application/json',apikey:SB_ANON,Authorization:'Bearer '+SB_ANON},
+      body:JSON.stringify({p_ref:ref,p_token:TEAM.token,p_verified:true})
+    });
+    ok=res.ok;
+  }catch(e){}
+  if(!ok){showToast('Could not confirm the email — try again',true);return;}
+  const i=QUEUE.findIndex(a=>a.ref===ref);
+  if(i>=0)QUEUE[i]={...QUEUE[i],email_verified:true};
+  renderQueue();
+  showToast('Email confirmed');
+}
 async function update(ref,patch,okMsg){
   const r=await cpApi('/team/applications/'+ref,{method:'PATCH',body:patch,token:TEAM.token});
   if(r.status===401){showToast('Session expired — please sign in again',true);doSignOut();return;}

@@ -216,12 +216,18 @@ function renderStatus(app){
   icon.className = 'status-icon ' + status;
   title.className = 'status-title ' + status;
 
+  /* Access needs BOTH: team approval AND a confirmed email address. */
+  const emailOk = !!app.email_verified;
+  const fullAccess = status === 'approved' && emailOk;
   const tease = document.getElementById('founder-tease');
   const offer = document.getElementById('founder-offer');
   const emailNote = document.getElementById('email-note');
-  tease.classList.toggle('show', status === 'pending' || status === 'reviewing');
-  offer.classList.toggle('show', status === 'approved');
-  emailNote.style.display = (status === 'pending' || status === 'reviewing') ? '' : 'none';
+  tease.classList.toggle('show', status === 'pending' || status === 'reviewing' || (status === 'approved' && !emailOk));
+  offer.classList.toggle('show', fullAccess);
+  emailNote.style.display = (status === 'pending' || status === 'reviewing' || (status === 'approved' && !emailOk)) ? '' : 'none';
+  if (status === 'approved' && !emailOk) {
+    emailNote.querySelector('span').innerHTML = '<strong>One step left — confirm your email.</strong> Your documents are approved, but access stays locked until the email address on your application is confirmed with the HAF team.';
+  }
 
   if(status === 'pending'){
     icon.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>';
@@ -231,6 +237,21 @@ function renderStatus(app){
     icon.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
     title.textContent = 'In Review';
     body.textContent = 'The team is actively reviewing your documents. You\'ll be notified by email shortly.';
+  } else if(status === 'approved' && !emailOk){
+    icon.className = 'status-icon pending';
+    title.className = 'status-title pending';
+    icon.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>';
+    title.textContent = 'Approved — confirm your email';
+    body.textContent = 'The compliance team has approved your documents. Access unlocks the moment your email address is confirmed.';
+
+    const s3a = document.getElementById('step-3');
+    s3a.className = 'step done';
+    s3a.querySelector('.step-n').textContent = '✓';
+    document.getElementById('tl-review-dot').className = 'tl-dot done';
+    document.getElementById('tl-review-title').textContent = 'Compliance approved';
+    document.getElementById('tl-review-sub').textContent = 'All documents verified by the HAF compliance team.';
+    document.getElementById('tl-access-sub').textContent = 'Unlocks once your email address is confirmed.';
+
   } else if(status === 'approved'){
     icon.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
     title.textContent = 'Approved';
@@ -266,6 +287,14 @@ function renderStatus(app){
       const tier = app.knect ? `KNECT member (${knectRate})` : `Standard (${stdRate})`;
       document.getElementById('rebate-tier').textContent = tier;
     }
+
+  } else if(status === 'blocked'){
+    icon.className = 'status-icon rejected';
+    title.className = 'status-title rejected';
+    icon.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>';
+    title.textContent = 'Account Blocked';
+    body.textContent = 'This account has been blocked by the HAF team and cannot access the network. If you believe this is a mistake, contact the team quoting your reference above.';
+    document.getElementById('access-panel').classList.remove('show');
 
   } else if(status === 'rejected'){
     icon.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>';
