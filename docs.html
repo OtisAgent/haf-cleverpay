@@ -58,6 +58,15 @@
     <div class="up-bar"><div class="up-fill" id="up-fill" style="width:0%"></div></div>
   </div>
 
+  <!-- Founders code banner — shown only if applicant selected a tier -->
+  <div id="founders-code-banner" style="display:none;background:rgba(241,142,0,.10);border:1.5px solid var(--or);border-radius:13px;padding:1rem 1.1rem;margin-bottom:1.1rem">
+    <div style="font-size:.68rem;font-weight:700;color:var(--or);letter-spacing:.06em;text-transform:uppercase;margin-bottom:.3rem">Your founders deal is locked in</div>
+    <div style="font-size:.85rem;color:var(--tx);margin-bottom:.5rem"><strong id="fcb-stage">—</strong> tier &nbsp;·&nbsp; <strong id="fcb-months">—</strong> PLNA Pro free</div>
+    <div style="font-size:.7rem;color:var(--mu);margin-bottom:.35rem">Your personal discount code:</div>
+    <div id="fcb-code" style="font-size:1.2rem;font-weight:800;color:var(--or);letter-spacing:.14em;font-family:monospace">—</div>
+    <div style="font-size:.68rem;color:var(--mu);margin-top:.35rem">Screenshot or copy this — it'll also be in your approval email. Code is unique to you.</div>
+  </div>
+
   <div id="doc-section"></div>
 
   <div class="info-box">
@@ -134,6 +143,18 @@ async function loadPage(){
 
   document.getElementById('ref-val').textContent = app.ref;
   document.getElementById('type-val').textContent = app.type === 'driver' ? 'Driver' : 'Freight Forwarder';
+
+  if(app.promo_code && app.founders_tier){
+    const MONTHS = { founder:'6 months', builder:'3 months', partner:'1 month', final:'—' };
+    const STAGE  = { founder:'Founders', builder:'Builder', partner:'Partner', final:'Final stage' };
+    const el = document.getElementById('founders-code-banner');
+    if(el){
+      document.getElementById('fcb-stage').textContent = STAGE[app.founders_tier] || app.founders_tier;
+      document.getElementById('fcb-months').textContent = MONTHS[app.founders_tier] || '—';
+      document.getElementById('fcb-code').textContent  = app.promo_code;
+      el.style.display = '';
+    }
+  }
 
   const isDriver = app.type === 'driver';
   document.getElementById('page-kicker').textContent = isDriver ? 'Driver Account' : 'Freight Forwarder Account';

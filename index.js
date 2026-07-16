@@ -2,6 +2,44 @@ let selectedType = null;
 let knectOn = false;
 let fleetOn = false;
 let knectDriverOn = false;
+let dFounderTier = null;
+let fFounderTier = null;
+
+const FOUNDER_CODES = { founder:'H6PRO', builder:'H3PRO', partner:'H1PRO', final:'HKPRO' };
+const FOUNDER_MONTHS = { founder:6, builder:3, partner:1, final:0 };
+
+function genFoundersCode(tier){
+  const prefix = FOUNDER_CODES[tier] || 'HKPRO';
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  const rand = [...crypto.getRandomValues(new Uint8Array(6))].map(b => chars[b % chars.length]).join('');
+  return prefix + '-' + rand;
+}
+
+function selectFounderTier(form, tier){
+  const prev = form === 'd' ? dFounderTier : fFounderTier;
+  const tiers = ['founder','builder','partner','final'];
+
+  // toggle off if same tier tapped again
+  if(prev === tier){
+    if(form === 'd') dFounderTier = null; else fFounderTier = null;
+    tiers.forEach(t => document.getElementById(form + '-ft-' + t)?.classList.remove('selected'));
+    document.getElementById(form + '-code-preview').classList.remove('show');
+    return;
+  }
+
+  if(form === 'd') dFounderTier = tier; else fFounderTier = tier;
+  tiers.forEach(t => {
+    const card = document.getElementById(form + '-ft-' + t);
+    if(card) card.classList.toggle('selected', t === tier);
+  });
+
+  const code = genFoundersCode(tier);
+  document.getElementById(form + '-code-val').textContent = code;
+  document.getElementById(form + '-code-preview').classList.add('show');
+  // Store in sessionStorage so submit can read it
+  sessionStorage.setItem(form + '_founders_code', code);
+  sessionStorage.setItem(form + '_founders_tier', tier);
+}
 
 function toggleTheme(){
   const h = document.documentElement;
@@ -223,15 +261,21 @@ async function submitDriver(e){
   const username = genDriverUsername(fn, ln, phone, dob);
   const pinHash = await hashPin(username, pin);
 
+  const foundersTier = dFounderTier || sessionStorage.getItem('d_founders_tier') || null;
+  const foundersCode = foundersTier ? (sessionStorage.getItem('d_founders_code') || genFoundersCode(foundersTier)) : null;
+
   const r = await cpApi('/apply', { method: 'POST', body: {
     type: 'driver', username, pinHash,
     fname: fn, lname: ln, email, phone, dob, vtype, vreg,
     fleet: fleetOn, fleetSize: fleetOn ? fleetSize : null,
-    knect: knectDriverOn
+    knect: knectDriverOn,
+    founders_tier: foundersTier,
+    promo_code: foundersCode
   }});
   if(!r.ok){ alert(r.body?.error || 'Something went wrong — please try again.'); return; }
 
-  localStorage.setItem('cp_application', JSON.stringify({...r.body, pinHash}));
+  sessionStorage.removeItem('d_founders_code'); sessionStorage.removeItem('d_founders_tier');
+  localStorage.setItem('cp_application', JSON.stringify({...r.body, pinHash, founders_tier: foundersTier, promo_code: foundersCode}));
   window.location.href = 'docs.html';
 }
 
@@ -257,14 +301,20 @@ async function submitFreight(e){
   const username = genFreightUsername(company, phone);
   const pinHash = await hashPin(username, pin);
 
+  const foundersTier = fFounderTier || sessionStorage.getItem('f_founders_tier') || null;
+  const foundersCode = foundersTier ? (sessionStorage.getItem('f_founders_code') || genFoundersCode(foundersTier)) : null;
+
   const r = await cpApi('/apply', { method: 'POST', body: {
     type: 'freight', username, pinHash,
     company, crn, vat, name, title, email, phone,
-    knect: knectOn
+    knect: knectOn,
+    founders_tier: foundersTier,
+    promo_code: foundersCode
   }});
   if(!r.ok){ alert(r.body?.error || 'Something went wrong — please try again.'); return; }
 
-  localStorage.setItem('cp_application', JSON.stringify({...r.body, pinHash}));
+  sessionStorage.removeItem('f_founders_code'); sessionStorage.removeItem('f_founders_tier');
+  localStorage.setItem('cp_application', JSON.stringify({...r.body, pinHash, founders_tier: foundersTier, promo_code: foundersCode}));
   window.location.href = 'docs.html';
 }
 
