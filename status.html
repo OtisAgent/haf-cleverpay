@@ -50,6 +50,19 @@
       </div>
       <div class="copy-btn" id="copy-btn">Copy</div>
     </div>
+
+    <div class="email-note" id="email-note">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+      <span><strong>Check your email.</strong> Your reference and portal sign-in details are on their way. You can sign back in any time at this portal with your HAF username and PIN to follow your review.</span>
+    </div>
+  </div>
+
+  <!-- FOUNDER TEASER (shown while under review) -->
+  <div class="founder-tease" id="founder-tease">
+    <div class="ft-kicker">While you're being verified</div>
+    <div class="ft-head">HAF KNECT Founder Membership</div>
+    <div class="ft-body">A one-off £100 payment — never monthly. Your Founder price and badge are locked for life, with priority access to work on the network. The founder window closes <strong>31 July 2026</strong>.</div>
+    <div class="ft-lock">🔒 Unlocks the moment you're approved</div>
   </div>
 
   <!-- ACCESS PANEL (shown when approved) -->
@@ -74,6 +87,20 @@
         <div class="al-url">knect.usehaf.co.uk</div>
       </a>
     </div>
+  </div>
+
+  <!-- FOUNDER OFFER (shown once approved — the memorable moment) -->
+  <div class="founder-offer" id="founder-offer">
+    <div class="fo-kicker">You're verified — the founder window is open</div>
+    <div class="fo-head">Claim your Founder Membership</div>
+    <ul class="fo-list">
+      <li>One-off £100 — never a monthly charge, nothing to cancel</li>
+      <li>Founder price and badge locked for life, even as the price rises</li>
+      <li>Priority visibility for suitable work on the network</li>
+      <li>First access to every network reward as it rolls out</li>
+    </ul>
+    <a class="fo-btn" href="https://www.usehaf.co.uk/products/haf-knect-founding-member" target="_blank" rel="noopener">Claim Founder Membership — £100 one-off →</a>
+    <div class="fo-note">Prefer to carry on free? No problem — you can join any time, at the membership price live at that moment.</div>
   </div>
 
   <!-- REBATE PANEL (freight approved) -->
@@ -130,7 +157,7 @@
       </div>
       <div class="tl-body">
         <div class="tl-title">Access granted</div>
-        <div class="tl-sub" id="tl-access-sub">You will receive a WhatsApp message with your login details.</div>
+        <div class="tl-sub" id="tl-access-sub">You'll receive an email with your sign-in details once the review is complete.</div>
       </div>
     </div>
   </div>
@@ -189,14 +216,21 @@ function renderStatus(app){
   icon.className = 'status-icon ' + status;
   title.className = 'status-title ' + status;
 
+  const tease = document.getElementById('founder-tease');
+  const offer = document.getElementById('founder-offer');
+  const emailNote = document.getElementById('email-note');
+  tease.classList.toggle('show', status === 'pending' || status === 'reviewing');
+  offer.classList.toggle('show', status === 'approved');
+  emailNote.style.display = (status === 'pending' || status === 'reviewing') ? '' : 'none';
+
   if(status === 'pending'){
     icon.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>';
     title.textContent = 'Under Review';
-    body.textContent = 'Your application has been submitted. The HAF compliance team usually responds within 24 hours.';
+    body.textContent = 'Your application has been submitted and is with the HAF compliance team — they usually respond within 24 hours.';
   } else if(status === 'reviewing'){
     icon.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
     title.textContent = 'In Review';
-    body.textContent = 'The team is actively reviewing your documents. You will be notified by WhatsApp shortly.';
+    body.textContent = 'The team is actively reviewing your documents. You\'ll be notified by email shortly.';
   } else if(status === 'approved'){
     icon.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
     title.textContent = 'Approved';

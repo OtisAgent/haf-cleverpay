@@ -128,3 +128,26 @@ a{color:var(--or);text-decoration:none}
 .rbt-val{font-weight:700;color:var(--tx)}
 .rbt-val.or{color:var(--or)}
 .rbt-val.gn{color:var(--gn)}
+
+/* ── EMAIL NOTE (under-review confirmation) ── */
+.email-note{display:flex;gap:.6rem;align-items:flex-start;text-align:left;background:var(--or-d);border:1px solid var(--or-g);border-radius:var(--rs);padding:.85rem 1rem;margin-top:1rem;font-size:.93rem;color:var(--tx)}
+.email-note svg{width:17px;height:17px;stroke:var(--or);flex-shrink:0;margin-top:2px}
+
+/* ── FOUNDER TEASER (under review) + OFFER (approved) ── */
+.founder-tease{display:none;background:var(--p);border:1.5px dashed var(--or-g);border-radius:var(--r);padding:1.4rem 1.3rem;margin-bottom:1.2rem;text-align:center}
+.founder-tease.show{display:block}
+.ft-kicker{font-size:.72rem;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--or);margin-bottom:.35rem}
+.ft-head{font-family:var(--dp);font-weight:900;font-size:1.15rem;letter-spacing:-.02em;margin-bottom:.4rem}
+.ft-body{font-size:.93rem;color:var(--mu);max-width:34rem;margin:0 auto .6rem}
+.ft-lock{display:inline-block;font-size:.85rem;font-weight:600;background:var(--p2);border-radius:var(--pill);padding:.4rem .9rem}
+.founder-offer{display:none;background:var(--or-d);border:1.5px solid var(--or-g);border-radius:var(--r);padding:1.6rem 1.4rem;margin-bottom:1.2rem;text-align:center}
+.founder-offer.show{display:block}
+.fo-kicker{font-size:.72rem;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--or);margin-bottom:.35rem}
+.fo-head{font-family:var(--dp);font-weight:900;font-size:1.3rem;letter-spacing:-.02em;margin-bottom:.7rem}
+.fo-list{list-style:none;max-width:26rem;margin:0 auto .9rem;text-align:left}
+.fo-list li{position:relative;padding-left:1.5rem;font-size:.93rem;margin-bottom:.4rem}
+.fo-list li::before{content:"✓";position:absolute;left:0;color:var(--or);font-weight:800}
+.fo-btn{display:inline-block;background:var(--or);color:#0e1113;font-weight:800;border-radius:var(--pill);padding:.85rem 1.5rem;font-size:.95rem;box-shadow:0 6px 18px var(--or-g)}
+.fo-btn:hover{filter:brightness(1.06)}
+.fo-note{font-size:.82rem;color:var(--mu);margin-top:.7rem}
+@media (max-width:480px){.fo-btn{display:block;padding:.9rem 1rem}}
