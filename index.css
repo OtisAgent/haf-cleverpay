@@ -183,3 +183,4 @@ select.fi{appearance:none;-webkit-appearance:none;background-image:url("data:ima
 .biz-band .bb-arrow{flex:none;color:var(--or)}
 .biz-band .bb-arrow svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 @media (max-width:560px){.biz-band{flex-direction:row;align-items:flex-start}.biz-band .type-icon{margin-top:.1rem}}
+.ft-reward-freight{font-size:.68rem;color:var(--or);font-weight:600;opacity:.85;margin-top:.1rem}
