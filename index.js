@@ -4,9 +4,38 @@ let fleetOn = false;
 let knectDriverOn = false;
 let dFounderTier = null;
 let fFounderTier = null;
+let activeTierStage = 'founder'; // Tracks which tier stage is currently unlocked
 
 const FOUNDER_CODES = { founder:'H6PRO', builder:'H3PRO', partner:'H1PRO', final:'HKPRO' };
 const FOUNDER_MONTHS = { founder:6, builder:3, partner:1, final:0 };
+const TIER_HIERARCHY = ['founder', 'builder', 'partner', 'final']; // Unlock order
+
+// Fetch milestone state and gate tier visibility
+async function gateLockedTiers(){
+  try {
+    const r = await fetch('https://jsdwvogsxlnczzbefwgp.supabase.co/rest/v1/tier_config?id=eq.1&select=active_stage', {
+      headers: {
+        'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpzZHd2b2dzeGxuY3p6YmVmd2dwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEzODgyMzYsImV4cCI6MjA5Njk2NDIzNn0.pxqM-Oh4f_3PlqCbKIKvcKZnNRUZ1ASKqqdNg78M_4M'
+      }
+    });
+    const data = await r.json();
+    if (data && data[0]) {
+      activeTierStage = data[0].active_stage || 'founder';
+    }
+  } catch (e) {
+    console.warn('Tier config fetch failed; defaulting to founder', e);
+  }
+  // Hide tier cards that are not yet unlocked
+  const unlockedIndex = TIER_HIERARCHY.indexOf(activeTierStage);
+  TIER_HIERARCHY.forEach((tier, idx) => {
+    const dCard = document.getElementById('d-ft-' + tier);
+    const fCard = document.getElementById('f-ft-' + tier);
+    if (idx > unlockedIndex) {
+      if (dCard) dCard.style.display = 'none';
+      if (fCard) fCard.style.display = 'none';
+    }
+  });
+}
 
 function genFoundersCode(tier){
   const prefix = FOUNDER_CODES[tier] || 'HKPRO';
@@ -349,3 +378,6 @@ async function doLogin(){
     document.getElementById('login-err').classList.remove('show');
   });
 });
+
+// Gate locked tiers on page load
+gateLockedTiers();
