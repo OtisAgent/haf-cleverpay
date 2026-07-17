@@ -2,95 +2,6 @@ let selectedType = null;
 let knectOn = false;
 let fleetOn = false;
 let knectDriverOn = false;
-let dFounderTier = null;
-let fFounderTier = null;
-let activeTierStage = 'founder'; // Tracks which tier stage is currently unlocked
-
-const FOUNDER_CODES = { founder:'H6PRO', builder:'H3PRO', partner:'H1PRO', final:'HKPRO' };
-const FOUNDER_MONTHS = { founder:6, builder:3, partner:1, final:0 };
-const TIER_HIERARCHY = ['founder', 'builder', 'partner', 'final']; // Unlock order
-const TIER_DATA = {
-  founder: { name: 'Founders', price: '£100', plna: '6 months free PLNA Pro', freight: '3 months free Freight account' },
-  builder: { name: 'Builder', price: '£250', plna: '3 months free PLNA Pro', freight: '1 month free Freight account' },
-  partner: { name: 'Partner', price: '£500', plna: '1 month free PLNA Pro', freight: '1 month free Freight account' },
-  final: { name: 'Final stage', price: '£1,000', plna: 'Standard access', freight: null }
-};
-
-// Fetch milestone state and render the active tier card
-async function renderActiveTier(){
-  try {
-    const r = await fetch('https://jsdwvogsxlnczzbefwgp.supabase.co/rest/v1/tier_config?id=eq.1&select=active_stage', {
-      headers: {
-        'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpzZHd2b2dzeGxuY3p6YmVmd2dwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEzODgyMzYsImV4cCI6MjA5Njk2NDIzNn0.pxqM-Oh4f_3PlqCbKIKvcKZnNRUZ1ASKqqdNg78M_4M'
-      }
-    });
-    const data = await r.json();
-    if (data && data[0]) {
-      activeTierStage = data[0].active_stage || 'founder';
-    }
-  } catch (e) {
-    console.warn('Tier config fetch failed; defaulting to founder', e);
-  }
-
-  // Render active tier card for desktop and mobile
-  const tierData = TIER_DATA[activeTierStage];
-  if (tierData) {
-    const cardHtml = `
-      <div class="ft-card" id="d-ft-${activeTierStage}" onclick="selectFounderTier('d','${activeTierStage}')">
-        <div class="ft-stage">${tierData.name}</div>
-        <div class="ft-price">${tierData.price}</div>
-        <div class="ft-reward">${tierData.plna}</div>
-        ${tierData.freight ? `<div class="ft-reward ft-reward-freight">+ ${tierData.freight}</div>` : ''}
-      </div>
-    `;
-    const dCardContainer = document.getElementById('d-active-tier-card');
-    if (dCardContainer) dCardContainer.innerHTML = cardHtml;
-
-    const mCardHtml = cardHtml.replace(/id="d-ft-/g, 'id="f-ft-').replace(/onclick="selectFounderTier\('d'/g, "onclick=\"selectFounderTier('f'");
-    const fCardContainer = document.getElementById('f-active-tier-card');
-    if (fCardContainer) fCardContainer.innerHTML = mCardHtml;
-  }
-}
-
-function genFoundersCode(tier){
-  const prefix = FOUNDER_CODES[tier] || 'HKPRO';
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  const rand = [...crypto.getRandomValues(new Uint8Array(6))].map(b => chars[b % chars.length]).join('');
-  return prefix + '-' + rand;
-}
-
-function selectFounderTier(form, tier){
-  const prev = form === 'd' ? dFounderTier : fFounderTier;
-  const allTiers = ['free', activeTierStage];
-
-  // toggle off if same tier tapped again
-  if(prev === tier){
-    if(form === 'd') dFounderTier = null; else fFounderTier = null;
-    allTiers.forEach(t => document.getElementById(form + '-ft-' + t)?.classList.remove('selected'));
-    document.getElementById(form + '-code-preview').classList.remove('show');
-    return;
-  }
-
-  if(form === 'd') dFounderTier = tier; else fFounderTier = tier;
-  allTiers.forEach(t => {
-    const card = document.getElementById(form + '-ft-' + t);
-    if(card) card.classList.toggle('selected', t === tier);
-  });
-
-  // If free was selected, clear code
-  if(tier === 'free'){
-    document.getElementById(form + '-code-preview').classList.remove('show');
-    sessionStorage.removeItem(form + '_founders_code');
-    sessionStorage.removeItem(form + '_founders_tier');
-  } else {
-    const code = genFoundersCode(tier);
-    document.getElementById(form + '-code-val').textContent = code;
-    document.getElementById(form + '-code-preview').classList.add('show');
-    // Store in sessionStorage so submit can read it
-    sessionStorage.setItem(form + '_founders_code', code);
-    sessionStorage.setItem(form + '_founders_tier', tier);
-  }
-}
 
 function toggleTheme(){
   const h = document.documentElement;
@@ -312,21 +223,15 @@ async function submitDriver(e){
   const username = genDriverUsername(fn, ln, phone, dob);
   const pinHash = await hashPin(username, pin);
 
-  const foundersTier = dFounderTier || sessionStorage.getItem('d_founders_tier') || null;
-  const foundersCode = foundersTier ? (sessionStorage.getItem('d_founders_code') || genFoundersCode(foundersTier)) : null;
-
   const r = await cpApi('/apply', { method: 'POST', body: {
     type: 'driver', username, pinHash,
     fname: fn, lname: ln, email, phone, dob, vtype, vreg,
     fleet: fleetOn, fleetSize: fleetOn ? fleetSize : null,
-    knect: knectDriverOn,
-    founders_tier: foundersTier,
-    promo_code: foundersCode
+    knect: knectDriverOn
   }});
   if(!r.ok){ alert(r.body?.error || 'Something went wrong — please try again.'); return; }
 
-  sessionStorage.removeItem('d_founders_code'); sessionStorage.removeItem('d_founders_tier');
-  localStorage.setItem('cp_application', JSON.stringify({...r.body, pinHash, founders_tier: foundersTier, promo_code: foundersCode}));
+  localStorage.setItem('cp_application', JSON.stringify({...r.body, pinHash}));
   window.location.href = 'docs.html';
 }
 
@@ -352,20 +257,14 @@ async function submitFreight(e){
   const username = genFreightUsername(company, phone);
   const pinHash = await hashPin(username, pin);
 
-  const foundersTier = fFounderTier || sessionStorage.getItem('f_founders_tier') || null;
-  const foundersCode = foundersTier ? (sessionStorage.getItem('f_founders_code') || genFoundersCode(foundersTier)) : null;
-
   const r = await cpApi('/apply', { method: 'POST', body: {
     type: 'freight', username, pinHash,
     company, crn, vat, name, title, email, phone,
-    knect: knectOn,
-    founders_tier: foundersTier,
-    promo_code: foundersCode
+    knect: knectOn
   }});
   if(!r.ok){ alert(r.body?.error || 'Something went wrong — please try again.'); return; }
 
-  sessionStorage.removeItem('f_founders_code'); sessionStorage.removeItem('f_founders_tier');
-  localStorage.setItem('cp_application', JSON.stringify({...r.body, pinHash, founders_tier: foundersTier, promo_code: foundersCode}));
+  localStorage.setItem('cp_application', JSON.stringify({...r.body, pinHash}));
   window.location.href = 'docs.html';
 }
 
@@ -400,6 +299,3 @@ async function doLogin(){
     document.getElementById('login-err').classList.remove('show');
   });
 });
-
-// Render two-tile choice on page load
-renderActiveTier();

@@ -125,23 +125,6 @@ select.fi{appearance:none;-webkit-appearance:none;background-image:url("data:ima
 .btn svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
 
 /* ── FOUNDERS TIER ── */
-.founder-tiers{display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-top:.55rem}
-.ft-card{background:var(--p2);border:1.5px solid var(--ln);border-radius:var(--r);padding:.75rem .8rem;cursor:pointer;transition:border-color .15s,background .15s;text-align:center}
-.ft-card:hover{border-color:rgba(241,142,0,.4)}
-.ft-card.selected{border-color:var(--or);background:var(--or-d)}
-.ft-card.grayed{opacity:.45;pointer-events:none}
-.ft-stage{font-size:.68rem;font-weight:700;color:var(--mu);letter-spacing:.04em;text-transform:uppercase;margin-bottom:.25rem}
-.ft-price{font-size:1.05rem;font-weight:800;color:var(--tx);margin-bottom:.2rem}
-.ft-reward{font-size:.72rem;color:var(--or);font-weight:700}
-.ft-reward.none{color:var(--mu);font-weight:400}
-.ft-card.selected .ft-stage{color:var(--or)}
-.founder-code-preview{display:none;margin-top:.8rem;background:var(--p2);border:1.5px solid var(--or);border-radius:var(--rx);padding:.75rem 1rem}
-.founder-code-preview.show{display:block}
-.fcp-label{font-size:.7rem;color:var(--mu);margin-bottom:.25rem}
-.fcp-code{font-size:1.1rem;font-weight:800;color:var(--or);letter-spacing:.12em;font-family:monospace}
-.fcp-note{font-size:.68rem;color:var(--mu);margin-top:.3rem}
-
-@media(max-width:360px){.founder-tiers{grid-template-columns:1fr}}
 
 /* ── TERMS ACCEPTANCE ── */
 .terms-row{display:flex;align-items:flex-start;gap:.7rem;margin-top:1.3rem;padding:.85rem 1rem;background:var(--p2);border:1px solid var(--ln);border-radius:var(--rx)}
