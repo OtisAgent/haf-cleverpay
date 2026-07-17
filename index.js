@@ -70,6 +70,17 @@ function selectFounderTier(form, tier){
   sessionStorage.setItem(form + '_founders_tier', tier);
 }
 
+function skipFounderTier(form){
+  const tiers = ['founder','builder','partner','final'];
+  // Clear any selected tier
+  if(form === 'd') dFounderTier = null; else fFounderTier = null;
+  tiers.forEach(t => document.getElementById(form + '-ft-' + t)?.classList.remove('selected'));
+  document.getElementById(form + '-code-preview').classList.remove('show');
+  // Clear storage
+  sessionStorage.removeItem(form + '_founders_code');
+  sessionStorage.removeItem(form + '_founders_tier');
+}
+
 function toggleTheme(){
   const h = document.documentElement;
   h.dataset.theme = h.dataset.theme === 'dark' ? 'light' : 'dark';
