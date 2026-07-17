@@ -41,7 +41,6 @@ async function renderActiveTier(){
         <div class="ft-price">${tierData.price}</div>
         <div class="ft-reward">${tierData.plna}</div>
         ${tierData.freight ? `<div class="ft-reward ft-reward-freight">+ ${tierData.freight}</div>` : ''}
-        <div class="ft-view-link" onclick="openBenefitsPanel('${activeTierStage}'); event.stopPropagation()">View benefits →</div>
       </div>
     `;
     const dCardContainer = document.getElementById('d-active-tier-card');
@@ -59,28 +58,6 @@ function genFoundersCode(tier){
   const rand = [...crypto.getRandomValues(new Uint8Array(6))].map(b => chars[b % chars.length]).join('');
   return prefix + '-' + rand;
 }
-
-function openBenefitsPanel(tier){
-  const tierData = TIER_DATA[tier];
-  if (!tierData) return;
-
-  document.getElementById('bp-tier-name').textContent = tierData.name + ' Benefits';
-  document.getElementById('bp-free-months').textContent = FOUNDER_MONTHS[tier] + ' months free';
-  document.getElementById('benefits-panel').classList.add('show');
-}
-
-function closeBenefitsPanel(){
-  document.getElementById('benefits-panel').classList.remove('show');
-}
-
-// Close panel on escape key or outside click
-document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') closeBenefitsPanel();
-});
-
-document.getElementById('benefits-panel')?.addEventListener('click', (e) => {
-  if (e.target.id === 'benefits-panel') closeBenefitsPanel();
-});
 
 function selectFounderTier(form, tier){
   const prev = form === 'd' ? dFounderTier : fFounderTier;

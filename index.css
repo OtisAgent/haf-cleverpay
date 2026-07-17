@@ -140,22 +140,6 @@ select.fi{appearance:none;-webkit-appearance:none;background-image:url("data:ima
 .fcp-label{font-size:.7rem;color:var(--mu);margin-bottom:.25rem}
 .fcp-code{font-size:1.1rem;font-weight:800;color:var(--or);letter-spacing:.12em;font-family:monospace}
 .fcp-note{font-size:.68rem;color:var(--mu);margin-top:.3rem}
-.ft-view-link{font-size:.65rem;color:var(--or);font-weight:700;margin-top:.35rem;cursor:pointer;text-decoration:none;letter-spacing:.01em}
-.ft-view-link:hover{text-decoration:underline}
-
-/* ── BENEFITS PANEL ── */
-.benefits-panel{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.6);z-index:100;display:none;align-items:center;justify-content:center;backdrop-filter:blur(4px)}
-.benefits-panel.show{display:flex}
-.benefits-panel-content{background:var(--p);border:1.5px solid var(--ln);border-radius:var(--r);padding:2rem 1.5rem;max-width:400px;width:90%;max-height:80vh;overflow-y:auto;position:relative;box-shadow:0 8px 32px rgba(0,0,0,.5)}
-.bp-close{position:absolute;top:1rem;right:1rem;width:32px;height:32px;border-radius:50%;background:var(--p2);border:1px solid var(--ln);display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--mu);transition:color .15s}
-.bp-close:hover{color:var(--tx)}
-.bp-close svg{width:18px;height:18px;stroke:currentColor;stroke-width:2;fill:none}
-.bp-title{font-size:1.1rem;font-weight:800;color:var(--tx);margin-bottom:.8rem;padding-right:2rem}
-.bp-subtitle{font-size:.75rem;color:var(--mu);font-weight:700;letter-spacing:.02em;text-transform:uppercase;margin-bottom:1rem}
-.bp-list{list-style:none}
-.bp-item{display:flex;align-items:flex-start;gap:.6rem;margin-bottom:.85rem}
-.bp-item svg{flex-shrink:0;width:16px;height:16px;color:var(--or);margin-top:.15rem}
-.bp-item-text{font-size:.8rem;line-height:1.5;color:var(--tx)}
 
 @media(max-width:360px){.founder-tiers{grid-template-columns:1fr}}
 
