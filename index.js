@@ -9,9 +9,15 @@ let activeTierStage = 'founder'; // Tracks which tier stage is currently unlocke
 const FOUNDER_CODES = { founder:'H6PRO', builder:'H3PRO', partner:'H1PRO', final:'HKPRO' };
 const FOUNDER_MONTHS = { founder:6, builder:3, partner:1, final:0 };
 const TIER_HIERARCHY = ['founder', 'builder', 'partner', 'final']; // Unlock order
+const TIER_DATA = {
+  founder: { name: 'Founders', price: '£100', plna: '6 months free PLNA Pro', freight: '3 months free Freight account' },
+  builder: { name: 'Builder', price: '£250', plna: '3 months free PLNA Pro', freight: '1 month free Freight account' },
+  partner: { name: 'Partner', price: '£500', plna: '1 month free PLNA Pro', freight: '1 month free Freight account' },
+  final: { name: 'Final stage', price: '£1,000', plna: 'Standard access', freight: null }
+};
 
-// Fetch milestone state and gate tier visibility
-async function gateLockedTiers(){
+// Fetch milestone state and render the active tier card
+async function renderActiveTier(){
   try {
     const r = await fetch('https://jsdwvogsxlnczzbefwgp.supabase.co/rest/v1/tier_config?id=eq.1&select=active_stage', {
       headers: {
@@ -25,16 +31,25 @@ async function gateLockedTiers(){
   } catch (e) {
     console.warn('Tier config fetch failed; defaulting to founder', e);
   }
-  // Hide tier cards that are not yet unlocked
-  const unlockedIndex = TIER_HIERARCHY.indexOf(activeTierStage);
-  TIER_HIERARCHY.forEach((tier, idx) => {
-    const dCard = document.getElementById('d-ft-' + tier);
-    const fCard = document.getElementById('f-ft-' + tier);
-    if (idx > unlockedIndex) {
-      if (dCard) dCard.style.display = 'none';
-      if (fCard) fCard.style.display = 'none';
-    }
-  });
+
+  // Render active tier card for desktop and mobile
+  const tierData = TIER_DATA[activeTierStage];
+  if (tierData) {
+    const cardHtml = `
+      <div class="ft-card" id="d-ft-${activeTierStage}" onclick="selectFounderTier('d','${activeTierStage}')">
+        <div class="ft-stage">${tierData.name}</div>
+        <div class="ft-price">${tierData.price}</div>
+        <div class="ft-reward">${tierData.plna}</div>
+        ${tierData.freight ? `<div class="ft-reward ft-reward-freight">+ ${tierData.freight}</div>` : ''}
+      </div>
+    `;
+    const dCardContainer = document.getElementById('d-active-tier-card');
+    if (dCardContainer) dCardContainer.innerHTML = cardHtml;
+
+    const mCardHtml = cardHtml.replace(/id="d-ft-/g, 'id="f-ft-').replace(/onclick="selectFounderTier\('d'/g, "onclick=\"selectFounderTier('f'");
+    const fCardContainer = document.getElementById('f-active-tier-card');
+    if (fCardContainer) fCardContainer.innerHTML = mCardHtml;
+  }
 }
 
 function genFoundersCode(tier){
@@ -46,39 +61,35 @@ function genFoundersCode(tier){
 
 function selectFounderTier(form, tier){
   const prev = form === 'd' ? dFounderTier : fFounderTier;
-  const tiers = ['founder','builder','partner','final'];
+  const allTiers = ['free', activeTierStage];
 
   // toggle off if same tier tapped again
   if(prev === tier){
     if(form === 'd') dFounderTier = null; else fFounderTier = null;
-    tiers.forEach(t => document.getElementById(form + '-ft-' + t)?.classList.remove('selected'));
+    allTiers.forEach(t => document.getElementById(form + '-ft-' + t)?.classList.remove('selected'));
     document.getElementById(form + '-code-preview').classList.remove('show');
     return;
   }
 
   if(form === 'd') dFounderTier = tier; else fFounderTier = tier;
-  tiers.forEach(t => {
+  allTiers.forEach(t => {
     const card = document.getElementById(form + '-ft-' + t);
     if(card) card.classList.toggle('selected', t === tier);
   });
 
-  const code = genFoundersCode(tier);
-  document.getElementById(form + '-code-val').textContent = code;
-  document.getElementById(form + '-code-preview').classList.add('show');
-  // Store in sessionStorage so submit can read it
-  sessionStorage.setItem(form + '_founders_code', code);
-  sessionStorage.setItem(form + '_founders_tier', tier);
-}
-
-function skipFounderTier(form){
-  const tiers = ['founder','builder','partner','final'];
-  // Clear any selected tier
-  if(form === 'd') dFounderTier = null; else fFounderTier = null;
-  tiers.forEach(t => document.getElementById(form + '-ft-' + t)?.classList.remove('selected'));
-  document.getElementById(form + '-code-preview').classList.remove('show');
-  // Clear storage
-  sessionStorage.removeItem(form + '_founders_code');
-  sessionStorage.removeItem(form + '_founders_tier');
+  // If free was selected, clear code
+  if(tier === 'free'){
+    document.getElementById(form + '-code-preview').classList.remove('show');
+    sessionStorage.removeItem(form + '_founders_code');
+    sessionStorage.removeItem(form + '_founders_tier');
+  } else {
+    const code = genFoundersCode(tier);
+    document.getElementById(form + '-code-val').textContent = code;
+    document.getElementById(form + '-code-preview').classList.add('show');
+    // Store in sessionStorage so submit can read it
+    sessionStorage.setItem(form + '_founders_code', code);
+    sessionStorage.setItem(form + '_founders_tier', tier);
+  }
 }
 
 function toggleTheme(){
@@ -390,5 +401,5 @@ async function doLogin(){
   });
 });
 
-// Gate locked tiers on page load
-gateLockedTiers();
+// Render two-tile choice on page load
+renderActiveTier();
