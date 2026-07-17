@@ -4,11 +4,11 @@
 
 const SB = 'https://jsdwvogsxlnczzbefwgp.supabase.co/rest/v1';
 const APPS = 'cleverpay_applications';
-const OK_ORIGINS = ['https://clever.usehaf.co.uk', 'https://otisagent.github.io'];
+const OK_ORIGINS = ['https://clever.usehaf.co.uk', 'https://otisagent.github.io', 'https://plna.usehaf.co.uk'];
 
 function corsHeaders(req) {
   const o = req.headers.get('Origin') || '';
-  const ok = OK_ORIGINS.includes(o) || o.endsWith('.workers.dev');
+  const ok = OK_ORIGINS.includes(o) || o.endsWith('.workers.dev') || o.endsWith('.vercel.app');
   return {
     'Access-Control-Allow-Origin': ok ? o : OK_ORIGINS[0],
     'Access-Control-Allow-Methods': 'GET,POST,PATCH,PUT,OPTIONS',
@@ -133,6 +133,31 @@ export default {
         const app = await findApp(env, url.searchParams.get('ref') || '');
         if (!app || (app.pin_hash && app.pin_hash !== url.searchParams.get('k'))) return J({ error: 'Not found.' }, 404, cors);
         return J(strip(app), 200, cors);
+      }
+
+      /* ── PLNA: redeem a Founders code for free Pro months (single-use, atomic) ── */
+      if (p === '/promo/redeem' && req.method === 'POST') {
+        const code = String(b.code || '').toUpperCase().trim();
+        const user = String(b.username || '').toUpperCase().trim();
+        if (!user) return J({ error: 'Missing username.' }, 400, cors);
+        if (!/^H[631K]PRO-[A-Z0-9]{4,10}$/.test(code)) return J({ error: 'That code doesn’t look right — check it and try again.' }, 400, cors);
+        const MONTHS = { H6: 6, H3: 3, H1: 1 };
+        const months = MONTHS[code.slice(0, 2)];
+        if (!months) return J({ error: 'This code doesn’t include free PLNA Pro time.' }, 400, cors);
+        const r = await sb(env, `/${APPS}?promo_code=eq.${encodeURIComponent(code)}&limit=1`);
+        const app = r.ok && r.body && r.body[0];
+        if (!app) return J({ error: 'Code not recognised — check it matches the code from your sign-up.' }, 404, cors);
+        if (app.username && app.username.toUpperCase() !== user) return J({ error: 'This code belongs to a different account.' }, 403, cors);
+        if (app.promo_redeemed_at) {
+          if ((app.promo_redeemed_by || '').toUpperCase() === user)
+            return J({ ok: true, months, redeemed_at: app.promo_redeemed_at, already: true }, 200, cors);
+          return J({ error: 'This code has already been used.' }, 409, cors);
+        }
+        const now = new Date().toISOString();
+        const u2 = await sb(env, `/${APPS}?promo_code=eq.${encodeURIComponent(code)}&promo_redeemed_at=is.null`, {
+          method: 'PATCH', body: JSON.stringify({ promo_redeemed_at: now, promo_redeemed_by: user }) });
+        if (!u2.ok || !u2.body || !u2.body[0]) return J({ error: 'Could not redeem just now — please try again.' }, 500, cors);
+        return J({ ok: true, months, redeemed_at: now }, 200, cors);
       }
 
       /* ── team: log in ── */
