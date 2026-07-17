@@ -59,7 +59,7 @@ async function teamUser(env, req) {
 }
 
 const APP_FIELDS = ['type','username','pin_hash','fname','lname','email','phone','dob','vtype','vreg',
-  'company','crn','vat','name','title','knect','docs','status','notes'];
+  'company','crn','vat','name','title','knect','docs','status','notes','founders_tier','promo_code'];
 function pickFields(b) {
   const row = {};
   for (const k of APP_FIELDS) if (b[k] !== undefined) row[k] = b[k];
