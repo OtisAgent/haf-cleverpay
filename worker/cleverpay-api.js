@@ -67,8 +67,51 @@ function pickFields(b) {
   return row;
 }
 
+/* ── new-enquiry alert → the "HAF Sign ups - Enquiries" Telegram group ──
+   Four lines only, signed off by Brent 28 Jul. Fire-and-forget: a Telegram
+   failure must never break somebody's sign-up. TG_TOKEN/TG_CHAT are secrets. */
+const TYPE_LABELS = {
+  driver: 'Owner Driver',
+  fleet: 'Fleet / Courier Company',
+  freight: 'Freight Forwarder',
+  business: 'Business Account',
+};
+const esc = (s) => String(s == null ? '' : s)
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+function ukStamp(d = new Date()) {
+  const time = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Europe/London', hour: '2-digit', minute: '2-digit', hour12: false }).format(d);
+  const day = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Europe/London', day: 'numeric', month: 'short' }).format(d);
+  return `${time}, ${day}`;
+}
+
+async function sendEnquiryAlert(env, row) {
+  if (!env.TG_TOKEN || !env.TG_CHAT) return;
+  const label = TYPE_LABELS[row.type] || 'New account';
+  const who = [row.fname, row.lname].filter(Boolean).join(' ') || row.name || row.company || '—';
+  const contact = [row.phone, row.email].filter(Boolean).join(' · ') || '—';
+  const text =
+    `<b>🟠 NEW ENQUIRY — ${esc(label)}</b>\n` +
+    `<b>Ref:</b> ${esc(row.ref)} · ${ukStamp()}\n` +
+    `<b>Name:</b> ${esc(who)}\n` +
+    `<b>Contact:</b> ${esc(contact)}`;
+  await fetch(`https://api.telegram.org/bot${env.TG_TOKEN}/sendMessage`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ chat_id: env.TG_CHAT, text, parse_mode: 'HTML', disable_web_page_preview: true }),
+  });
+}
+
+function alertNewEnquiry(env, ctx, row) {
+  if (!row) return;
+  const p = sendEnquiryAlert(env, row).catch(() => {});
+  if (ctx && typeof ctx.waitUntil === 'function') ctx.waitUntil(p);
+}
+
 export default {
-  async fetch(req, env) {
+  async fetch(req, env, ctx) {
     const cors = corsHeaders(req);
     if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
     const url = new URL(req.url);
@@ -92,6 +135,7 @@ export default {
         row.ref = newRef(); row.status = 'pending'; row.docs = b.docs || [];
         const r = await sb(env, `/${APPS}`, { method: 'POST', body: JSON.stringify(row) });
         if (!r.ok) return J({ error: 'Could not save your application. Please try again.' }, 500, cors);
+        alertNewEnquiry(env, ctx, r.body[0]);
         return J(strip(r.body[0]), 200, cors);
       }
 
@@ -107,6 +151,7 @@ export default {
         };
         const r = await sb(env, `/${APPS}`, { method: 'POST', body: JSON.stringify(row) });
         if (!r.ok) return J({ error: 'Could not send your enquiry. Please try again.' }, 500, cors);
+        alertNewEnquiry(env, ctx, row);
         return J({ ok: true, ref: row.ref }, 200, cors);
       }
 
