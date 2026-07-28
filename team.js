@@ -26,7 +26,33 @@ async function gateLogin(){
   }
   TEAM=r.body;
   sessionStorage.setItem('cp_team_session',JSON.stringify(TEAM));
+  if(TEAM.mustSetPin){showSetPin();return;}
   enterShell();
+}
+/* First sign-in — the member picks their own PIN before they see anything else */
+function showSetPin(){
+  document.querySelector('#gate .gate-card').style.display='none';
+  document.getElementById('setpin-card').style.display='';
+  document.getElementById('setpin-name').textContent=(TEAM.name||'').split(' ')[0]||'there';
+  document.getElementById('setpin-a').focus();
+}
+async function savePin(){
+  const a=document.getElementById('setpin-a').value.trim();
+  const b=document.getElementById('setpin-b').value.trim();
+  const err=document.getElementById('setpin-err');
+  const fail=m=>{err.textContent=m;err.classList.add('show')};
+  if(!/^\d{4,6}$/.test(a))return fail('Your PIN must be 4 to 6 numbers.');
+  if(a!==b)return fail('Those two PINs do not match.');
+  err.classList.remove('show');
+  const r=await cpApi('/team/set-pin',{method:'POST',token:TEAM.token,body:{pin:a}});
+  if(!r.ok)return fail(r.body?.error||'Could not save your PIN — try again.');
+  delete TEAM.mustSetPin;
+  sessionStorage.setItem('cp_team_session',JSON.stringify(TEAM));
+  document.getElementById('setpin-card').style.display='none';
+  document.querySelector('#gate .gate-card').style.display='';
+  document.getElementById('setpin-a').value='';document.getElementById('setpin-b').value='';
+  enterShell();
+  showToast('PIN saved — use it to sign in from now on');
 }
 function enterShell(){
   document.getElementById('gate').style.display='none';
@@ -40,6 +66,8 @@ function doSignOut(){
   TEAM=null;QUEUE=[];
   document.getElementById('shell').classList.remove('show');
   document.getElementById('gate').style.display='';
+  document.getElementById('setpin-card').style.display='none';
+  document.querySelector('#gate .gate-card').style.display='';
   document.getElementById('gate-user').value='';
   document.getElementById('gate-pw').value='';
   document.getElementById('gate-err').classList.remove('show');
@@ -271,7 +299,7 @@ document.getElementById('modal-ov').addEventListener('click',function(e){if(e.ta
 const stored=sessionStorage.getItem('cp_team_session');
 if(stored){
   TEAM=JSON.parse(stored);
-  enterShell();
+  if(TEAM.mustSetPin)showSetPin();else enterShell();
 }
 
 /* Auto-refresh queue every 15s */

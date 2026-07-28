@@ -160,23 +160,54 @@ export default {
         return J({ ok: true, months, redeemed_at: now }, 200, cors);
       }
 
-      /* ── team: log in ── */
+      /* ── team: log in ──
+         First-time members have must_set_pin set: they sign in once with the one-time
+         setup code they were given, then choose their own PIN (see /team/set-pin). */
       if (p === '/team/login' && req.method === 'POST') {
         const u = (b.username || '').toLowerCase().trim();
         const hash = await sha256('HAF-CP-TEAM|' + u + '|' + (b.password || ''));
         const r = await sb(env, `/cleverpay_team_users?username=eq.${encodeURIComponent(u)}&limit=1`);
         const user = r.ok && r.body && r.body[0];
-        if (!user || user.pw_hash !== hash) return J({ error: 'Wrong username or password.' }, 401, cors);
+        if (!user) return J({ error: 'Wrong username or password.' }, 401, cors);
+        const first = !!user.must_set_pin;
+        const ok = first
+          ? !!user.setup_code && (b.password || '').trim().toUpperCase() === user.setup_code.toUpperCase()
+          : user.pw_hash === hash;
+        if (!ok) return J({ error: first ? 'That setup code is not right.' : 'Wrong username or password.' }, 401, cors);
         const token = crypto.randomUUID() + crypto.randomUUID().replace(/-/g, '');
-        const expires = new Date(Date.now() + 7 * 864e5).toISOString();
+        const expires = new Date(Date.now() + (first ? 36e5 : 7 * 864e5)).toISOString();
         await sb(env, '/cleverpay_team_sessions', { method: 'POST', body: JSON.stringify({ token, username: u, expires_at: expires }) });
-        return J({ token, username: u, name: user.name, role: user.role }, 200, cors);
+        return J({ token, username: u, name: user.name, role: user.role, mustSetPin: first }, 200, cors);
       }
 
       /* ── team: everything below needs a session ── */
       if (p.startsWith('/team/')) {
         const who = await teamUser(env, req);
         if (!who) return J({ error: 'Session expired — sign in again.' }, 401, cors);
+        const ur = await sb(env, `/cleverpay_team_users?username=eq.${encodeURIComponent(who)}&limit=1`);
+        const me = ur.ok && ur.body && ur.body[0];
+        if (!me) return J({ error: 'Session expired — sign in again.' }, 401, cors);
+
+        /* choose / change your own PIN — nobody else ever sets it for you */
+        if (p === '/team/set-pin' && req.method === 'POST') {
+          const pin = (b.pin || '').trim();
+          if (!/^\d{4,6}$/.test(pin)) return J({ error: 'Your PIN must be 4 to 6 numbers.' }, 400, cors);
+          if (!me.must_set_pin) {
+            const current = await sha256('HAF-CP-TEAM|' + who + '|' + (b.currentPin || ''));
+            if (current !== me.pw_hash) return J({ error: 'Your current PIN is not right.' }, 401, cors);
+          }
+          const pw = await sha256('HAF-CP-TEAM|' + who + '|' + pin);
+          const r = await sb(env, `/cleverpay_team_users?username=eq.${encodeURIComponent(who)}`,
+            { method: 'PATCH', body: JSON.stringify({ pw_hash: pw, must_set_pin: false, setup_code: null }) });
+          if (!r.ok) return J({ error: 'Could not save your PIN — please try again.' }, 500, cors);
+          const tk = (req.headers.get('Authorization') || '').replace(/^Bearer /, '');
+          await sb(env, `/cleverpay_team_sessions?token=eq.${encodeURIComponent(tk)}`,
+            { method: 'PATCH', body: JSON.stringify({ expires_at: new Date(Date.now() + 7 * 864e5).toISOString() }) });
+          return J({ ok: true }, 200, cors);
+        }
+
+        /* a first-time member sees nothing else until their PIN is set */
+        if (me.must_set_pin) return J({ error: 'Choose your PIN first.' }, 403, cors);
 
         if (p === '/team/applications' && req.method === 'GET') {
           const r = await sb(env, `/${APPS}?order=submitted.desc&limit=500`);

@@ -23,10 +23,23 @@
     <div class="gate-sub">HAF compliance team only — sign in with your credentials.</div>
     <label class="fl">Username</label>
     <input class="fi" id="gate-user" type="text" placeholder="your username" autocomplete="username" onkeydown="if(event.key==='Enter')document.getElementById('gate-pw').focus()">
-    <label class="fl">Password</label>
-    <input class="fi" id="gate-pw" type="password" placeholder="password" autocomplete="current-password" onkeydown="if(event.key==='Enter')gateLogin()">
+    <label class="fl">PIN</label>
+    <input class="fi" id="gate-pw" type="password" placeholder="your PIN" autocomplete="current-password" onkeydown="if(event.key==='Enter')gateLogin()">
     <button class="btn-full" onclick="gateLogin()">Sign in</button>
-    <div class="gate-err" id="gate-err">Incorrect username or password. Try again.</div>
+    <div class="gate-err" id="gate-err">Incorrect username or PIN. Try again.</div>
+    <div class="gate-sub" style="margin:.9rem 0 0">First time here? Sign in with the one-time setup code you were given and you'll choose your own PIN.</div>
+  </div>
+
+  <!-- First sign-in: choose your own PIN -->
+  <div class="gate-card" id="setpin-card" style="display:none">
+    <div class="gate-title">Choose your PIN</div>
+    <div class="gate-sub">Welcome, <span id="setpin-name">there</span>. Pick a PIN of 4 to 6 numbers — only you will know it.</div>
+    <label class="fl">New PIN</label>
+    <input class="fi" id="setpin-a" type="password" inputmode="numeric" maxlength="6" placeholder="4–6 numbers" autocomplete="new-password" onkeydown="if(event.key==='Enter')document.getElementById('setpin-b').focus()">
+    <label class="fl">Confirm PIN</label>
+    <input class="fi" id="setpin-b" type="password" inputmode="numeric" maxlength="6" placeholder="type it again" autocomplete="new-password" onkeydown="if(event.key==='Enter')savePin()">
+    <button class="btn-full" onclick="savePin()">Save my PIN</button>
+    <div class="gate-err" id="setpin-err"></div>
   </div>
 </div>
 
