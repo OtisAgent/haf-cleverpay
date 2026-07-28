@@ -137,9 +137,12 @@ function ini(a){
     const w=(a.company||'').split(' ').filter(x=>!['ltd','limited','uk','plc','llp'].includes(x.toLowerCase()));
     return w.slice(0,2).map(x=>x[0]?.toUpperCase()||'').join('');
   }
-  return((a.fname||'')[0]||'').toUpperCase()+((a.lname||'')[0]||'').toUpperCase();
+  return(((a.fname||'')[0]||'').toUpperCase()+((a.lname||'')[0]||'').toUpperCase())||'—';
 }
-function displayName(a){return a.type==='driver'?(a.fname+' '+a.lname):(a.company||a.name)}
+function displayName(a){
+  const n=(a.type==='driver'?((a.fname||'')+' '+(a.lname||'')):(a.company||a.name||'')).trim();
+  return n||'Name not given';
+}
 function statusChip(s){
   const m={pending:'chip-pending',enquiry:'chip-pending',reviewing:'chip-reviewing',approved:'chip-approved',rejected:'chip-rejected',blocked:'chip-rejected'};
   const l={pending:'Pending',enquiry:'New enquiry',reviewing:'In Review',approved:'Approved',rejected:'Rejected',blocked:'Blocked'};
@@ -153,7 +156,7 @@ function appCardHtml(a){
   /* business enquiries carry no compliance docs — never flag them as missing */
   const docDefs=isB?[]:(isF?cfg.freight.docs:cfg.driver.docs);
 
-  const uploaded=a.docs||[];
+  const uploaded=Array.isArray(a.docs)?a.docs:[];
   const uploadedIds=uploaded.map(d=>d.id);
   const reqDefs=docDefs.filter(d=>d.status==='required');
   const missingReq=reqDefs.filter(d=>!uploadedIds.includes(d.id));
@@ -161,12 +164,12 @@ function appCardHtml(a){
   const allDocRows=[
     ...uploaded.filter(d=>{const def=docDefs.find(x=>x.id===d.id);return def&&def.status==='required';}).map(d=>{
       const def=docDefs.find(x=>x.id===d.id);
-      return`<div class="doc-row"><div class="dc-chk${a.status==='approved'?' on':''}" id="chk-${a.ref}-${d.id}" onclick="tickDoc('${a.ref}','${d.id}')"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></div><div class="doc-row-name">${def?def.name:d.id}</div><div class="doc-row-file">${d.filename}</div><span class="doc-row-badge badge-ok">Uploaded</span></div>`;
+      return`<div class="doc-row"><div class="dc-chk${a.status==='approved'?' on':''}" id="chk-${a.ref}-${d.id}" onclick="tickDoc('${a.ref}','${d.id}')"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></div><div class="doc-row-name">${def?def.name:d.id}</div><div class="doc-row-file">${d.filename||"—"}</div><span class="doc-row-badge badge-ok">Uploaded</span></div>`;
     }),
     ...missingReq.map(d=>`<div class="doc-row missing"><div class="dc-chk" style="opacity:.4"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></div><div class="doc-row-name">${d.name}</div><div class="doc-row-file">—</div><span class="doc-row-badge badge-missing">Missing</span></div>`),
     ...uploaded.filter(d=>{const def=docDefs.find(x=>x.id===d.id);return !def||def.status==='optional';}).map(d=>{
       const def=docDefs.find(x=>x.id===d.id);
-      return`<div class="doc-row"><div class="dc-chk${a.status==='approved'?' on':''}" id="chk-${a.ref}-${d.id}" onclick="tickDoc('${a.ref}','${d.id}')"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></div><div class="doc-row-name">${def?def.name:d.id}</div><div class="doc-row-file">${d.filename}</div><span class="doc-row-badge badge-opt">Optional</span></div>`;
+      return`<div class="doc-row"><div class="dc-chk${a.status==='approved'?' on':''}" id="chk-${a.ref}-${d.id}" onclick="tickDoc('${a.ref}','${d.id}')"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></div><div class="doc-row-name">${def?def.name:d.id}</div><div class="doc-row-file">${d.filename||"—"}</div><span class="doc-row-badge badge-opt">Optional</span></div>`;
     }),
   ];
 

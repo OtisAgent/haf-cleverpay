@@ -88,7 +88,7 @@ a{color:var(--or);text-decoration:none}
 .app-main{flex:1;min-width:0}
 .app-name{font-size:.86rem;font-weight:700;color:var(--tx);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .app-meta{font-size:.7rem;color:var(--mu);margin-top:.1rem}
-.app-right{display:flex;align-items:center;gap:.5rem;flex-shrink:0}
+.app-right{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:.5rem;flex-shrink:1;min-width:0}
 .chevron{color:var(--mu);transition:transform .2s;flex-shrink:0}
 .app-card.expanded .chevron{transform:rotate(180deg)}
 .chevron svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
@@ -199,8 +199,53 @@ a{color:var(--or);text-decoration:none}
 .toast.error{background:var(--rd)}
 
 @media(max-width:580px){
-  .kpi-strip{grid-template-columns:1fr 1fr}
   .detail-grid{grid-template-columns:1fr}
   .rf-row{grid-template-columns:1fr}
   .action-bar .btn{flex:1;justify-content:center}
+}
+
+/* ── PHONE LAYOUT (rebuilt 2026-07-28) ──
+   Cards stack: avatar + name/reference on row one, status chips wrap on row two.
+   Header keeps one compact line; stats sit in a single slim strip. */
+@media(max-width:700px){
+  html,body{max-width:100%;overflow-x:hidden}
+
+  /* header — one line, no crowding */
+  .bar{height:56px;padding:0 .85rem;gap:.5rem}
+  .bar-r{gap:.35rem;flex-shrink:0}
+  .logo{min-width:0;gap:.5rem}
+  .logo-m{width:30px;height:30px;font-size:.86rem}
+  .logo-t{font-size:.94rem;white-space:nowrap}
+  .logo-tag{display:none}
+  .welcome{display:none}          /* name is in the sign-in, not needed on a phone */
+  .bar-badge{display:none}        /* same count already shown in Pending below */
+  .bar-r .add-btn{font-size:0;gap:0;width:32px;height:32px;padding:0;justify-content:center;border-radius:var(--rx)}
+  .bar-r .add-btn svg{width:15px;height:15px}
+  .icon-btn{width:32px;height:32px}
+
+  /* stats — one slim strip instead of four big tiles */
+  .kpi-strip{grid-template-columns:repeat(4,1fr);gap:.35rem;padding:.55rem .8rem}
+  .kpi{padding:.45rem .4rem;border-radius:10px;text-align:center}
+  .kpi-label{font-size:.52rem;letter-spacing:.04em;margin-bottom:.1rem}
+  .kpi-value{font-size:1.12rem}
+
+  /* filter tabs — all six reachable with a swipe */
+  .tab-bar{padding:.45rem .8rem;gap:.2rem}
+  .tab{padding:.4rem .7rem;font-size:.72rem}
+
+  /* application cards */
+  .content{padding:.8rem .8rem calc(4.5rem + env(safe-area-inset-bottom))}
+  .app-head{flex-wrap:wrap;align-items:flex-start;gap:.6rem;padding:.75rem .8rem}
+  .app-avatar{width:32px;height:32px;font-size:.78rem}
+  .app-main{flex:1 1 0;min-width:0}
+  .app-name{font-size:.84rem}
+  .app-meta{font-size:.68rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .app-right{order:4;flex:0 0 100%;width:100%;justify-content:flex-start;gap:.3rem;margin-top:-.15rem}
+  .chip{font-size:.62rem;padding:.16rem .5rem}
+  .chevron{align-self:center;padding:.35rem;margin:-.35rem -.2rem -.35rem 0}
+  .chevron svg{width:17px;height:17px}
+  .app-detail{padding:.85rem .8rem 1rem}
+  .doc-row{gap:.5rem;padding:.45rem .6rem}
+  .doc-row-file{max-width:90px}
+  .toast{max-width:88vw;white-space:normal;text-align:center}
 }
