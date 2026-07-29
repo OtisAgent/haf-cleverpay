@@ -99,8 +99,33 @@
       <li>Priority visibility for suitable work on the network</li>
       <li>First access to every network reward as it rolls out</li>
     </ul>
-    <a class="fo-btn" href="https://www.usehaf.co.uk/products/haf-knect-founding-member" target="_blank" rel="noopener">Claim Founder Membership — £100 one-off →</a>
+    <a class="fo-btn" id="fo-btn" href="#" rel="noopener">Claim Founder Membership — £100 one-off →</a>
     <div class="fo-note">Prefer to carry on free? No problem — you can join any time, at the membership price live at that moment.</div>
+  </div>
+
+  <!-- MEMBERSHIP PENDING — payment taken, membership being set up -->
+  <div class="member-pending" id="member-pending">
+    <div class="mp-head">Payment received — thank you</div>
+    <div class="mp-sub">We're activating your founder membership and preparing your supporter code. This page updates on its own, and your code also arrives by email.</div>
+  </div>
+
+  <!-- MEMBER PANEL — shown once the membership payment has cleared -->
+  <div class="member-panel" id="member-panel">
+    <div class="mp-badge">Founder member</div>
+    <div class="mp-head">Your supporter reward is ready</div>
+    <div class="mp-sub">Thank you for backing the network. Use the code below on PLNA to start your free months.</div>
+
+    <div class="ref-box" onclick="copyCode()">
+      <div>
+        <div class="rb-label">Your PLNA Plus code — 6 months free</div>
+        <div class="rb-val" id="mp-code">—</div>
+        <div class="rb-hint">Works once, and only on your own account.</div>
+      </div>
+      <div class="copy-btn" id="code-copy-btn">Copy</div>
+    </div>
+
+    <div class="mp-pro">Your PLNA Pro reward — 3 months free — is reserved against your account and opens when PLNA Pro goes live.</div>
+    <a class="fo-btn" href="https://plna.usehaf.co.uk" target="_blank" rel="noopener">Go to PLNA and apply your code →</a>
   </div>
 
   <!-- REBATE PANEL (freight approved) -->
@@ -173,6 +198,36 @@ function toggleTheme(){
 
 let CFG = null; /* portal config (rebate rates) — fetched once from the API */
 
+/* ── HAF KNECT membership — the £100 one-off, taken in Stripe ──
+   The member's HAF username rides along as client_reference_id, which is how the
+   activation job matches the payment back to this account and issues their
+   supporter code. Never send anyone here without a username on the record. */
+const PAY_LINK = 'https://buy.stripe.com/4gMeVf0S3eWo3em3XD8og09';
+
+function membershipUrl(app){
+  const u = new URL(PAY_LINK);
+  u.searchParams.set('client_reference_id', (app.username || '').toUpperCase());
+  if(app.email) u.searchParams.set('prefilled_email', app.email);
+  return u.toString();
+}
+
+/* Stripe sends the member back here after paying. The membership takes a few
+   minutes to activate, so remember the return for this browser session and keep
+   showing "payment received" until the record catches up. */
+if(new URLSearchParams(location.search).get('membership') === 'paid'){
+  sessionStorage.setItem('cp_just_paid', '1');
+  history.replaceState({}, '', location.pathname);
+}
+const justPaid = () => sessionStorage.getItem('cp_just_paid') === '1';
+
+function copyCode(){
+  const code = document.getElementById('mp-code').textContent;
+  if(navigator.clipboard) navigator.clipboard.writeText(code);
+  const btn = document.getElementById('code-copy-btn');
+  btn.textContent = 'Copied!';
+  setTimeout(() => { btn.textContent = 'Copy'; }, 2000);
+}
+
 function copyRef(){
   const ref = document.getElementById('ref-display').textContent;
   if(navigator.clipboard) navigator.clipboard.writeText(ref);
@@ -223,8 +278,21 @@ function renderStatus(app){
   const offer = document.getElementById('founder-offer');
   const emailNote = document.getElementById('email-note');
   tease.classList.toggle('show', status === 'pending' || status === 'reviewing' || (status === 'approved' && !emailOk));
-  offer.classList.toggle('show', fullAccess);
   emailNote.style.display = (status === 'pending' || status === 'reviewing' || (status === 'approved' && !emailOk)) ? '' : 'none';
+
+  /* ── Membership: offer → paid → activated with a code ── */
+  const paid = !!app.membership_paid_at;
+  const code = app.supporter_code || '';
+  const settled = paid && !!code;
+  if(settled) sessionStorage.removeItem('cp_just_paid');
+
+  offer.classList.toggle('show', fullAccess && !paid && !justPaid());
+  document.getElementById('member-pending').classList.toggle('show', !settled && (paid || justPaid()));
+  document.getElementById('member-panel').classList.toggle('show', settled);
+
+  if(settled) document.getElementById('mp-code').textContent = code;
+  const claim = document.getElementById('fo-btn');
+  if(claim && app.username) claim.href = membershipUrl(app);
   if (status === 'approved' && !emailOk) {
     emailNote.querySelector('span').innerHTML = '<strong>One step left — confirm your email.</strong> Your documents are approved, but access stays locked until the email address on your application is confirmed with the HAF team.';
   }

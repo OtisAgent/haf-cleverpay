@@ -151,3 +151,14 @@ a{color:var(--or);text-decoration:none}
 .fo-btn:hover{filter:brightness(1.06)}
 .fo-note{font-size:.82rem;color:var(--mu);margin-top:.7rem}
 @media (max-width:480px){.fo-btn{display:block;padding:.9rem 1rem}}
+
+/* ── Membership: payment taken, and the activated member's supporter code ── */
+.member-pending{display:none;background:var(--or-d);border:1.5px dashed var(--or-g);border-radius:var(--r);padding:1.5rem 1.4rem;margin-bottom:1.2rem;text-align:center}
+.member-pending.show{display:block}
+.member-panel{display:none;background:var(--gn-d);border:1.5px solid rgba(45,171,96,.25);border-radius:var(--r);padding:1.6rem 1.4rem;margin-bottom:1.2rem;text-align:center}
+.member-panel.show{display:block}
+.mp-badge{display:inline-block;background:var(--or);color:#0e1113;font-size:.68rem;font-weight:800;letter-spacing:.09em;text-transform:uppercase;border-radius:var(--pill);padding:.3rem .75rem;margin-bottom:.6rem}
+.mp-head{font-family:var(--dp);font-weight:900;font-size:1.22rem;letter-spacing:-.02em;margin-bottom:.4rem}
+.mp-sub{font-size:.93rem;color:var(--mu);max-width:28rem;margin:0 auto 1rem}
+.member-panel .ref-box{text-align:left;margin-bottom:1rem}
+.mp-pro{font-size:.85rem;color:var(--mu);border-top:1px solid rgba(45,171,96,.2);padding-top:.85rem;margin-bottom:1rem}
