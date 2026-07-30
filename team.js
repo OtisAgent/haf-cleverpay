@@ -161,16 +161,24 @@ function appCardHtml(a){
   const reqDefs=docDefs.filter(d=>d.status==='required');
   const missingReq=reqDefs.filter(d=>!uploadedIds.includes(d.id));
 
+  const docRow=(d,badge)=>{
+    const def=docDefs.find(x=>x.id===d.id);
+    const on=d.checked===true||(d.checked===undefined&&a.status==='approved');
+    /* only a document whose file is actually held can be opened — older applications
+       were submitted before the store existed and hold a filename only */
+    const open=d.path
+      ?`<button class="doc-open" onclick="openDoc('${a.ref}','${d.id}')" title="Open this document">
+          <svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>View</button>`
+      :`<span class="doc-nofile" title="Submitted before the document store existed — ask them to upload it again">No file held</span>`;
+    return`<div class="doc-row"><div class="dc-chk${on?' on':''}" id="chk-${a.ref}-${d.id}" onclick="tickDoc('${a.ref}','${d.id}')" title="${d.checked_by?'Checked by '+d.checked_by+' · '+fmtDate(d.checked_at):'Tick once you have checked this document'}"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></div><div class="doc-row-name">${def?def.name:d.id}</div><div class="doc-row-file">${d.filename||'—'}${d.size?' · '+fmtSize(d.size):''}</div>${open}<span class="doc-row-badge ${badge.cls}">${badge.txt}</span></div>`;
+  };
+
   const allDocRows=[
-    ...uploaded.filter(d=>{const def=docDefs.find(x=>x.id===d.id);return def&&def.status==='required';}).map(d=>{
-      const def=docDefs.find(x=>x.id===d.id);
-      return`<div class="doc-row"><div class="dc-chk${a.status==='approved'?' on':''}" id="chk-${a.ref}-${d.id}" onclick="tickDoc('${a.ref}','${d.id}')"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></div><div class="doc-row-name">${def?def.name:d.id}</div><div class="doc-row-file">${d.filename||"—"}</div><span class="doc-row-badge badge-ok">Uploaded</span></div>`;
-    }),
+    ...uploaded.filter(d=>{const def=docDefs.find(x=>x.id===d.id);return def&&def.status==='required';})
+      .map(d=>docRow(d,{cls:'badge-ok',txt:'Uploaded'})),
     ...missingReq.map(d=>`<div class="doc-row missing"><div class="dc-chk" style="opacity:.4"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></div><div class="doc-row-name">${d.name}</div><div class="doc-row-file">—</div><span class="doc-row-badge badge-missing">Missing</span></div>`),
-    ...uploaded.filter(d=>{const def=docDefs.find(x=>x.id===d.id);return !def||def.status==='optional';}).map(d=>{
-      const def=docDefs.find(x=>x.id===d.id);
-      return`<div class="doc-row"><div class="dc-chk${a.status==='approved'?' on':''}" id="chk-${a.ref}-${d.id}" onclick="tickDoc('${a.ref}','${d.id}')"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></div><div class="doc-row-name">${def?def.name:d.id}</div><div class="doc-row-file">${d.filename||"—"}</div><span class="doc-row-badge badge-opt">Optional</span></div>`;
-    }),
+    ...uploaded.filter(d=>{const def=docDefs.find(x=>x.id===d.id);return !def||def.status==='optional';})
+      .map(d=>docRow(d,{cls:'badge-opt',txt:'Optional'})),
   ];
 
   const driverRows=`
@@ -252,7 +260,116 @@ function toggleCard(ref){
   document.querySelectorAll('.app-card.expanded').forEach(x=>x.classList.remove('expanded'));
   if(!was)c.classList.add('expanded');
 }
-function tickDoc(ref,id){document.getElementById('chk-'+ref+'-'+id)?.classList.toggle('on')}
+/* ── DOCUMENT VIEWER ──
+   The file never has a public address. The portal asks the API for it with this
+   reviewer's session, holds the bytes in the browser only, and drops them on close. */
+let VIEW={ref:null,list:[],i:0,url:null};
+
+function fmtSize(n){if(!n)return'';return n<1048576?Math.max(1,Math.round(n/1024))+'KB':(n/1048576).toFixed(1)+'MB'}
+
+function heldDocs(ref){
+  const a=QUEUE.find(x=>x.ref===ref);
+  if(!a)return[];
+  const cfg=getConfig();
+  const defs=a.type==='freight'?cfg.freight.docs:cfg.driver.docs;
+  return(Array.isArray(a.docs)?a.docs:[]).filter(d=>d.path)
+    .map(d=>({...d,name:(defs.find(x=>x.id===d.id)||{}).name||d.id}));
+}
+
+async function openDoc(ref,id){
+  if(!TEAM)return;
+  VIEW.ref=ref;VIEW.list=heldDocs(ref);
+  const at=VIEW.list.findIndex(d=>d.id===id);
+  VIEW.i=at<0?0:at;
+  if(!VIEW.list.length){showToast('No document files are held on this application yet',true);return}
+  document.getElementById('doc-ov').classList.add('open');
+  await showDoc();
+}
+
+function closeDoc(){
+  document.getElementById('doc-ov').classList.remove('open');
+  document.getElementById('dv-body').innerHTML='';
+  if(VIEW.url){URL.revokeObjectURL(VIEW.url);VIEW.url=null}
+}
+
+function stepDoc(n){
+  const next=VIEW.i+n;
+  if(next<0||next>=VIEW.list.length)return;
+  VIEW.i=next;showDoc();
+}
+
+async function showDoc(){
+  const d=VIEW.list[VIEW.i];
+  const a=QUEUE.find(x=>x.ref===VIEW.ref)||{};
+  const body=document.getElementById('dv-body');
+  document.getElementById('dv-title').textContent=d.name;
+  document.getElementById('dv-sub').textContent=
+    `${displayName(a)} · ${a.ref} · ${d.filename||'file'}${d.size?' · '+fmtSize(d.size):''}`;
+  document.getElementById('dv-count').textContent=`${VIEW.i+1} of ${VIEW.list.length}`;
+  document.getElementById('dv-prev').disabled=VIEW.i===0;
+  document.getElementById('dv-next').disabled=VIEW.i>=VIEW.list.length-1;
+  const tick=document.getElementById('dv-tick');
+  tick.textContent=d.checked?'Checked ✓'+(d.checked_by?' by '+d.checked_by:''):'Tick as checked';
+  tick.className='btn '+(d.checked?'btn-gh btn-done':'btn-approve');
+
+  if(VIEW.url){URL.revokeObjectURL(VIEW.url);VIEW.url=null}
+  body.innerHTML='<div class="dv-msg">Opening the document…</div>';
+
+  let res;
+  try{
+    res=await fetch(CP_API+'/team/doc?ref='+encodeURIComponent(VIEW.ref)+'&id='+encodeURIComponent(d.id),
+      {headers:{Authorization:'Bearer '+TEAM.token}});
+  }catch(e){
+    body.innerHTML='<div class="dv-msg">No connection — check your internet and try again.</div>';return;
+  }
+  if(res.status===401){closeDoc();showToast('Session expired — please sign in again',true);doSignOut();return}
+  if(!res.ok){
+    const e=await res.json().catch(()=>null);
+    body.innerHTML='<div class="dv-msg">'+(e&&e.error==='no_file'
+      ?'No file is held for this document — ask the applicant to upload it again.'
+      :'That document could not be opened. Nothing has been lost — try again, and tell Otis if it keeps failing.')+'</div>';
+    return;
+  }
+  const blob=await res.blob();
+  VIEW.url=URL.createObjectURL(blob);
+  const mime=d.mime||blob.type||'';
+  const dl=document.getElementById('dv-dl');
+  dl.href=VIEW.url;dl.download=d.filename||d.id;
+
+  if(mime.includes('pdf'))
+    body.innerHTML=`<iframe class="dv-frame" src="${VIEW.url}" title="${d.name}"></iframe>`;
+  else if(mime.startsWith('image/'))
+    body.innerHTML=`<img class="dv-img" src="${VIEW.url}" alt="${d.name}">`;
+  else
+    body.innerHTML='<div class="dv-msg">This file type can’t be shown in the portal — use Download to open it.</div>';
+}
+
+async function tickFromViewer(){
+  const d=VIEW.list[VIEW.i];
+  if(d)await tickDoc(VIEW.ref,d.id);
+}
+
+/* a tick is a compliance record, so it is saved against the application with who and when */
+async function tickDoc(ref,id){
+  if(!TEAM)return;
+  const a=QUEUE.find(x=>x.ref===ref);
+  const d=a&&(Array.isArray(a.docs)?a.docs:[]).find(x=>x.id===id);
+  if(!d)return;
+  const next=!d.checked;
+  const el=document.getElementById('chk-'+ref+'-'+id);
+  el?.classList.toggle('on',next);
+  const r=await cpApi('/team/doc-check',{method:'POST',token:TEAM.token,body:{ref:ref,id:id,checked:next}});
+  if(!r.ok){el?.classList.toggle('on',!next);showToast(r.body?.error||'Could not save that tick',true);return}
+  a.docs=r.body.docs;
+  const fresh=a.docs.find(x=>x.id===id)||{};
+  VIEW.list=VIEW.list.map(x=>x.id===id?{...x,...fresh}:x);
+  if(document.getElementById('doc-ov').classList.contains('open')){
+    const tick=document.getElementById('dv-tick');
+    tick.textContent=fresh.checked?'Checked ✓'+(fresh.checked_by?' by '+fresh.checked_by:''):'Tick as checked';
+    tick.className='btn '+(fresh.checked?'btn-gh btn-done':'btn-approve');
+  }
+  showToast(next?'Document checked off':'Tick removed');
+}
 function markReviewing(ref){update(ref,{status:'reviewing'},'Marked as in review')}
 function approve(ref){update(ref,{status:'approved'},'Approved — access unlocks once their email is confirmed')}
 function blockAcc(ref){update(ref,{status:'blocked'},'Account blocked — all access refused')}
@@ -297,6 +414,14 @@ function confirmReject(){
   closeModal();
 }
 document.getElementById('modal-ov').addEventListener('click',function(e){if(e.target===this)closeModal()});
+
+/* reviewing a pile of documents is keyboard work: Esc closes, arrows flip through */
+document.addEventListener('keydown',e=>{
+  if(!document.getElementById('doc-ov').classList.contains('open'))return;
+  if(e.key==='Escape')closeDoc();
+  else if(e.key==='ArrowLeft')stepDoc(-1);
+  else if(e.key==='ArrowRight')stepDoc(1);
+});
 
 /* ── INIT ── */
 const stored=sessionStorage.getItem('cp_team_session');

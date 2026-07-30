@@ -103,3 +103,13 @@ input,button{font:inherit;color:inherit;border:none;outline:none;background:none
 /* ── INFO BOX ── */
 .info-box{background:var(--p);border:1px solid var(--ln);border-radius:var(--rx);padding:.75rem .9rem;margin-bottom:1.1rem;font-size:.76rem;color:var(--mu);line-height:1.6;display:flex;gap:.6rem;align-items:flex-start}
 .info-box svg{flex-shrink:0;color:var(--mu);width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;margin-top:.1rem}
+
+/* upload in flight / upload refused — the applicant must never be left guessing */
+.doc-card.uploading{border-color:var(--or);background:var(--or-d)}
+.doc-card.uploading .doc-status{background:var(--or-d);border-color:var(--or);color:var(--or)}
+.doc-card.uploading .doc-filename{color:var(--or)}
+.doc-card.upload-error{border-color:var(--rd);background:rgba(208,64,64,.08)}
+.doc-card.upload-error .doc-filename{color:var(--rd);white-space:normal}
+.doc-card.upload-error .doc-status{border-color:var(--rd);color:var(--rd)}
+.doc-spin{width:13px;height:13px;border-radius:50%;border:2px solid var(--or-g);border-top-color:var(--or);animation:docspin .7s linear infinite}
+@keyframes docspin{to{transform:rotate(360deg)}}

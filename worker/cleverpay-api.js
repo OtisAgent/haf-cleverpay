@@ -5,10 +5,15 @@
 const SB = 'https://jsdwvogsxlnczzbefwgp.supabase.co/rest/v1';
 const APPS = 'cleverpay_applications';
 const OK_ORIGINS = ['https://clever.usehaf.co.uk', 'https://otisagent.github.io', 'https://plna.usehaf.co.uk'];
+/* compliance files live in a PRIVATE bucket — reachable only with the service key, never by URL */
+const DOCS = 'https://jsdwvogsxlnczzbefwgp.supabase.co/storage/v1/object/cleverpay-docs/';
+const DOC_MIME = ['application/pdf', 'image/jpeg', 'image/png', 'image/heic', 'image/heif', 'image/webp'];
+const store = (env, path, init) => fetch(DOCS + path, { ...init,
+  headers: { apikey: env.SB_KEY, Authorization: 'Bearer ' + env.SB_KEY, ...(init.headers || {}) } });
 
 function corsHeaders(req) {
   const o = req.headers.get('Origin') || '';
-  const ok = OK_ORIGINS.includes(o) || o.endsWith('.workers.dev') || o.endsWith('.vercel.app');
+  const ok = OK_ORIGINS.includes(o) || o.endsWith('.workers.dev') || o.endsWith('.pages.dev') || o.endsWith('.vercel.app');
   return {
     'Access-Control-Allow-Origin': ok ? o : OK_ORIGINS[0],
     'Access-Control-Allow-Methods': 'GET,POST,PATCH,PUT,OPTIONS',
@@ -117,7 +122,8 @@ export default {
     const url = new URL(req.url);
     const p = url.pathname.replace(/\/+$/, '') || '/';
     let b = {};
-    if (req.method !== 'GET') { try { b = await req.json(); } catch {} }
+    /* /docs/file carries raw file bytes, so it must not be read as JSON */
+    if (req.method !== 'GET' && p !== '/docs/file') { try { b = await req.json(); } catch {} }
 
     try {
       /* ── public: config (doc requirements + rebates) ── */
@@ -174,6 +180,25 @@ export default {
           method: 'PATCH', body: JSON.stringify({ docs: b.docs || [], updated_at: new Date().toISOString() }) });
         return r.ok ? J(strip(r.body[0]), 200, cors) : J({ error: 'Could not save documents.' }, 500, cors);
       }
+      /* ── applicant: upload one real file (raw bytes; ref/doc id/pin in the query) ── */
+      if (p === '/docs/file' && req.method === 'POST') {
+        const q = url.searchParams;
+        const app = await findApp(env, q.get('ref') || '');
+        if (!app || (app.pin_hash && app.pin_hash !== q.get('k'))) return J({ error: 'Not authorised.' }, 401, cors);
+        const id = (q.get('id') || '').replace(/[^a-z0-9_-]/gi, '').slice(0, 40);
+        if (!id) return J({ error: 'Missing document type.' }, 400, cors);
+        const mime = (req.headers.get('Content-Type') || '').split(';')[0].toLowerCase();
+        if (!DOC_MIME.includes(mime)) return J({ error: 'Please upload a PDF or a photo (JPG, PNG or HEIC).' }, 415, cors);
+        const bytes = await req.arrayBuffer();
+        if (!bytes.byteLength) return J({ error: 'That file looks empty.' }, 400, cors);
+        if (bytes.byteLength > 15728640) return J({ error: 'That file is over 15MB — please upload a smaller copy.' }, 413, cors);
+        const path = `${app.ref}/${id}`;
+        const up = await store(env, path, { method: 'POST', body: bytes,
+          headers: { 'Content-Type': mime, 'x-upsert': 'true' } });
+        if (!up.ok) return J({ error: 'Could not store that file — please try again.' }, 502, cors);
+        return J({ ok: true, path, size: bytes.byteLength, mime }, 200, cors);
+      }
+
       if (p === '/application' && req.method === 'GET') {
         const app = await findApp(env, url.searchParams.get('ref') || '');
         if (!app || (app.pin_hash && app.pin_hash !== url.searchParams.get('k'))) return J({ error: 'Not found.' }, 404, cors);
@@ -284,6 +309,32 @@ export default {
           if (b.docs !== undefined) patch.docs = b.docs;
           const r = await sb(env, `/${APPS}?ref=eq.${encodeURIComponent(m[1])}`, { method: 'PATCH', body: JSON.stringify(patch) });
           return r.ok && r.body[0] ? J(strip(r.body[0]), 200, cors) : J({ error: 'Update failed.' }, 500, cors);
+        }
+
+        /* ── reviewer opens the actual file — bytes proxied through this session, never a public link ── */
+        if (p === '/team/doc' && req.method === 'GET') {
+          const app = await findApp(env, url.searchParams.get('ref') || '');
+          const id = (url.searchParams.get('id') || '').replace(/[^a-z0-9_-]/gi, '');
+          const d = app && (Array.isArray(app.docs) ? app.docs : []).find(x => x.id === id);
+          if (!d) return J({ error: 'No such document on this application.' }, 404, cors);
+          if (!d.path) return J({ error: 'no_file' }, 404, cors);
+          const f = await store(env, d.path, { method: 'GET' });
+          if (!f.ok) return J({ error: 'That file could not be opened.' }, 502, cors);
+          return new Response(f.body, { status: 200, headers: { ...cors,
+            'Content-Type': d.mime || f.headers.get('Content-Type') || 'application/octet-stream',
+            'Content-Disposition': `inline; filename="${String(d.filename || id).replace(/["\r\n]/g, '')}"` } });
+        }
+
+        /* ── reviewer ticks a document off — recorded on the application with who and when ── */
+        if (p === '/team/doc-check' && req.method === 'POST') {
+          const app = await findApp(env, b.ref || '');
+          if (!app) return J({ error: 'Not found.' }, 404, cors);
+          const now = new Date().toISOString();
+          const docs = (Array.isArray(app.docs) ? app.docs : []).map(d => d.id !== b.id ? d
+            : { ...d, checked: !!b.checked, checked_by: b.checked ? who : null, checked_at: b.checked ? now : null });
+          const r = await sb(env, `/${APPS}?ref=eq.${encodeURIComponent(app.ref)}`,
+            { method: 'PATCH', body: JSON.stringify({ docs, updated_at: now }) });
+          return r.ok ? J({ ok: true, docs }, 200, cors) : J({ error: 'Could not save that tick.' }, 500, cors);
         }
 
         if (p === '/team/config' && req.method === 'PUT') {

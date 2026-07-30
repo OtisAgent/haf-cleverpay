@@ -249,3 +249,47 @@ a{color:var(--or);text-decoration:none}
   .doc-row-file{max-width:90px}
   .toast{max-width:88vw;white-space:normal;text-align:center}
 }
+
+/* ── Document viewer ──
+   The reviewer opens the real file inside the portal: PDFs in a frame, photos as images. */
+.doc-open{display:inline-flex;align-items:center;gap:.28rem;flex-shrink:0;font-size:.66rem;font-weight:800;letter-spacing:.02em;
+  padding:.24rem .55rem;border-radius:var(--pill);cursor:pointer;
+  background:var(--or-d);color:var(--or);border:1.5px solid var(--or-g);transition:all .14s}
+.doc-open:hover{background:var(--or);color:#fff;border-color:var(--or)}
+.doc-open svg{width:11px;height:11px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+.doc-nofile{flex-shrink:0;font-size:.62rem;font-weight:700;color:var(--am);border:1px dashed rgba(217,146,11,.4);
+  padding:.18rem .45rem;border-radius:var(--pill);cursor:help}
+
+.doc-ov{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:300;display:none;align-items:center;justify-content:center;padding:1.2rem}
+.doc-ov.open{display:flex}
+.doc-modal{background:var(--p);border:1.5px solid var(--lns);border-radius:var(--r);width:100%;max-width:920px;
+  height:min(90vh,900px);display:flex;flex-direction:column;overflow:hidden}
+.dv-head{display:flex;align-items:flex-start;gap:.75rem;padding:.9rem 1.1rem;border-bottom:1px solid var(--ln)}
+.dv-heads{flex:1;min-width:0}
+.dv-title{font-family:var(--dp);font-size:.95rem;font-weight:900;letter-spacing:-.02em;color:var(--tx)}
+.dv-sub{font-size:.68rem;color:var(--mu);margin-top:.12rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dv-x{width:30px;height:30px;flex-shrink:0;border-radius:50%;background:var(--p2);border:1.5px solid var(--lns);
+  color:var(--mu);display:flex;align-items:center;justify-content:center;cursor:pointer}
+.dv-x:hover{color:var(--tx);border-color:var(--or)}
+.dv-x svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2.4;stroke-linecap:round}
+.dv-body{flex:1;min-height:0;background:var(--p2);display:flex;align-items:center;justify-content:center;overflow:auto}
+.dv-frame{width:100%;height:100%;border:none;background:#fff}
+.dv-img{max-width:100%;max-height:100%;object-fit:contain}
+.dv-msg{font-size:.8rem;color:var(--mu);text-align:center;padding:2rem 1.5rem;max-width:34ch;line-height:1.5}
+.dv-foot{display:flex;align-items:center;gap:.5rem;padding:.75rem 1.1rem;border-top:1px solid var(--ln);flex-wrap:wrap}
+.dv-foot .btn svg{width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+.dv-foot #dv-dl{text-decoration:none}
+.dv-foot .btn:disabled{opacity:.35;cursor:default}
+.dv-count{font-size:.68rem;color:var(--mu);font-weight:700}
+.dv-foot #dv-tick{margin-left:auto}
+
+@media(max-width:640px){
+  .doc-ov{padding:0}
+  .doc-modal{height:100%;max-width:100%;border:none;border-radius:0}
+  .doc-open{padding:.22rem .45rem}
+  .doc-open span{display:none}
+  .dv-foot{gap:.4rem}
+  .dv-foot .btn{flex:1;justify-content:center;padding:.5rem .6rem;font-size:.72rem}
+  .dv-foot #dv-tick{margin-left:0;flex-basis:100%}
+  .dv-count{order:5;width:100%;text-align:center}
+}

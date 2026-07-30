@@ -212,15 +212,56 @@ function docCardHtml(d){
   </div>`;
 }
 
-function handleUpload(id, name, req, input, card){
+const MAX_MB = 15;
+const TICK = '<svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>';
+const PLUS = '<svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>';
+
+function uploadFailed(id, input, card, msg){
+  delete uploaded[id];
+  card.classList.remove('uploaded', 'uploading');
+  card.classList.add('upload-error');
+  document.getElementById('fname-' + id).textContent = msg;
+  document.getElementById('status-' + id).innerHTML = PLUS;
+  input.value = '';
+  updateProgress();
+}
+
+/* The file itself goes to the CleverPay document store the moment it is chosen — a
+   filename on its own is no use to the compliance team, they have to see the document. */
+async function handleUpload(id, name, req, input, card){
   const file = input.files[0];
   if(!file) return;
 
-  uploaded[id] = {name: file.name, req};
+  if(file.size > MAX_MB * 1024 * 1024)
+    return uploadFailed(id, input, card, 'That file is over ' + MAX_MB + 'MB — please upload a smaller copy or a photo of it.');
 
+  card.classList.remove('upload-error');
+  card.classList.add('uploading');
+  document.getElementById('fname-' + id).textContent = 'Uploading ' + file.name + '…';
+  document.getElementById('status-' + id).innerHTML = '<div class="doc-spin"></div>';
+
+  const q = new URLSearchParams({ ref: app.ref, id: id, k: app.pinHash || '' });
+  let ok = false, data = null;
+  try {
+    const res = await fetch(CP_API + '/docs/file?' + q.toString(), {
+      method: 'POST',
+      headers: { 'Content-Type': file.type || 'application/octet-stream' },
+      body: file,
+    });
+    ok = res.ok;
+    data = await res.json().catch(() => null);
+  } catch (e) {
+    data = { error: 'No connection — check your internet and try again.' };
+  }
+
+  if(!ok) return uploadFailed(id, input, card, (data && data.error) || 'That upload didn’t go through — please try again.');
+
+  uploaded[id] = { name: file.name, req: req, path: data.path, mime: data.mime, size: data.size };
+
+  card.classList.remove('uploading');
   card.classList.add('uploaded');
   document.getElementById('fname-' + id).textContent = file.name;
-  document.getElementById('status-' + id).innerHTML = '<svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>';
+  document.getElementById('status-' + id).innerHTML = TICK;
 
   updateProgress();
 }
@@ -245,7 +286,8 @@ function updateProgress(){
 }
 
 async function submitDocs(){
-  const docList = Object.entries(uploaded).map(([id, d]) => ({id, filename: d.name, req: d.req}));
+  const docList = Object.entries(uploaded).map(([id, d]) =>
+    ({id, filename: d.name, req: d.req, path: d.path, mime: d.mime, size: d.size}));
   const r = await cpApi('/docs', { method: 'POST', body: { ref: app.ref, pinHash: app.pinHash, docs: docList } });
   if(!r.ok){ alert(r.body?.error || 'Could not submit — please try again.'); return; }
   localStorage.setItem('cp_application', JSON.stringify({...r.body, pinHash: app.pinHash}));

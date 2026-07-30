@@ -105,6 +105,35 @@
   </div>
 </div>
 
+<!-- Document viewer — opens the real file the applicant uploaded -->
+<div class="doc-ov" id="doc-ov" onclick="if(event.target===this)closeDoc()">
+  <div class="doc-modal">
+    <div class="dv-head">
+      <div class="dv-heads">
+        <div class="dv-title" id="dv-title">Document</div>
+        <div class="dv-sub" id="dv-sub"></div>
+      </div>
+      <button class="dv-x" onclick="closeDoc()" title="Close">
+        <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="dv-body" id="dv-body"></div>
+    <div class="dv-foot">
+      <button class="btn btn-gh" id="dv-prev" onclick="stepDoc(-1)">
+        <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>Previous
+      </button>
+      <span class="dv-count" id="dv-count"></span>
+      <button class="btn btn-gh" id="dv-next" onclick="stepDoc(1)">Next
+        <svg viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
+      </button>
+      <a class="btn btn-gh" id="dv-dl" download>
+        <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Download
+      </a>
+      <button class="btn btn-approve" id="dv-tick" onclick="tickFromViewer()">Tick as checked</button>
+    </div>
+  </div>
+</div>
+
 <!-- Add account modal -->
 <div class="modal-ov" id="add-ov">
   <div class="modal" style="max-width:560px">
