@@ -80,8 +80,15 @@ function pickFields(b) {
    be notified of every new enquiry. The ping rides on the 🟠 of line one as a
    tg://user mention — it cuts through a muted group without adding a fifth
    line. TG_NOTIFY_IDS (comma-separated Telegram user ids) overrides the
-   default if the people to notify change. */
-const NOTIFY_DEFAULT = '8681596257'; /* Gemma Vale */
+   default if the people to notify change.
+
+   30 Jul, second pass: a tg://user mention of an id Telegram cannot resolve is
+   rejected outright (400 "wrong user_id specified") — which would take the WHOLE
+   alert down with it, silently, because failures here are swallowed. The ping is
+   a nice-to-have; the enquiry landing in the group is not. So the send now walks
+   a ladder: mention → same message with a plain 🟠 → plain text with no markup.
+   The enquiry always arrives, whatever Telegram thinks of the id. */
+const NOTIFY_DEFAULT = ''; /* set TG_NOTIFY_IDS once an id is confirmed from Telegram itself */
 const TYPE_LABELS = {
   driver: 'Owner Driver',
   fleet: 'Fleet / Courier Company',
@@ -109,21 +116,33 @@ function alertHeader(env, label) {
   return `<b>${dot}${extra} NEW ENQUIRY — ${esc(label)}</b>`;
 }
 
+async function tgSend(env, text, html) {
+  const body = { chat_id: env.TG_CHAT, text, disable_web_page_preview: true };
+  if (html) body.parse_mode = 'HTML';
+  const r = await fetch(`https://api.telegram.org/bot${env.TG_TOKEN}/sendMessage`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!r.ok) console.log('enquiry alert rejected', r.status, await r.text().catch(() => ''));
+  return r.ok;
+}
+
 async function sendEnquiryAlert(env, row) {
   if (!env.TG_TOKEN || !env.TG_CHAT) return;
   const label = TYPE_LABELS[row.type] || 'New account';
   const who = [row.fname, row.lname].filter(Boolean).join(' ') || row.name || row.company || '—';
   const contact = [row.phone, row.email].filter(Boolean).join(' · ') || '—';
-  const text =
-    `${alertHeader(env, label)}\n` +
+  const rest =
     `<b>Ref:</b> ${esc(row.ref)} · ${ukStamp()}\n` +
     `<b>Name:</b> ${esc(who)}\n` +
     `<b>Contact:</b> ${esc(contact)}`;
-  await fetch(`https://api.telegram.org/bot${env.TG_TOKEN}/sendMessage`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ chat_id: env.TG_CHAT, text, parse_mode: 'HTML', disable_web_page_preview: true }),
-  });
+  const head = alertHeader(env, label);
+  const plainHead = `<b>🟠 NEW ENQUIRY — ${esc(label)}</b>`;
+  if (head !== plainHead && await tgSend(env, `${head}\n${rest}`, true)) return;
+  if (await tgSend(env, `${plainHead}\n${rest}`, true)) return;
+  await tgSend(env, `🟠 NEW ENQUIRY — ${label}\nRef: ${row.ref} · ${ukStamp()}\n` +
+    `Name: ${who}\nContact: ${contact}`, false);
 }
 
 function alertNewEnquiry(env, ctx, row) {
