@@ -60,6 +60,7 @@ for (const k of APP_FIELDS) if (b[k] !== undefined) row[k] = b[k];
 if (b.pinHash) row.pin_hash = b.pinHash;
 return row;
 }
+const NOTIFY_DEFAULT = '8681596257'; /* Gemma Vale */
 const TYPE_LABELS = {
 driver: 'Owner Driver',
 fleet: 'Fleet / Courier Company',
@@ -75,13 +76,20 @@ const day = new Intl.DateTimeFormat('en-GB', {
 timeZone: 'Europe/London', day: 'numeric', month: 'short' }).format(d);
 return `${time}, ${day}`;
 }
+function alertHeader(env, label) {
+const ids = String(env.TG_NOTIFY_IDS || NOTIFY_DEFAULT)
+.split(',').map((s) => s.trim()).filter((s) => /^\d+$/.test(s));
+const dot = ids.length ? `<a href="tg://user?id=${ids[0]}">🟠</a>` : '🟠';
+const extra = ids.slice(1).map((id) => `<a href="tg://user?id=${id}">⁣</a>`).join('');
+return `<b>${dot}${extra} NEW ENQUIRY — ${esc(label)}</b>`;
+}
 async function sendEnquiryAlert(env, row) {
 if (!env.TG_TOKEN || !env.TG_CHAT) return;
 const label = TYPE_LABELS[row.type] || 'New account';
 const who = [row.fname, row.lname].filter(Boolean).join(' ') || row.name || row.company || '—';
 const contact = [row.phone, row.email].filter(Boolean).join(' · ') || '—';
 const text =
-`<b>🟠 NEW ENQUIRY — ${esc(label)}</b>\n` +
+`${alertHeader(env, label)}\n` +
 `<b>Ref:</b> ${esc(row.ref)} · ${ukStamp()}\n` +
 `<b>Name:</b> ${esc(who)}\n` +
 `<b>Contact:</b> ${esc(contact)}`;
