@@ -192,6 +192,9 @@ a{color:var(--or);text-decoration:none}
 .mbt{flex:1;padding:.62rem;border-radius:var(--pill);font-weight:800;font-size:.82rem;border:none;cursor:pointer;transition:all .14s}
 .mbt-red{background:var(--rd);color:#fff}.mbt-red:hover{filter:brightness(1.1)}
 .mbt-gh{background:var(--p2);color:var(--tx);border:1.5px solid var(--lns)}
+.mbt-green{background:var(--gn);color:#fff}.mbt-green:hover{filter:brightness(1.1)}
+/* three choices need room on a phone — let them stack instead of squeezing */
+.ae-btns{flex-wrap:wrap}.ae-btns .mbt{flex:1 1 auto;min-width:8.5rem;white-space:nowrap}
 
 /* ── TOAST ── */
 .toast{position:fixed;bottom:1.2rem;left:50%;transform:translateX(-50%) translateY(20px);background:var(--gn);color:#fff;font-size:.8rem;font-weight:700;padding:.56rem 1.3rem;border-radius:var(--pill);box-shadow:0 6px 24px rgba(0,0,0,.3);opacity:0;transition:all .25s;z-index:300;pointer-events:none;white-space:nowrap}

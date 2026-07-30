@@ -371,7 +371,31 @@ async function tickDoc(ref,id){
   showToast(next?'Document checked off':'Tick removed');
 }
 function markReviewing(ref){update(ref,{status:'reviewing'},'Marked as in review')}
-function approve(ref){update(ref,{status:'approved'},'Approved — access unlocks once their email is confirmed')}
+/* Approving with an unconfirmed email used to leave the applicant stuck — approved
+   but locked out, waiting on a separate "Confirm email" click nobody knew to make.
+   Both decisions are now taken together in one prompt, so the step cannot be missed. */
+function approve(ref){
+  const a=QUEUE.find(x=>x.ref===ref);
+  if(a&&a.type!=='business'&&!a.email_verified){openApproveEmail(ref);return}
+  update(ref,{status:'approved'},a&&a.type==='business'?'Enquiry approved':'Approved — access is unlocked');
+}
+let approveTarget=null;
+function openApproveEmail(ref){
+  approveTarget=ref;
+  const a=QUEUE.find(x=>x.ref===ref)||{};
+  document.getElementById('ae-email').textContent=a.email||'no email on file';
+  document.getElementById('ae-ov').classList.add('open');
+}
+function closeApproveEmail(){document.getElementById('ae-ov').classList.remove('open');approveTarget=null}
+async function approveAndConfirm(){
+  const ref=approveTarget;closeApproveEmail();if(!ref)return;
+  if(!await update(ref,{status:'approved'}))return;
+  if(await confirmEmail(ref,true))showToast('Approved and email confirmed — access is unlocked');
+}
+function approveOnly(){
+  const ref=approveTarget;closeApproveEmail();if(!ref)return;
+  update(ref,{status:'approved'},'Approved — access stays locked until their email is confirmed');
+}
 function blockAcc(ref){update(ref,{status:'blocked'},'Account blocked — all access refused')}
 function unblockAcc(ref){update(ref,{status:'pending'},'Unblocked — returned to pending for re-review')}
 
@@ -379,8 +403,8 @@ function unblockAcc(ref){update(ref,{status:'pending'},'Unblocked — returned t
    session token server-side — the public key alone cannot flip this flag. */
 const SB_URL='https://jsdwvogsxlnczzbefwgp.supabase.co';
 const SB_ANON='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpzZHd2b2dzeGxuY3p6YmVmd2dwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEzODgyMzYsImV4cCI6MjA5Njk2NDIzNn0.pxqM-Oh4f_3PlqCbKIKvcKZnNRUZ1ASKqqdNg78M_4M';
-async function confirmEmail(ref){
-  if(!TEAM)return;
+async function confirmEmail(ref,silent){
+  if(!TEAM)return false;
   let ok=false;
   try{
     const res=await fetch(SB_URL+'/rest/v1/rpc/cleverpay_team_set_email_verified',{
@@ -390,20 +414,22 @@ async function confirmEmail(ref){
     });
     ok=res.ok;
   }catch(e){}
-  if(!ok){showToast('Could not confirm the email — try again',true);return;}
+  if(!ok){showToast(silent?'Approved, but the email could not be confirmed — use the Confirm email button on the card to retry':'Could not confirm the email — try again',true);return false;}
   const i=QUEUE.findIndex(a=>a.ref===ref);
   if(i>=0)QUEUE[i]={...QUEUE[i],email_verified:true};
   renderQueue();
-  showToast('Email confirmed');
+  if(!silent)showToast('Email confirmed');
+  return true;
 }
 async function update(ref,patch,okMsg){
   const r=await cpApi('/team/applications/'+ref,{method:'PATCH',body:patch,token:TEAM.token});
-  if(r.status===401){showToast('Session expired — please sign in again',true);doSignOut();return;}
-  if(!r.ok){showToast(r.body?.error||'Update failed — try again',true);return;}
+  if(r.status===401){showToast('Session expired — please sign in again',true);doSignOut();return false;}
+  if(!r.ok){showToast(r.body?.error||'Update failed — try again',true);return false;}
   const i=QUEUE.findIndex(a=>a.ref===ref);
   if(i>=0)QUEUE[i]={...r.body,rejectReason:r.body.reject_reason};
   renderQueue();
   if(okMsg)showToast(okMsg,patch.status==='rejected');
+  return true;
 }
 function openReject(ref){rejectTarget=ref;document.getElementById('reject-reason-text').value='';document.getElementById('modal-ov').classList.add('open')}
 function closeModal(){document.getElementById('modal-ov').classList.remove('open');rejectTarget=null}
@@ -414,6 +440,7 @@ function confirmReject(){
   closeModal();
 }
 document.getElementById('modal-ov').addEventListener('click',function(e){if(e.target===this)closeModal()});
+document.getElementById('ae-ov').addEventListener('click',function(e){if(e.target===this)closeApproveEmail()});
 
 /* reviewing a pile of documents is keyboard work: Esc closes, arrows flip through */
 document.addEventListener('keydown',e=>{

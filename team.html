@@ -105,6 +105,21 @@
   </div>
 </div>
 
+<!-- Approve modal — shown only when the email is still unconfirmed, so approval and
+     the email decision are made together and nobody is left approved-but-locked-out -->
+<div class="modal-ov" id="ae-ov">
+  <div class="modal">
+    <h2>Approve — is their email confirmed?</h2>
+    <p>Their email address <strong id="ae-email"></strong> has not been confirmed yet. Access stays locked until it is — approving on its own leaves them waiting.</p>
+    <p>Confirm it if you know this address reaches them (they replied to us, or you have spoken with them). If you are not sure yet, approve only — the card keeps its Confirm email button for later.</p>
+    <div class="modal-btns ae-btns">
+      <button class="mbt mbt-gh" onclick="closeApproveEmail()">Cancel</button>
+      <button class="mbt mbt-gh" onclick="approveOnly()">Approve only</button>
+      <button class="mbt mbt-green" onclick="approveAndConfirm()">Approve + confirm email</button>
+    </div>
+  </div>
+</div>
+
 <!-- Document viewer — opens the real file the applicant uploaded -->
 <div class="doc-ov" id="doc-ov" onclick="if(event.target===this)closeDoc()">
   <div class="doc-modal">
