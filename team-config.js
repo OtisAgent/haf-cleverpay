@@ -78,18 +78,18 @@ function renderDocSection(title,sub,cfg,type){
 function renderRebateSection(cfg){
   const r=cfg.rebate||{standard:'',knect:''};
   return`<div class="set-section">
-    <div class="set-section-head"><div class="set-section-title">Rebate rates — Freight Forwarders</div><div class="set-section-sub">Set the rebate percentages shown to freight forwarder applicants after approval. Leave blank to display "TBC" until confirmed.</div></div>
+    <div class="set-section-head"><div class="set-section-title">Profit pooling shares — Freight Forwarders</div><div class="set-section-sub">Set the profit-pooling percentages shown to freight forwarder applicants after approval. Leave blank to display "TBC" until confirmed.</div></div>
     <div class="rebate-fields">
       <div class="rf-row">
-        <div><div class="rf-label">Standard rebate rate</div><div class="rf-sub">Applies to all freight forwarder accounts</div></div>
+        <div><div class="rf-label">Standard pooling share</div><div class="rf-sub">Applies to all freight forwarder accounts</div></div>
         <div class="rf-input-wrap"><input class="rf-input" id="rb-standard" type="text" placeholder="e.g. 3" value="${r.standard}"><span class="rf-unit">% per job</span></div>
       </div>
       <div class="rf-row">
-        <div><div class="rf-label">HAF KNECT member rate</div><div class="rf-sub">Higher rate for forwarders who hold a KNECT membership</div></div>
+        <div><div class="rf-label">HAF KNECT member share</div><div class="rf-sub">Higher share for forwarders who hold a KNECT membership</div></div>
         <div class="rf-input-wrap"><input class="rf-input" id="rb-knect" type="text" placeholder="e.g. 5" value="${r.knect}"><span class="rf-unit">% per job</span></div>
       </div>
     </div>
-    <div class="save-row"><button class="btn-save" onclick="saveRebates()"><svg viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>Save rebate rates</button></div>
+    <div class="save-row"><button class="btn-save" onclick="saveRebates()"><svg viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>Save pooling shares</button></div>
   </div>`;
 }
 
@@ -117,5 +117,5 @@ function saveRebates(){
   const cfg=getConfig();
   cfg.rebate={standard:document.getElementById('rb-standard').value.trim(),knect:document.getElementById('rb-knect').value.trim()};
   CFG=cfg;
-  pushConfig('Rebate rates saved');
+  pushConfig('Pooling shares saved');
 }

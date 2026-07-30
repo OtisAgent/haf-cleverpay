@@ -59,10 +59,29 @@
 
   <!-- FOUNDER TEASER (shown while under review) -->
   <div class="founder-tease" id="founder-tease">
-    <div class="ft-kicker">While you're being verified</div>
-    <div class="ft-head">HAF KNECT Founder Membership</div>
-    <div class="ft-body">A one-off £100 payment — never monthly. Your Founder price and badge are locked for life, with priority access to work on the network. The price moves to the <strong>next tier</strong> once the network hits its next milestone.</div>
-    <div class="ft-lock">🔒 Unlocks the moment you're approved</div>
+    <div class="ft-kicker">Your next stage — while you're being verified</div>
+    <div class="ft-head">Choose how you join HAF KNECT</div>
+    <div class="choice-grid">
+      <div class="choice-card">
+        <div class="cc-name">HAF KNECT — Free</div>
+        <div class="cc-price">£0</div>
+        <ul class="cc-list">
+          <li>Driver or company profile</li>
+          <li>Browse network lanes</li>
+          <li>Accept &amp; complete jobs</li>
+        </ul>
+      </div>
+      <div class="choice-card founder">
+        <div class="cc-name">HAF KNECT — Founder</div>
+        <div class="cc-price">£100 <small>one-off</small></div>
+        <ul class="cc-list">
+          <li>Everything in Free, plus all future features</li>
+          <li>Founder price &amp; badge locked for life</li>
+        </ul>
+      </div>
+    </div>
+    <div class="ft-body">Founder is a one-off payment — never monthly. The Founder price steps up to the <strong>next tier</strong> as the network hits its milestones.</div>
+    <div class="ft-lock"><svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> Both unlock the moment you're approved</div>
   </div>
 
   <!-- ACCESS PANEL (shown when approved) -->
@@ -91,24 +110,39 @@
 
   <!-- FOUNDER OFFER (shown once approved — the memorable moment) -->
   <div class="founder-offer" id="founder-offer">
-    <div class="fo-kicker">You're verified — founder pricing is open right now</div>
-    <div class="fo-head">Claim your Founder Membership</div>
-    <ul class="fo-list">
-      <li>One-off £100 — never a monthly charge, nothing to cancel</li>
-      <li>Founder price and badge locked for life, even as the price rises</li>
-      <li>Priority visibility for suitable work on the network</li>
-      <li>First access to every network reward as it rolls out</li>
-    </ul>
+    <div class="fo-kicker">You're verified — choose how you join HAF KNECT</div>
+    <div class="fo-head">Start free, or claim Founder</div>
+    <div class="choice-grid">
+      <div class="choice-card">
+        <div class="cc-name">HAF KNECT — Free</div>
+        <div class="cc-price">£0</div>
+        <ul class="cc-list">
+          <li>Driver or company profile</li>
+          <li>Browse network lanes</li>
+          <li>Accept &amp; complete jobs</li>
+        </ul>
+      </div>
+      <div class="choice-card founder">
+        <div class="cc-name">HAF KNECT — Founder</div>
+        <div class="cc-price">£100 <small>one-off</small></div>
+        <ul class="cc-list">
+          <li>Everything in Free, plus all future features</li>
+          <li>Founder price &amp; badge locked for life</li>
+          <li>Priority visibility for suitable work</li>
+        </ul>
+      </div>
+    </div>
     <a class="fo-btn" href="https://www.usehaf.co.uk/products/haf-knect-founding-member" target="_blank" rel="noopener">Claim Founder Membership — £100 one-off →</a>
-    <div class="fo-note">Prefer to carry on free? No problem — you can join any time, at the membership price live at that moment.</div>
+    <div class="fo-note">Founder is never a monthly charge, and the price steps up as the network hits its milestones — today's price is the lowest it will be. Prefer to start free? You're in already, and you can upgrade any time at the membership price live at that moment.</div>
   </div>
 
-  <!-- REBATE PANEL (freight approved) -->
-  <div class="rebate-panel" id="rebate-panel">
-    <div class="rbt-head">Your rebate account</div>
+  <!-- PROFIT POOLING PANEL (freight approved) -->
+  <div class="pool-panel" id="pool-panel">
+    <div class="rbt-head">Profit pooling in the network</div>
+    <div class="rbt-sub">You're eligible for profit pooling in the network — payouts are coming soon.</div>
     <div class="rbt-row"><span class="rbt-label">Payment method</span><span class="rbt-val">Pay upfront</span></div>
-    <div class="rbt-row"><span class="rbt-label">Rebate tier</span><span class="rbt-val or" id="rebate-tier">Standard (3%)</span></div>
-    <div class="rbt-row"><span class="rbt-label">Rebate wallet balance</span><span class="rbt-val gn">£0.00</span></div>
+    <div class="rbt-row"><span class="rbt-label">Pooling share</span><span class="rbt-val or" id="pool-tier">Standard (3%)</span></div>
+    <div class="rbt-row"><span class="rbt-label">Pooled balance</span><span class="rbt-val gn">£0.00</span></div>
     <div class="rbt-row"><span class="rbt-label">Credit limit</span><span class="rbt-val">None — upfront only</span></div>
   </div>
 
@@ -171,7 +205,7 @@ function toggleTheme(){
   h.dataset.theme = h.dataset.theme === 'dark' ? 'light' : 'dark';
 }
 
-let CFG = null; /* portal config (rebate rates) — fetched once from the API */
+let CFG = null; /* portal config (pooling rates) — fetched once from the API */
 
 function copyRef(){
   const ref = document.getElementById('ref-display').textContent;
@@ -278,14 +312,14 @@ function renderStatus(app){
     document.getElementById('tl-access-dot').innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
     document.getElementById('tl-access-sub').textContent = 'Log in to PLNA and HAF KNECT using your username above.';
 
-    /* Freight rebate panel */
+    /* Freight profit-pooling panel */
     if(app.type === 'freight'){
-      const rp = document.getElementById('rebate-panel');
+      const rp = document.getElementById('pool-panel');
       rp.classList.add('show');
       const stdRate = CFG?.rebate?.standard ? CFG.rebate.standard + '%' : 'TBC';
       const knectRate = CFG?.rebate?.knect ? CFG.rebate.knect + '%' : 'TBC';
       const tier = app.knect ? `KNECT member (${knectRate})` : `Standard (${stdRate})`;
-      document.getElementById('rebate-tier').textContent = tier;
+      document.getElementById('pool-tier').textContent = tier;
     }
 
   } else if(status === 'blocked'){

@@ -99,9 +99,9 @@ select.fi{appearance:none;-webkit-appearance:none;background-image:url("data:ima
 .kt-thumb{width:16px;height:16px;border-radius:50%;background:#fff;transition:transform .2s;box-shadow:0 1px 4px rgba(0,0,0,.3)}
 .knect-toggle.on .kt-thumb{transform:translateX(20px)}
 
-/* ── REBATE INFO ── */
-.rebate-info{background:var(--or-d);border:1px solid rgba(241,142,0,.2);border-radius:var(--rx);padding:.75rem 1rem;display:none;margin-bottom:.9rem}
-.rebate-info.show{display:block}
+/* ── PROFIT POOLING INFO ── */
+.pool-info{background:var(--or-d);border:1px solid rgba(241,142,0,.2);border-radius:var(--rx);padding:.75rem 1rem;display:none;margin-bottom:.9rem}
+.pool-info.show{display:block}
 .ri-row{display:flex;justify-content:space-between;align-items:center;font-size:.78rem;padding:.22rem 0}
 .ri-label{color:var(--mu)}
 .ri-val{font-weight:700;color:var(--tx)}

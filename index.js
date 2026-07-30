@@ -94,16 +94,16 @@ function toggleKnect(){
   knectOn = !knectOn;
   const tog = document.getElementById('knect-toggle');
   const sub = document.getElementById('knect-sub');
-  const info = document.getElementById('rebate-info');
+  const info = document.getElementById('pool-info');
   tog.classList.toggle('on', knectOn);
   const cfg = JSON.parse(localStorage.getItem('cp_config')||'null');
   const rStd = cfg?.rebate?.standard ? cfg.rebate.standard + '% per job' : 'Confirmed after signup';
-  const rKnect = cfg?.rebate?.knect ? cfg.rebate.knect + '% per job' : 'Higher rate — TBC';
+  const rKnect = cfg?.rebate?.knect ? cfg.rebate.knect + '% per job' : 'Higher share — TBC';
   document.getElementById('ri-standard').textContent = rStd;
   document.getElementById('ri-knect').textContent = rKnect;
   sub.textContent = knectOn
-    ? 'KNECT member rate applied — you earn a higher rebate on every job.'
-    : 'Tap to confirm — earns you a higher rebate rate on every job.';
+    ? 'KNECT member share applied — a higher share of profit pooling in the network.'
+    : 'Tap to confirm — you get a higher share of profit pooling in the network.';
   sub.classList.toggle('highlight', knectOn);
   info.classList.toggle('show', knectOn);
 }

@@ -118,10 +118,11 @@ a{color:var(--or);text-decoration:none}
 .btn-restart:hover{filter:brightness(1.1)}
 .btn-restart svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
 
-/* ── REBATE PANEL (freight approved) ── */
-.rebate-panel{display:none;background:var(--p);border:1px solid var(--ln);border-radius:var(--rs);padding:1rem 1.1rem;margin-bottom:1.2rem}
-.rebate-panel.show{display:block}
+/* ── PROFIT POOLING PANEL (freight approved) ── */
+.pool-panel{display:none;background:var(--p);border:1px solid var(--ln);border-radius:var(--rs);padding:1rem 1.1rem;margin-bottom:1.2rem}
+.pool-panel.show{display:block}
 .rbt-head{font-size:.68rem;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--mu);margin-bottom:.7rem}
+.rbt-sub{font-size:.8rem;color:var(--mu);margin:-.4rem 0 .6rem}
 .rbt-row{display:flex;justify-content:space-between;align-items:center;padding:.3rem 0;font-size:.8rem}
 .rbt-row+.rbt-row{border-top:1px solid var(--ln)}
 .rbt-label{color:var(--mu)}
@@ -140,6 +141,19 @@ a{color:var(--or);text-decoration:none}
 .ft-head{font-family:var(--dp);font-weight:900;font-size:1.15rem;letter-spacing:-.02em;margin-bottom:.4rem}
 .ft-body{font-size:.93rem;color:var(--mu);max-width:34rem;margin:0 auto .6rem}
 .ft-lock{display:inline-block;font-size:.85rem;font-weight:600;background:var(--p2);border-radius:var(--pill);padding:.4rem .9rem}
+.ft-lock svg{width:13px;height:13px;fill:none;stroke:var(--or);stroke-width:2;stroke-linecap:round;stroke-linejoin:round;vertical-align:-2px;margin-right:.15rem}
+
+/* ── FREE vs FOUNDER choice grid (tease + offer) ── */
+.choice-grid{display:grid;grid-template-columns:1fr 1fr;gap:.8rem;max-width:34rem;margin:0 auto .8rem;text-align:left}
+.choice-card{background:var(--p2);border:1px solid var(--ln);border-radius:var(--rs);padding:1rem 1.05rem}
+.choice-card.founder{background:var(--or-d);border:1.5px solid var(--or-g)}
+.cc-name{font-weight:800;font-size:.9rem}
+.cc-price{font-family:var(--dp);font-weight:900;font-size:1.35rem;letter-spacing:-.02em;margin:.15rem 0 .5rem}
+.cc-price small{font-family:var(--fn);font-weight:600;font-size:.72rem;color:var(--mu);letter-spacing:0}
+.cc-list{list-style:none;margin:0;padding:0}
+.cc-list li{position:relative;padding-left:1.15rem;font-size:.8rem;color:var(--mu);margin-bottom:.3rem}
+.cc-list li::before{content:"✓";position:absolute;left:0;color:var(--or);font-weight:800}
+@media (max-width:480px){.choice-grid{grid-template-columns:1fr}}
 .founder-offer{display:none;background:var(--or-d);border:1.5px solid var(--or-g);border-radius:var(--r);padding:1.6rem 1.4rem;margin-bottom:1.2rem;text-align:center}
 .founder-offer.show{display:block}
 .fo-kicker{font-size:.72rem;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--or);margin-bottom:.35rem}
