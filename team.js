@@ -113,6 +113,9 @@ function setTab(t){
   renderView();
 }
 function renderView(){
+  /* the reading column is sized for cards — a record list wants the whole screen */
+  document.getElementById('main-content')
+    .classList.toggle('wide',LIST_TABS.includes(currentTab)&&viewMode==='list');
   if(currentTab==='settings') renderSettings();
   else if(currentTab==='integration') renderIntegration();
   else renderQueue();
@@ -134,7 +137,33 @@ function updateKPIs(q){
   document.getElementById('tc-rejected').textContent=n('rejected');
 }
 
-/* ── QUEUE RENDER ── */
+/* ── QUEUE RENDER ──
+   Approved and All are the tabs that keep growing, so they default to the list
+   view: one row per account, the way a CRM reads. The card view is still a click
+   away on every tab. */
+const LIST_TABS=['approved','all'];
+let viewMode=localStorage.getItem('cp_view')||'list';
+let crmSearch='';
+let crmSort={key:'submitted',dir:-1};
+let crmOpen=null;
+
+function setView(v){
+  viewMode=v;
+  localStorage.setItem('cp_view',v);
+  renderView();
+}
+function setCrmSearch(v){
+  crmSearch=v;
+  renderQueue();
+  const box=document.getElementById('crm-search');
+  if(box){box.focus();box.setSelectionRange(box.value.length,box.value.length);}
+}
+function setCrmSort(k){
+  if(crmSort.key===k)crmSort.dir=-crmSort.dir;
+  else crmSort={key:k,dir:k==='submitted'?-1:1};
+  renderQueue();
+}
+
 function renderQueue(){
   const q=QUEUE;
   updateKPIs(q);
@@ -144,10 +173,102 @@ function renderQueue(){
     el.innerHTML=`<div class="empty"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>No ${currentTab==='all'?'':currentTab} applications yet.</div>`;
     return;
   }
-  el.innerHTML=`<div class="app-list">${filtered.map(a=>appCardHtml(a)).join('')}</div>`;
+  if(LIST_TABS.includes(currentTab)&&viewMode==='list'){renderCrm(filtered);return;}
+  el.innerHTML=`${LIST_TABS.includes(currentTab)?viewSwitchHtml():''}<div class="app-list">${filtered.map(a=>appCardHtml(a)).join('')}</div>`;
   filtered.forEach(a=>{
     document.getElementById('head-'+a.ref)?.addEventListener('click',()=>toggleCard(a.ref));
   });
+}
+
+/* ── CRM LIST VIEW ── */
+function viewSwitchHtml(){
+  const b=(v,label,icon)=>`<button class="vs-btn${viewMode===v?' on':''}" onclick="setView('${v}')" title="${label} view"><svg viewBox="0 0 24 24">${icon}</svg>${label}</button>`;
+  return`<div class="view-switch">
+    ${b('list','List','<line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>')}
+    ${b('cards','Cards','<rect x="3" y="3" width="18" height="7" rx="2"/><rect x="3" y="14" width="18" height="7" rx="2"/>')}
+  </div>`;
+}
+
+/* Columns sit to the right of the username and reference — the two things the team
+   searches by — so a row reads left to right like a record, not a card. */
+const CRM_COLS=[
+  {k:'username',t:'Username',s:a=>a.username||'',v:a=>`<span class="c-user">${a.username||'—'}</span>`},
+  {k:'ref',t:'Reference',s:a=>a.ref||'',v:a=>`<span class="c-ref">${a.ref}</span>`},
+  {k:'name',t:'Name',s:a=>displayName(a).toLowerCase(),v:a=>`<span class="c-name">${displayName(a)}</span>`},
+  {k:'type',t:'Account',sm:1,s:a=>a.type||'',v:a=>{
+    const isB=a.type==='business',isF=a.type==='freight';
+    return`<span class="chip ${isB?'chip-business':isF?'chip-freight':'chip-driver'}">${isB?'Business':isF?'Freight':'Driver'}</span>`;}},
+  {k:'status',t:'Status',s:a=>a.status||'',v:a=>statusChip(a.status)},
+  {k:'email',t:'Email',sm:1,s:a=>(a.email||'').toLowerCase(),v:a=>`<span class="c-dim">${a.email||'—'}</span>`},
+  {k:'verified',t:'Confirmed',sm:1,s:a=>a.type==='business'?2:(a.email_verified?1:0),v:a=>
+    a.type==='business'?'<span class="c-dim">—</span>'
+    :(a.email_verified?'<span class="c-yes">Yes</span>':'<span class="c-no">No</span>')},
+  {k:'phone',t:'Phone',sm:1,s:a=>a.phone||'',v:a=>`<span class="c-dim">${a.phone||'—'}</span>`},
+  {k:'docs',t:'Documents',sm:1,s:a=>appCompliance(a).missingReq.length,v:a=>{
+    if(a.type==='business')return'<span class="c-dim">—</span>';
+    const{missingReq,uploaded}=appCompliance(a);
+    return missingReq.length
+      ?`<span class="c-miss">${missingReq.length} missing</span>`
+      :`<span class="c-yes">${uploaded.length} held</span>`;}},
+  {k:'submitted',t:'Submitted',sm:1,s:a=>new Date(a.submitted||0).getTime()||0,v:a=>`<span class="c-dim">${fmtDate(a.submitted)}</span>`},
+];
+
+function crmMatch(a,term){
+  if(!term)return true;
+  const t=term.toLowerCase();
+  return[a.username,a.ref,displayName(a),a.email,a.phone,a.company,a.fname,a.lname]
+    .some(x=>(x||'').toString().toLowerCase().includes(t));
+}
+
+function renderCrm(list){
+  const rows=list.filter(a=>crmMatch(a,crmSearch));
+  const col=CRM_COLS.find(c=>c.k===crmSort.key)||CRM_COLS[CRM_COLS.length-1];
+  rows.sort((x,y)=>{
+    const a=col.s(x),b=col.s(y);
+    return(a<b?-1:a>b?1:0)*crmSort.dir;
+  });
+
+  const arrow=k=>crmSort.key===k?`<span class="th-ar">${crmSort.dir===1?'▲':'▼'}</span>`:'';
+  const head=CRM_COLS.map(c=>`<th class="${c.sm?'sm-hide ':''}th-${c.k}" onclick="setCrmSort('${c.k}')" title="Sort by ${c.t}">${c.t}${arrow(c.k)}</th>`).join('');
+  const span=CRM_COLS.length+2;
+
+  /* an approval re-renders the whole list — the row the reviewer had open stays open */
+  const body=rows.map((a,i)=>{
+    const op=a.ref===crmOpen?' open':'';
+    return`
+    <tr class="r ${i%2?'row-b':'row-a'}${op}" id="row-${a.ref}" onclick="toggleRow('${a.ref}')">
+      <td class="num">${i+1}</td>
+      ${CRM_COLS.map(c=>`<td class="td-${c.k}${c.sm?' sm-hide':''}">${c.v(a)}</td>`).join('')}
+      <td class="chev"><svg viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg></td>
+    </tr>
+    <tr class="det ${i%2?'row-b':'row-a'}${op}" id="det-${a.ref}"><td colspan="${span}"><div class="det-box">${appDetailHtml(a)}</div></td></tr>`;
+  }).join('');
+
+  document.getElementById('main-content').innerHTML=`
+    ${viewSwitchHtml()}
+    <div class="list-tools">
+      <div class="list-search">
+        <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input id="crm-search" type="text" placeholder="Search name, username, reference, email or phone" value="${crmSearch.replace(/"/g,'&quot;')}" oninput="setCrmSearch(this.value)">
+      </div>
+      <div class="list-count">${rows.length} of ${list.length}</div>
+    </div>
+    ${rows.length?`<div class="crm-wrap"><table class="crm">
+      <thead><tr><th class="num">#</th>${head}<th class="chev"></th></tr></thead>
+      <tbody>${body}</tbody>
+    </table></div>`
+    :`<div class="empty"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>Nothing matches "${crmSearch}".</div>`}`;
+}
+
+/* One row open at a time — the same rule the cards follow. */
+function toggleRow(ref){
+  const row=document.getElementById('row-'+ref);
+  const det=document.getElementById('det-'+ref);
+  if(!row||!det)return;
+  const was=row.classList.contains('open');
+  document.querySelectorAll('.crm tr.open').forEach(x=>x.classList.remove('open'));
+  crmOpen=was?null:ref;
+  if(!was){row.classList.add('open');det.classList.add('open');}
 }
 
 function ini(a){
@@ -167,7 +288,9 @@ function statusChip(s){
   return`<span class="chip ${m[s]||'chip-pending'}">${l[s]||s}</span>`;
 }
 
-function appCardHtml(a){
+/* Compliance rows and the detail panel are shared by the card view and the list
+   view, so they live in their own functions rather than inside the card. */
+function appCompliance(a){
   const isF=a.type==='freight';
   const isB=a.type==='business';
   const cfg=getConfig();
@@ -198,6 +321,11 @@ function appCardHtml(a){
     ...uploaded.filter(d=>{const def=docDefs.find(x=>x.id===d.id);return !def||def.status==='optional';})
       .map(d=>docRow(d,{cls:'badge-opt',txt:'Optional'})),
   ];
+  return{isF,isB,docDefs,uploaded,reqDefs,missingReq,allDocRows};
+}
+
+function appDetailHtml(a){
+  const{isF,isB,allDocRows}=appCompliance(a);
 
   const driverRows=`
     <div class="dg"><div class="dl">Name</div><div class="dv">${a.fname||''} ${a.lname||''}</div></div>
@@ -243,6 +371,17 @@ function appCardHtml(a){
     return`${rev}${emailBtn}<button class="btn btn-approve" onclick="approve('${a.ref}')"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>Approve</button><button class="btn btn-reject" onclick="openReject('${a.ref}')"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>Reject</button>${blockBtn}`;
   })();
 
+  return`<div class="detail-sec">${isB?'Enquiry details':'Applicant details'}</div>
+    <div class="detail-grid">${isB?businessRows:isF?freightRows:driverRows}</div>
+    ${freightExtras}
+    ${isB?'':`<div class="detail-sec">Compliance documents</div>
+    <div class="doc-rows">${allDocRows.join('')||'<div style="font-size:.74rem;color:var(--mu);padding:.2rem 0">No documents submitted yet.</div>'}</div>`}
+    <div class="detail-sec">Actions</div>
+    <div class="action-bar">${actions}</div>`;
+}
+
+function appCardHtml(a){
+  const{isF,isB,missingReq}=appCompliance(a);
   return`<div class="app-card" id="card-${a.ref}">
     <div class="app-head" id="head-${a.ref}">
       <div class="app-avatar">${ini(a)}</div>
@@ -259,15 +398,7 @@ function appCardHtml(a){
       </div>
       <div class="chevron"><svg viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg></div>
     </div>
-    <div class="app-detail">
-      <div class="detail-sec">${isB?'Enquiry details':'Applicant details'}</div>
-      <div class="detail-grid">${isB?businessRows:isF?freightRows:driverRows}</div>
-      ${freightExtras}
-      ${isB?'':`<div class="detail-sec">Compliance documents</div>
-      <div class="doc-rows">${allDocRows.join('')||'<div style="font-size:.74rem;color:var(--mu);padding:.2rem 0">No documents submitted yet.</div>'}</div>`}
-      <div class="detail-sec">Actions</div>
-      <div class="action-bar">${actions}</div>
-    </div>
+    <div class="app-detail">${appDetailHtml(a)}</div>
   </div>`;
 }
 

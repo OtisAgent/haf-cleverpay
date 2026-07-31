@@ -104,6 +104,59 @@ a{color:var(--or);text-decoration:none}
 .chip-business{background:rgba(139,92,246,.1);color:#a78bfa;border:1px solid rgba(139,92,246,.25)}.chip-business::before{background:#a78bfa}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
 
+/* ── CRM LIST VIEW ──
+   Cards stop being readable somewhere past twenty accounts, so Approved and All
+   render as a numbered, striped table: one line per record, scannable at 50, 100,
+   500. Alternating rows use transparency rather than fixed colours so the stripe
+   works in both the dark and the light theme. */
+.view-switch{display:flex;gap:.3rem;margin-bottom:.7rem}
+.vs-btn{display:inline-flex;align-items:center;gap:.35rem;font-size:.7rem;font-weight:700;padding:.34rem .7rem;border-radius:var(--pill);background:var(--p);border:1.5px solid var(--lns);color:var(--mu);transition:all .14s}
+.vs-btn:hover{color:var(--tx)}
+.vs-btn.on{background:var(--or-d);border-color:var(--or-g);color:var(--or)}
+.vs-btn svg{width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+
+.list-tools{display:flex;align-items:center;gap:.6rem;margin-bottom:.6rem;flex-wrap:wrap}
+.list-search{flex:1;min-width:190px;display:flex;align-items:center;gap:.5rem;background:var(--p);border:1.5px solid var(--lns);border-radius:var(--rx);padding:.4rem .7rem}
+.list-search svg{width:14px;height:14px;fill:none;stroke:var(--mu);stroke-width:2;stroke-linecap:round;flex-shrink:0}
+.list-search input{flex:1;min-width:0;font-size:.78rem;font-weight:600;cursor:text}
+.list-search input::placeholder{color:var(--su);font-weight:500}
+.list-count{font-size:.7rem;font-weight:700;color:var(--mu);white-space:nowrap}
+
+.content.wide{max-width:1500px}
+.crm-wrap{background:var(--p);border:1.5px solid var(--lns);border-radius:var(--rs);overflow-x:auto}
+table.crm{width:100%;min-width:820px;border-collapse:collapse}
+.crm th{position:sticky;top:0;z-index:3;background:var(--p2);text-align:left;white-space:nowrap;
+  font-size:.62rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--mu);
+  padding:.6rem .7rem;border-bottom:1.5px solid var(--lns);cursor:pointer;user-select:none}
+.crm th:hover{color:var(--tx)}
+.crm th.num,.crm td.num{width:44px;text-align:right;padding-right:.55rem}
+.crm th.chev,.crm td.chev{width:34px;cursor:default}
+.crm td{padding:.5rem .7rem;font-size:.78rem;white-space:nowrap;vertical-align:middle;max-width:230px;overflow:hidden;text-overflow:ellipsis}
+.th-ar{margin-left:.25rem;font-size:.55rem;color:var(--or)}
+
+.crm tr.r{cursor:pointer;transition:background .12s}
+.crm tr.row-a{background:transparent}
+.crm tr.row-b{background:rgba(240,237,234,.05)}
+[data-theme=light] .crm tr.row-b{background:rgba(26,30,34,.045)}
+.crm tr.r:hover{background:var(--or-d)}
+.crm tr.r.open{background:var(--or-d);box-shadow:inset 3px 0 0 var(--or)}
+.crm td.num{color:var(--su);font-size:.7rem;font-weight:800}
+.crm tr.r.open td.num{color:var(--or)}
+.crm .c-user{font-family:var(--dp);font-weight:800;font-size:.76rem;letter-spacing:.03em;color:var(--or)}
+.crm .c-ref{font-family:var(--dp);font-weight:700;font-size:.72rem;letter-spacing:.03em;color:var(--mu)}
+.crm .c-name{font-weight:700;color:var(--tx)}
+.crm .c-dim{color:var(--mu);font-size:.74rem}
+.crm .c-yes{color:var(--gn);font-weight:700;font-size:.74rem}
+.crm .c-no{color:var(--am);font-weight:700;font-size:.74rem}
+.crm .c-miss{color:var(--rd);font-weight:700;font-size:.74rem}
+.crm td.chev svg{width:14px;height:14px;fill:none;stroke:var(--mu);stroke-width:2;stroke-linecap:round;stroke-linejoin:round;transition:transform .2s}
+.crm tr.r.open td.chev svg{transform:rotate(180deg);stroke:var(--or)}
+
+.crm tr.det{display:none}
+.crm tr.det.open{display:table-row}
+.crm tr.det>td{padding:0;white-space:normal;border-bottom:1.5px solid var(--lns)}
+.det-box{padding:.95rem 1.1rem 1.1rem;background:var(--p2);white-space:normal}
+
 /* ── DETAIL ── */
 .app-detail{display:none;border-top:1px solid var(--ln);padding:.95rem 1.1rem 1.1rem}
 .app-card.expanded .app-detail{display:block}
@@ -248,6 +301,24 @@ a{color:var(--or);text-decoration:none}
   .chevron{align-self:center;padding:.35rem;margin:-.35rem -.2rem -.35rem 0}
   .chevron svg{width:17px;height:17px}
   .app-detail{padding:.85rem .8rem 1rem}
+
+  /* list view on a phone — number, username, reference, name and status stay;
+     everything else folds away and is still one tap down in the open record */
+  .crm .sm-hide{display:none}
+  table.crm{min-width:0}
+  .crm th,.crm td{padding:.42rem .3rem;max-width:none}
+  .crm td{font-size:.72rem}
+  .crm th{font-size:.55rem;letter-spacing:.04em}
+  .crm th.num,.crm td.num{width:20px;padding-right:.2rem}
+  .crm th.chev,.crm td.chev{width:18px}
+  .crm .c-user,.crm .c-ref{font-size:.66rem;letter-spacing:0}
+  .crm .c-name{font-size:.72rem}
+  /* a long company name truncates rather than pushing the row off the screen */
+  .crm td.td-name{max-width:84px;overflow:hidden;text-overflow:ellipsis}
+  .crm .chip{font-size:.56rem;padding:.12rem .38rem}
+  .det-box{padding:.85rem .8rem 1rem}
+  .list-tools{gap:.45rem}
+
   .doc-row{gap:.5rem;padding:.45rem .6rem}
   .doc-row-file{max-width:90px}
   .toast{max-width:88vw;white-space:normal;text-align:center}
