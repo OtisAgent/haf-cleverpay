@@ -30,6 +30,10 @@ const DEFAULT_CONFIG = {
       {id:'cmr-ins',      name:'CMR insurance certificate',      hint:'Required for international road freight. Covers statutory CMR liability (8.33 SDR per kg if goods lost or damaged).',     legal:'Carriage of Goods by Road Act 1965 — mandatory for international road carriage',                        status:'optional'},
       {id:'vat-cert',     name:'VAT registration certificate',   hint:'Required if VAT registered. Threshold from April 2024: £90,000 taxable turnover in any 12-month period.',                legal:'Value Added Tax Act 1994',                                                                               status:'optional'},
       {id:'bifa',         name:'BIFA membership certificate',    hint:'British International Freight Association membership. Industry standard, expected by most major clients.',                 legal:'Best practice; expected by contractual counterparties; limits liability under BIFA STCs 2025',           status:'optional'},
+      /* Proof of person — identity of the human behind the business, for profile building */
+      {id:'id-passport',  name:'Passport — proof of person',     hint:'Photo page of the passport of the director, owner or named contact. Confirms who is actually behind the business.',          legal:'Money Laundering Regulations 2017, reg. 28 — identify and verify the beneficial owner',                 status:'optional'},
+      {id:'id-licence',   name:'Driving licence — proof of person', hint:'Photocard of the director, owner or named contact. Accepted in place of a passport as photographic ID.',                 legal:'Money Laundering Regulations 2017, reg. 28 — accepted photographic identity evidence',                  status:'optional'},
+      {id:'id-utility',   name:'Utility bill — proof of person', hint:'Gas, electricity, water, broadband or council tax bill dated within 3 months, in that person\'s own name at their home address.', legal:'Money Laundering Regulations 2017, reg. 28 — address verification of the beneficial owner',          status:'optional'},
     ]
   },
   rebate: {standard: '', knect: ''}

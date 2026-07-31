@@ -93,7 +93,7 @@ function doSignOut(){
 /* ── DATA ── */
 async function loadConfig(){
   const r=await cpApi('/config');
-  if(r.ok&&r.body)CFG=r.body;
+  if(r.ok&&r.body)CFG=cpMergeConfig(r.body,DEFAULT_CONFIG);
 }
 async function loadQueue(silent){
   if(!TEAM)return;

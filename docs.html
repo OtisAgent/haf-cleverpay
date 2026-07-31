@@ -118,15 +118,21 @@ const DEFAULT_FREIGHT_DOCS = [
   {id:'cmr-ins',      name:"CMR insurance certificate",        hint:"Required for international road freight. Covers liability under the CMR Convention (8.33 SDR per kg for loss or damage).",        req:false},
   {id:'vat-cert',     name:"VAT registration certificate",     hint:"Required if your business is VAT registered. Threshold from April 2024: £90,000 taxable turnover in 12 months.",                  req:false},
   {id:'bifa',         name:"BIFA membership certificate",      hint:"British International Freight Association membership — industry standard and expected by most commercial clients.",                  req:false},
+  {id:'id-passport',  name:"Passport — proof of person",       hint:"The photo page of the passport of your director, owner or named contact. Confirms who is behind the business.",                     req:false},
+  {id:'id-licence',   name:"Driving licence — proof of person",hint:"Photocard of your director, owner or named contact. Accepted instead of a passport as photo ID.",                                   req:false},
+  {id:'id-utility',   name:"Utility bill — proof of person",   hint:"Gas, electricity, water, broadband or council tax bill dated within 3 months, in that person's own name at their home address.",    req:false},
 ];
 
 async function getDocList(type){
+  const fallback = type==='driver'?DEFAULT_DRIVER_DOCS:DEFAULT_FREIGHT_DOCS;
   const r = await cpApi('/config');
   const cfg = r.ok ? r.body : null;
-  if(cfg&&cfg[type]&&cfg[type].docs){
-    return cfg[type].docs.filter(d=>d.status!=='hidden').map(d=>({id:d.id,name:d.name,hint:d.hint,req:d.status==='required'}));
+  if(cfg&&cfg[type]&&Array.isArray(cfg[type].docs)){
+    /* the team's saved choices win; anything added to the built-in set since is appended */
+    const merged = cpMergeDocList(cfg[type].docs, fallback.map(d=>({id:d.id,name:d.name,hint:d.hint,status:d.req?'required':'optional'})));
+    return merged.filter(d=>d.status!=='hidden').map(d=>({id:d.id,name:d.name,hint:d.hint,req:d.status==='required'}));
   }
-  return type==='driver'?DEFAULT_DRIVER_DOCS:DEFAULT_FREIGHT_DOCS;
+  return fallback;
 }
 
 const DRIVER_DOCS = [];   /* populated at load time from config */
