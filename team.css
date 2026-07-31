@@ -102,6 +102,17 @@ a{color:var(--or);text-decoration:none}
 .chip-driver{background:var(--bl-d);color:#7db3f5;border:1px solid rgba(61,125,202,.22)}.chip-driver::before{background:#7db3f5}
 .chip-freight{background:var(--or-d);color:var(--or);border:1px solid rgba(241,142,0,.18)}.chip-freight::before{background:var(--or)}
 .chip-business{background:rgba(139,92,246,.1);color:#a78bfa;border:1px solid rgba(139,92,246,.25)}.chip-business::before{background:#a78bfa}
+.chip-seen{background:rgba(240,237,234,.06);color:var(--mu);border:1px solid var(--ln)}.chip-seen::before{background:var(--mu)}
+
+/* Where the account stands in the network AFTER the compliance check — green only
+   once the KNECT membership has actually activated on the record. */
+.npill{display:inline-flex;align-items:center;gap:.28rem;padding:.16rem .55rem;border-radius:var(--pill);font-size:.64rem;font-weight:800;letter-spacing:.04em;white-space:nowrap}
+.npill::before{content:'';width:5px;height:5px;border-radius:50%;flex-shrink:0}
+.net-on{background:var(--gn-d);color:var(--gn);border:1px solid rgba(45,171,96,.3)}.net-on::before{background:var(--gn);box-shadow:0 0 0 3px rgba(45,171,96,.18)}
+.net-mid{background:var(--am-d);color:var(--am);border:1px solid rgba(217,146,11,.25)}.net-mid::before{background:var(--am);animation:pulse 1.6s ease infinite}
+.net-off{background:rgba(240,237,234,.05);color:var(--mu);border:1px solid var(--ln)}.net-off::before{background:var(--su)}
+.net-no{background:var(--rd-d);color:var(--rd);border:1px solid rgba(208,64,64,.25)}.net-no::before{background:var(--rd)}
+.net-none{background:transparent;color:var(--su);border:1px solid transparent}.net-none::before{display:none}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
 
 /* ── CRM LIST VIEW ──
@@ -121,6 +132,31 @@ a{color:var(--or);text-decoration:none}
 .list-search input{flex:1;min-width:0;font-size:.78rem;font-weight:600;cursor:text}
 .list-search input::placeholder{color:var(--su);font-weight:500}
 .list-count{font-size:.7rem;font-weight:700;color:var(--mu);white-space:nowrap}
+
+/* Column picker — the standard columns suit most days, the rest are one tick away */
+.col-pick{position:relative}
+.col-menu{position:absolute;top:calc(100% + .35rem);right:0;z-index:30;min-width:210px;padding:.45rem;
+  background:var(--p);border:1.5px solid var(--lns);border-radius:var(--rx);box-shadow:0 14px 34px rgba(0,0,0,.34)}
+.col-menu-h{font-size:.58rem;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:var(--su);padding:.2rem .45rem .35rem}
+.col-opt{display:flex;align-items:center;gap:.5rem;padding:.33rem .45rem;border-radius:var(--rx);font-size:.74rem;font-weight:600;color:var(--mu);cursor:pointer}
+.col-opt:hover{background:var(--or-d);color:var(--tx)}
+.col-opt.on{color:var(--tx)}
+.col-box{width:15px;height:15px;flex-shrink:0;border-radius:4px;border:1.5px solid var(--lns);display:flex;align-items:center;justify-content:center}
+.col-opt.on .col-box{background:var(--or);border-color:var(--or)}
+.col-box svg{width:10px;height:10px;fill:none;stroke:#12161a;stroke-width:3.4;stroke-linecap:round;stroke-linejoin:round;opacity:0}
+.col-opt.on .col-box svg{opacity:1}
+.col-menu-f{border-top:1px solid var(--ln);margin-top:.35rem;padding-top:.35rem}
+.col-menu-f button{width:100%;text-align:left;padding:.3rem .45rem;border-radius:var(--rx);font-size:.7rem;font-weight:700;color:var(--or)}
+.col-menu-f button:hover{background:var(--or-d)}
+
+/* New Applications reads as a to-do list: today's arrivals, then the ones we have
+   opened and are still waiting on, then the rest. */
+.qsec{margin-bottom:1.15rem}
+.sec-head{display:flex;align-items:center;gap:.55rem;margin:0 0 .55rem}
+.sec-t{font-size:.66rem;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:var(--tx)}
+.sec-n{font-size:.62rem;font-weight:800;color:var(--or);background:var(--or-d);border:1px solid var(--or-g);border-radius:var(--pill);padding:.1rem .45rem;min-width:20px;text-align:center}
+.sec-head::after{content:'';flex:1;height:1px;background:var(--ln)}
+.sec-empty{font-size:.72rem;color:var(--su);padding:.15rem 0 .1rem}
 
 .content.wide{max-width:1500px}
 .crm-wrap{background:var(--p);border:1.5px solid var(--lns);border-radius:var(--rs);overflow-x:auto}
@@ -149,6 +185,26 @@ table.crm{width:100%;min-width:820px;border-collapse:collapse}
 .crm .c-yes{color:var(--gn);font-weight:700;font-size:.74rem}
 .crm .c-no{color:var(--am);font-weight:700;font-size:.74rem}
 .crm .c-miss{color:var(--rd);font-weight:700;font-size:.74rem}
+.crm .c-reg{font-family:var(--dp);font-weight:700;letter-spacing:.04em;color:var(--tx)}
+.cc-on{display:inline-flex;align-items:center;gap:.28rem;color:var(--gn);font-weight:800;font-size:.72rem}
+.cc-on svg{width:12px;height:12px;fill:none;stroke:currentColor;stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
+
+/* With the wider record the table scrolls sideways — the number and the first
+   column stay put so a row never loses its name. */
+@media(min-width:761px){
+  /* the number column must be EXACTLY 44px or the column that sticks beside it sits
+     44px in and paints over its neighbour — pin it rather than suggest it */
+  .crm th.num,.crm td.num{width:44px;min-width:44px;max-width:44px;box-sizing:border-box}
+  .crm th.num,.crm td.num,.crm th.stick1,.crm td.stick1{position:sticky;z-index:2}
+  .crm th.num,.crm td.num{left:0}
+  .crm th.stick1,.crm td.stick1{left:44px;box-shadow:1px 0 0 var(--ln)}
+  .crm th.num,.crm th.stick1{z-index:5;background:var(--p2)}
+  .crm td.num,.crm td.stick1{background:var(--p)}
+  .crm tr.row-b td.num,.crm tr.row-b td.stick1{background:linear-gradient(rgba(240,237,234,.05),rgba(240,237,234,.05)),var(--p)}
+  [data-theme=light] .crm tr.row-b td.num,[data-theme=light] .crm tr.row-b td.stick1{background:linear-gradient(rgba(26,30,34,.045),rgba(26,30,34,.045)),var(--p)}
+  .crm tr.r:hover td.num,.crm tr.r:hover td.stick1,
+  .crm tr.r.open td.num,.crm tr.r.open td.stick1{background:linear-gradient(var(--or-d),var(--or-d)),var(--p)}
+}
 .crm td.chev svg{width:14px;height:14px;fill:none;stroke:var(--mu);stroke-width:2;stroke-linecap:round;stroke-linejoin:round;transition:transform .2s}
 .crm tr.r.open td.chev svg{transform:rotate(180deg);stroke:var(--or)}
 
@@ -304,6 +360,8 @@ table.crm{width:100%;min-width:820px;border-collapse:collapse}
 
   /* list view on a phone — number, username, reference, name and status stay;
      everything else folds away and is still one tap down in the open record */
+  /* on a phone the extra columns fold away anyway, so the picker would be a dead control */
+  .col-pick{display:none}
   .crm .sm-hide{display:none}
   table.crm{min-width:0}
   .crm th,.crm td{padding:.42rem .3rem;max-width:none}

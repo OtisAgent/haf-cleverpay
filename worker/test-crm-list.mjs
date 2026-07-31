@@ -18,6 +18,7 @@ const LIVE_CONFIG = JSON.parse(readFileSync(new URL('./_live-config.json', impor
 
 /* 24 accounts: 18 approved (the tab that has to scale), plus a few in every other
    state so the All tab has a real mix to sort and filter. */
+const NOW = new Date().toISOString();
 const SURNAMES = ['Abbott', 'Nash', 'Okafor', 'Zielinski', 'Baxter', 'Mensah', 'Doyle', 'Ravel',
   'Cummings', 'Whitfield', 'Ibrahim', 'Lang', 'Foster', 'Quinn', 'Delgado', 'Marsh', 'Yates', 'Pike'];
 const apps = SURNAMES.map((ln, i) => {
@@ -42,6 +43,22 @@ apps.push(
     email: 'pen@example.invalid', phone: '07700900601', dob: '1990-01-01', vtype: 'Luton',
     status: 'pending', email_verified: false, submitted: '2026-07-29T09:00:00Z',
     updated_at: '2026-07-29T09:00:00Z', pin_hash: sha('HAF-CP|TP990199|' + PIN), docs: [] },
+  /* the three shapes the New Applications sections have to tell apart */
+  { ref: 'HAF-CP-TODAY1', type: 'driver', username: 'TT990101', fname: 'Today', lname: 'Arrival',
+    email: 'today@example.invalid', phone: '07700900610', dob: '1990-01-01', vtype: 'Small van',
+    status: 'pending', email_verified: false, submitted: NOW, updated_at: NOW,
+    pin_hash: sha('HAF-CP|TT990101|' + PIN), docs: [] },
+  { ref: 'HAF-CP-SEEN1', type: 'driver', username: 'TS990101', fname: 'Seen', lname: 'Nodocs',
+    email: 'seen@example.invalid', phone: '07700900611', dob: '1990-01-01', vtype: 'MWB van',
+    status: 'pending', email_verified: true, submitted: '2026-07-25T09:00:00Z',
+    updated_at: '2026-07-25T09:00:00Z', viewed_at: '2026-07-26T10:00:00Z', viewed_by: 'cleverg',
+    pin_hash: sha('HAF-CP|TS990101|' + PIN), docs: [] },
+  { ref: 'HAF-CP-SEEN2', type: 'driver', username: 'TD990101', fname: 'Seen', lname: 'Withdocs',
+    email: 'seend@example.invalid', phone: '07700900612', dob: '1990-01-01', vtype: 'LWB van',
+    status: 'pending', email_verified: true, submitted: '2026-07-24T09:00:00Z',
+    updated_at: '2026-07-24T09:00:00Z', viewed_at: '2026-07-26T10:00:00Z', viewed_by: 'cleverg',
+    pin_hash: sha('HAF-CP|TD990101|' + PIN),
+    docs: [{ id: 'id-passport', filename: 'p.jpg', size: 1000, path: 'HAF-CP-SEEN2/id-passport.jpg' }] },
   { ref: 'HAF-CP-REV01', type: 'driver', username: 'TR990199', fname: 'Review', lname: 'Person',
     email: 'rev@example.invalid', phone: '07700900602', dob: '1990-01-01', vtype: 'MWB van',
     status: 'reviewing', email_verified: true, submitted: '2026-07-28T09:00:00Z',
@@ -55,6 +72,16 @@ apps.push(
     notes: 'Two pallets a week to Leeds', submitted: '2026-07-26T09:00:00Z',
     updated_at: '2026-07-26T09:00:00Z', docs: [] },
 );
+
+/* the network states: one live in the network, one paid and waiting on activation */
+apps[0].activated_at = '2026-07-30T12:00:00Z';
+apps[0].membership_paid_at = '2026-07-30T11:00:00Z';
+apps[0].membership_amount = 4999;
+apps[0].membership_currency = 'gbp';
+apps[0].knect = true;
+apps[1].membership_paid_at = '2026-07-30T11:30:00Z';
+apps[1].membership_amount = 4999;
+apps[1].approved_at = '2026-07-30T12:30:00Z';
 
 const DB = {
   cleverpay_portal_config: [{ id: 1, config: JSON.parse(JSON.stringify(LIVE_CONFIG)) }],
@@ -82,7 +109,24 @@ const dbSrv = createServer(async (req, res) => {
   const table = u.pathname.replace('/rest/v1/', '').split('?')[0];
   let body = ''; for await (const c of req) body += c;
   const rows = DB[table] || [];
-  const send = (d, c = 200) => { res.writeHead(c, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(d)); };
+  /* the portal calls the database function straight from the browser, so the stub
+     has to answer the preflight the same way Supabase does */
+  const CORS = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': '*', 'Access-Control-Allow-Methods': '*' };
+  if (req.method === 'OPTIONS') { res.writeHead(204, CORS); return res.end(); }
+  const send = (d, c = 200) => { res.writeHead(c, { 'Content-Type': 'application/json', ...CORS }); res.end(JSON.stringify(d)); };
+
+  /* stands in for the database function that records who first opened a record —
+     same contract: a valid team session, and the first stamp is the one that keeps */
+  if (table === 'rpc/cleverpay_team_mark_seen') {
+    const b = JSON.parse(body || '{}');
+    const s = DB.cleverpay_team_sessions.find(x => x.token === b.p_token && new Date(x.expires_at) > new Date());
+    if (!s) return send({ message: 'not_authorised' }, 400);
+    const a = DB.cleverpay_applications.find(x => x.ref === String(b.p_ref || '').toUpperCase());
+    if (!a) return send({ message: 'not_found' }, 400);
+    a.viewed_at = a.viewed_at || new Date().toISOString();
+    a.viewed_by = a.viewed_by || s.username;
+    return send({ ref: a.ref, viewed_at: a.viewed_at, viewed_by: a.viewed_by });
+  }
   const or = u.searchParams.get('or');
   if (or) {
     const want = decodeURIComponent(or).replace(/[()]/g, '').split(',').map(s => s.split('.eq.')[1]);
@@ -120,6 +164,8 @@ const siteSrv = createServer(async (req, res) => {
     try {
       let f = readFileSync(new URL(name, ROOT), 'utf8');
       if (name === 'api.js') f = f.replace(/const CP_API = '[^']*'/, "const CP_API = ''");
+      /* the "opened by" write goes straight to the database, so point it at the stub */
+      if (name === 'team.js') f = f.replace("const SB_URL='https://jsdwvogsxlnczzbefwgp.supabase.co'", "const SB_URL='http://127.0.0.1:8796'");
       res.writeHead(200, { 'Content-Type': MIME[name.split('.').pop()] });
       return res.end(f);
     } catch { res.writeHead(404); return res.end('nope'); }
@@ -170,11 +216,66 @@ ok('the first column after the number is the username',
   /^username/i.test((await page.locator('.crm thead th').nth(1).innerText()).trim()));
 ok('the reference sits next to it',
   /^reference/i.test((await page.locator('.crm thead th').nth(2).innerText()).trim()));
-ok('the record continues to the right of them (8 more columns)',
-  await page.locator('.crm thead th').count() === 12);
-ok('the whole record fits the screen — no column is cut off',
-  await page.evaluate(() => { const w = document.querySelector('.crm-wrap'); return w.scrollWidth <= w.clientWidth + 1; }));
-ok('the last column is on screen', await page.locator('.crm th.th-submitted').isVisible());
+ok('the record continues to the right of them (13 columns of record)',
+  await page.locator('.crm thead th').count() === 15);
+ok('the compliance verdict has its own column', await page.locator('.crm th.th-checked').count() === 1);
+ok('so does where they stand in the network', await page.locator('.crm th.th-network').count() === 1);
+ok('and the vehicle', await page.locator('.crm th.th-vehicle').count() === 1);
+
+/* ── 2b. what the extra columns actually say ── */
+console.log('\n── the extra columns ──');
+const liveRow = await page.locator('#row-HAF-CP-D01').innerText();
+ok('an activated account reads Active in the network', /Active/.test(liveRow), liveRow);
+const activeColour = await page.locator('#row-HAF-CP-D01 .npill').evaluate(e => getComputedStyle(e).color);
+ok('and it is green', /45,\s*171,\s*96/.test(activeColour), activeColour);
+const payingRow = await page.locator('#row-HAF-CP-D02').innerText();
+ok('paid but not yet activated reads Activating, not Active', /Activating/.test(payingRow), payingRow);
+ok('and it carries the date it was Clever Checked', /30 Jul/.test(payingRow), payingRow);
+const notJoined = await page.locator('#row-HAF-CP-D03').innerText();
+ok('a checked account with no membership reads Not joined', /Not joined/.test(notJoined), notJoined);
+ok('the documents column counts what is in and what is missing',
+  /\d+ needed|All \d+ in|\d+ missing/.test(await page.locator('#row-HAF-CP-FRT01 td.td-docs').innerText()));
+
+/* ── 2c. the number and first column stay put when the record scrolls sideways ── */
+console.log('\n── sticky first columns ──');
+const stick = await page.evaluate(() => {
+  const w = document.querySelector('.crm-wrap');
+  const before = document.querySelector('.crm tr.r td.stick1').getBoundingClientRect().left;
+  w.scrollLeft = 400;
+  return { scrolls: w.scrollWidth > w.clientWidth, before,
+    after: document.querySelector('.crm tr.r td.stick1').getBoundingClientRect().left };
+});
+ok('the wider record scrolls sideways inside its own box', stick.scrolls);
+ok('the username column does not scroll away with it', Math.abs(stick.after - stick.before) < 2, stick);
+await page.evaluate(() => { document.querySelector('.crm-wrap').scrollLeft = 0; });
+
+/* ── 2d. the Columns button ── */
+console.log('\n── choosing columns ──');
+await page.click('.col-pick .vs-btn');
+await page.waitForTimeout(200);
+ok('the Columns menu opens', await page.locator('.col-menu').isVisible());
+ok('it lists every column there is', await page.locator('.col-opt').count() === 20);
+await page.locator('.col-opt:has-text("Membership")').click();
+await page.waitForTimeout(250);
+ok('ticking Membership adds the column', await page.locator('.crm th.th-membership').count() === 1);
+ok('and it shows what was paid', /£49\.99/.test(await page.locator('#row-HAF-CP-D01 td.td-membership').innerText()));
+await page.locator('.col-opt:has-text("Phone")').click();
+await page.waitForTimeout(250);
+ok('unticking Phone removes it', await page.locator('.crm th.th-phone').count() === 0);
+await page.reload();
+await page.waitForSelector('#shell.show', { timeout: 5000 }).catch(async () => { await login(page, 'cleverg'); });
+await page.click('#tab-approved');
+await page.waitForSelector('table.crm', { timeout: 5000 });
+ok('the choice survives a reload', await page.locator('.crm th.th-membership').count() === 1
+  && await page.locator('.crm th.th-phone').count() === 0);
+await page.click('.col-pick .vs-btn');
+await page.waitForTimeout(150);
+await page.locator('.col-menu-f button').click();
+await page.waitForTimeout(250);
+ok('the reset puts the standard columns back',
+  await page.locator('.crm thead th').count() === 15 && await page.locator('.crm th.th-phone').count() === 1);
+await page.click('.col-pick .vs-btn');
+await page.waitForTimeout(150);
 
 /* ── 2. the stripe ── */
 console.log('\n── alternating rows ──');
@@ -253,12 +354,62 @@ await page.click('.vs-btn:has-text("List")');
 await page.waitForTimeout(300);
 ok('switching back returns the list', await page.locator('table.crm').count() === 1);
 
+/* ── 6b. New Applications: sections ── */
+console.log('\n── New Applications, sections ──');
 await page.click('#tab-pending');
 await page.waitForTimeout(300);
-ok('Pending is untouched — still cards', await page.locator('.app-card').count() === 1 && await page.locator('table.crm').count() === 0);
-await page.locator('.app-head').first().click();
+ok('New Applications still opens as cards, not a list',
+  await page.locator('.app-card').count() === 4 && await page.locator('table.crm').count() === 0);
+const secTitles = (await page.locator('.sec-t').allInnerTexts()).map(t => t.toUpperCase());
+ok('it is split into the three sections, in order',
+  JSON.stringify(secTitles) === JSON.stringify(['New today', 'Seen by the team — no documents yet', 'Everything else waiting'].map(t => t.toUpperCase())), secTitles);
+const secCounts = await page.locator('.sec-n').allInnerTexts();
+ok('each heading carries its own count', JSON.stringify(secCounts) === JSON.stringify(['1', '1', '2']), secCounts);
+const secOf = async (i) => (await page.locator('.qsec').nth(i).innerText());
+ok('today\'s arrival is the only thing under New today', (await secOf(0)).includes('Today Arrival'));
+ok('the one we opened with nothing uploaded sits in its own section',
+  (await secOf(1)).includes('Seen Nodocs') && !(await secOf(1)).includes('Seen Withdocs'));
+ok('one we opened that DID upload is not in it — it is waiting on us, not them',
+  (await secOf(2)).includes('Seen Withdocs') && (await secOf(2)).includes('Pending Person'));
+ok('a card that has been opened says who opened it',
+  (await page.locator('#card-HAF-CP-SEEN1').innerText()).includes('Opened by cleverg'));
+await page.locator('#head-HAF-CP-PEN01').click();
 await page.waitForTimeout(300);
 ok('and a pending card still expands', await page.locator('.app-card.expanded .app-detail').isVisible());
+
+/* ── 6c. opening a record is what puts it in the "seen" section ── */
+console.log('\n── opening a record records who opened it ──');
+await page.waitForTimeout(400);
+const pen = DB.cleverpay_applications.find(a => a.ref === 'HAF-CP-PEN01');
+ok('opening it stamped the record in the database', !!pen.viewed_at, pen.viewed_at);
+ok('with the name of whoever opened it', pen.viewed_by === 'cleverg', pen.viewed_by);
+const firstStamp = pen.viewed_at;
+await page.click('#tab-approved');
+await page.click('#tab-pending');
+await page.waitForTimeout(300);
+ok('it has moved into the seen-with-no-documents section',
+  (await secOf(1)).includes('Pending Person'));
+const counts2 = await page.locator('.sec-n').allInnerTexts();
+ok('and the counts moved with it', JSON.stringify(counts2) === JSON.stringify(['1', '2', '1']), counts2);
+await page.locator('#head-HAF-CP-PEN01').click();
+await page.waitForTimeout(400);
+ok('re-opening it keeps the FIRST person and time, not the latest',
+  DB.cleverpay_applications.find(a => a.ref === 'HAF-CP-PEN01').viewed_at === firstStamp);
+await page.screenshot({ path: new URL('crm-pending-sections-1280.png', SHOTS).pathname, fullPage: true });
+await page.click('.vs-btn:has-text("List")');
+await page.waitForTimeout(300);
+ok('the sections work as a list too', await page.locator('.qsec table.crm').count() === 3);
+ok('with the same three headings', (await page.locator('.sec-t').count()) === 3);
+await page.screenshot({ path: new URL('crm-pending-sections-list-1280.png', SHOTS).pathname, fullPage: true });
+await page.click('.vs-btn:has-text("Cards")');
+await page.waitForTimeout(300);
+ok('and New Applications remembers cards separately from the other tabs',
+  await page.locator('.app-card').count() === 4);
+await page.click('#tab-approved');
+await page.waitForTimeout(300);
+ok('— Approved is still a list', await page.locator('table.crm').count() === 1);
+await page.click('#tab-pending');
+await page.waitForTimeout(300);
 await page.click('#tab-settings');
 await page.waitForSelector('.settings-panel', { timeout: 5000 });
 ok('Settings still loads', await page.locator('.settings-panel').count() >= 1);

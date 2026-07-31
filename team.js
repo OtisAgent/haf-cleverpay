@@ -115,7 +115,7 @@ function setTab(t){
 function renderView(){
   /* the reading column is sized for cards — a record list wants the whole screen */
   document.getElementById('main-content')
-    .classList.toggle('wide',LIST_TABS.includes(currentTab)&&viewMode==='list');
+    .classList.toggle('wide',LIST_TABS.includes(currentTab)&&getView(currentTab)==='list');
   if(currentTab==='settings') renderSettings();
   else if(currentTab==='integration') renderIntegration();
   else renderQueue();
@@ -141,15 +141,18 @@ function updateKPIs(q){
    Approved and All are the tabs that keep growing, so they default to the list
    view: one row per account, the way a CRM reads. The card view is still a click
    away on every tab. */
-const LIST_TABS=['approved','all'];
-let viewMode=localStorage.getItem('cp_view')||'list';
+const LIST_TABS=['pending','approved','all'];
+/* New Applications is the tab the team WORKS in, so it keeps its cards by default
+   and remembers its own preference — the reference tabs default to the list. */
+const SECTION_TAB='pending';
+const viewKey=t=>t===SECTION_TAB?'cp_view_pending':'cp_view';
+function getView(t){return localStorage.getItem(viewKey(t))||(t===SECTION_TAB?'cards':'list')}
 let crmSearch='';
 let crmSort={key:'submitted',dir:-1};
 let crmOpen=null;
 
 function setView(v){
-  viewMode=v;
-  localStorage.setItem('cp_view',v);
+  localStorage.setItem(viewKey(currentTab),v);
   renderView();
 }
 function setCrmSearch(v){
@@ -164,16 +167,52 @@ function setCrmSort(k){
   renderQueue();
 }
 
+/* ── NEW APPLICATIONS SECTIONS ──
+   Brent, 31 Jul: the working tab reads as a to-do list, not one long pile. Today's
+   arrivals first, then the ones somebody here has already opened and that are still
+   waiting on the applicant, then the rest. "Opened" is recorded on the record itself
+   (viewed_at / viewed_by) the first time any team member expands it, so it is the
+   team's shared knowledge, not one browser's. */
+function pendingSections(list){
+  const now=new Date();
+  const sameDay=d=>{const x=new Date(d);return x.getDate()===now.getDate()&&x.getMonth()===now.getMonth()&&x.getFullYear()===now.getFullYear()};
+  const isNew=a=>a.submitted&&sameDay(a.submitted);
+  const noDocs=a=>!(Array.isArray(a.docs)&&a.docs.length);
+  const rest=list.filter(a=>!isNew(a));
+  const seenNoDocs=a=>a.viewed_at&&noDocs(a);
+  return[
+    {t:'New today',rows:list.filter(isNew),e:'Nothing new has come in today yet.'},
+    {t:'Seen by the team — no documents yet',rows:rest.filter(seenNoDocs),e:'Nothing here — every application someone has opened has documents on it.'},
+    {t:'Everything else waiting',rows:rest.filter(a=>!seenNoDocs(a)),e:'Nothing else is waiting.'},
+  ];
+}
+
 function renderQueue(){
   const q=QUEUE;
   updateKPIs(q);
   const filtered=currentTab==='all'?q:q.filter(a=>a.status===currentTab||(currentTab==='pending'&&a.status==='enquiry'));
   const el=document.getElementById('main-content');
+  const mode=getView(currentTab);
   if(!filtered.length){
     el.innerHTML=`<div class="empty"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>No ${currentTab==='all'?'':currentTab} applications yet.</div>`;
     return;
   }
-  if(LIST_TABS.includes(currentTab)&&viewMode==='list'){renderCrm(filtered);return;}
+  /* the working tab: same records, grouped under headings */
+  if(currentTab===SECTION_TAB){
+    const rows=filtered.filter(a=>crmMatch(a,crmSearch));
+    const secs=pendingSections(rows);
+    el.innerHTML=viewSwitchHtml()+listToolsHtml(rows.length,filtered.length)+secs.map(s=>
+      `<div class="qsec">
+        <div class="sec-head"><span class="sec-t">${s.t}</span><span class="sec-n">${s.rows.length}</span></div>
+        ${s.rows.length?(mode==='list'?crmTableHtml(s.rows):`<div class="app-list">${s.rows.map(a=>appCardHtml(a)).join('')}</div>`)
+          :`<div class="sec-empty">${s.e}</div>`}
+      </div>`).join('');
+    if(mode!=='list')rows.forEach(a=>{
+      document.getElementById('head-'+a.ref)?.addEventListener('click',()=>toggleCard(a.ref));
+    });
+    return;
+  }
+  if(LIST_TABS.includes(currentTab)&&mode==='list'){renderCrm(filtered);return;}
   el.innerHTML=`${LIST_TABS.includes(currentTab)?viewSwitchHtml():''}<div class="app-list">${filtered.map(a=>appCardHtml(a)).join('')}</div>`;
   filtered.forEach(a=>{
     document.getElementById('head-'+a.ref)?.addEventListener('click',()=>toggleCard(a.ref));
@@ -182,36 +221,114 @@ function renderQueue(){
 
 /* ── CRM LIST VIEW ── */
 function viewSwitchHtml(){
-  const b=(v,label,icon)=>`<button class="vs-btn${viewMode===v?' on':''}" onclick="setView('${v}')" title="${label} view"><svg viewBox="0 0 24 24">${icon}</svg>${label}</button>`;
+  const mode=getView(currentTab);
+  const b=(v,label,icon)=>`<button class="vs-btn${mode===v?' on':''}" onclick="setView('${v}')" title="${label} view"><svg viewBox="0 0 24 24">${icon}</svg>${label}</button>`;
   return`<div class="view-switch">
     ${b('list','List','<line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>')}
     ${b('cards','Cards','<rect x="3" y="3" width="18" height="7" rx="2"/><rect x="3" y="14" width="18" height="7" rx="2"/>')}
   </div>`;
 }
 
+/* ── what a record says beyond "approved" ──
+   Clever Checked is the compliance verdict; the network state is what happened
+   AFTER it — the account only goes green once its HAF KNECT membership activates
+   (activated_at, set by the activation job). Both read off the record, never a guess. */
+function netState(a){
+  if(a.activated_at)return{c:'net-on',t:'Active',s:4,ti:'Active in the HAF network since '+fmtDate(a.activated_at)};
+  if(a.membership_paid_at)return{c:'net-mid',t:'Activating',s:3,ti:'Membership paid '+fmtDate(a.membership_paid_at)+' — activation still to run'};
+  if(a.status==='approved')return{c:'net-off',t:'Not joined',s:2,ti:'Clever Checked, but no HAF KNECT membership yet'};
+  if(a.status==='blocked')return{c:'net-no',t:'Blocked',s:0,ti:'Refused all access'};
+  return{c:'net-none',t:'—',s:1,ti:'Not in the network'};
+}
+function fmtDay(iso){return iso?new Date(iso).toLocaleDateString('en-GB',{day:'numeric',month:'short'}):'—'}
+function money(p,cur){
+  if(p===null||p===undefined)return'';
+  const sym=(cur||'gbp').toLowerCase()==='gbp'?'£':'';
+  return sym+(p/100).toFixed(2).replace(/\.00$/,'');
+}
+
 /* Columns sit to the right of the username and reference — the two things the team
-   searches by — so a row reads left to right like a record, not a card. */
+   searches by — so a row reads left to right like a record, not a card. `on` is what
+   shows out of the box; the Columns button turns the rest on per person. */
 const CRM_COLS=[
-  {k:'username',t:'Username',s:a=>a.username||'',v:a=>`<span class="c-user">${a.username||'—'}</span>`},
-  {k:'ref',t:'Reference',s:a=>a.ref||'',v:a=>`<span class="c-ref">${a.ref}</span>`},
-  {k:'name',t:'Name',s:a=>displayName(a).toLowerCase(),v:a=>`<span class="c-name">${displayName(a)}</span>`},
-  {k:'type',t:'Account',sm:1,s:a=>a.type||'',v:a=>{
+  {k:'username',t:'Username',on:1,s:a=>a.username||'',v:a=>`<span class="c-user">${a.username||'—'}</span>`},
+  {k:'ref',t:'Reference',on:1,s:a=>a.ref||'',v:a=>`<span class="c-ref">${a.ref}</span>`},
+  {k:'name',t:'Name',on:1,s:a=>displayName(a).toLowerCase(),v:a=>`<span class="c-name">${displayName(a)}</span>`},
+  {k:'type',t:'Account',on:1,sm:1,s:a=>a.type||'',v:a=>{
     const isB=a.type==='business',isF=a.type==='freight';
     return`<span class="chip ${isB?'chip-business':isF?'chip-freight':'chip-driver'}">${isB?'Business':isF?'Freight':'Driver'}</span>`;}},
-  {k:'status',t:'Status',s:a=>a.status||'',v:a=>statusChip(a.status)},
-  {k:'email',t:'Email',sm:1,s:a=>(a.email||'').toLowerCase(),v:a=>`<span class="c-dim">${a.email||'—'}</span>`},
-  {k:'verified',t:'Confirmed',sm:1,s:a=>a.type==='business'?2:(a.email_verified?1:0),v:a=>
+  {k:'status',t:'Status',on:1,s:a=>a.status||'',v:a=>statusChip(a.status)},
+  {k:'checked',t:'Clever Checked',on:1,sm:1,s:a=>a.status==='approved'?(new Date(a.approved_at||0).getTime()||1):0,v:a=>{
+    if(a.status==='approved')return`<span class="cc-on" title="Passed the CleverPay compliance check${a.approved_at?' on '+fmtDate(a.approved_at):''}"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>${a.approved_at?fmtDay(a.approved_at):'Checked'}</span>`;
+    if(a.status==='reviewing')return'<span class="c-no">Being checked</span>';
+    if(a.status==='rejected')return`<span class="c-miss" title="${(a.reject_reason||a.rejectReason||'').replace(/"/g,'&quot;')}">Not passed</span>`;
+    if(a.status==='blocked')return'<span class="c-miss">Blocked</span>';
+    return'<span class="c-dim">Not yet</span>';}},
+  {k:'network',t:'In the network',on:1,sm:1,s:a=>netState(a).s,v:a=>{
+    const n=netState(a);
+    return n.t==='—'?'<span class="c-dim">—</span>':`<span class="npill ${n.c}" title="${n.ti}">${n.t}</span>`;}},
+  {k:'email',t:'Email',on:1,sm:1,s:a=>(a.email||'').toLowerCase(),v:a=>`<span class="c-dim">${a.email||'—'}</span>`},
+  {k:'verified',t:'Confirmed',on:1,sm:1,s:a=>a.type==='business'?2:(a.email_verified?1:0),v:a=>
     a.type==='business'?'<span class="c-dim">—</span>'
-    :(a.email_verified?'<span class="c-yes">Yes</span>':'<span class="c-no">No</span>')},
-  {k:'phone',t:'Phone',sm:1,s:a=>a.phone||'',v:a=>`<span class="c-dim">${a.phone||'—'}</span>`},
-  {k:'docs',t:'Documents',sm:1,s:a=>appCompliance(a).missingReq.length,v:a=>{
+    :(a.email_verified?`<span class="c-yes" title="${a.email_verified_at?'Confirmed '+fmtDate(a.email_verified_at):'Confirmed'}">Yes</span>`:'<span class="c-no">No</span>')},
+  {k:'phone',t:'Phone',on:1,sm:1,s:a=>a.phone||'',v:a=>`<span class="c-dim">${a.phone||'—'}</span>`},
+  {k:'docs',t:'Documents',on:1,sm:1,s:a=>appCompliance(a).missingReq.length,v:a=>{
     if(a.type==='business')return'<span class="c-dim">—</span>';
     const{missingReq,uploaded}=appCompliance(a);
+    if(!uploaded.length&&missingReq.length)return`<span class="c-miss">None yet · ${missingReq.length} needed</span>`;
     return missingReq.length
-      ?`<span class="c-miss">${missingReq.length} missing</span>`
-      :`<span class="c-yes">${uploaded.length} held</span>`;}},
-  {k:'submitted',t:'Submitted',sm:1,s:a=>new Date(a.submitted||0).getTime()||0,v:a=>`<span class="c-dim">${fmtDate(a.submitted)}</span>`},
+      ?`<span class="c-miss">${uploaded.length} in · ${missingReq.length} missing</span>`
+      :`<span class="c-yes">All ${uploaded.length} in</span>`;}},
+  {k:'vehicle',t:'Vehicle',on:1,sm:1,s:a=>(a.vtype||'').toLowerCase(),v:a=>
+    a.type!=='driver'?'<span class="c-dim">—</span>'
+    :`<span class="c-dim">${a.vtype||'Not given'}${a.vreg?` · <span class="c-reg">${a.vreg}</span>`:''}</span>`},
+  {k:'knect',t:'KNECT',sm:1,s:a=>a.knect?1:0,v:a=>a.knect?'<span class="c-yes">Member</span>':'<span class="c-dim">—</span>'},
+  {k:'membership',t:'Membership',sm:1,s:a=>new Date(a.membership_paid_at||0).getTime()||0,v:a=>
+    a.membership_paid_at
+      ?`<span class="c-yes" title="Paid ${fmtDate(a.membership_paid_at)}">${money(a.membership_amount,a.membership_currency)||'Paid'} · ${fmtDay(a.membership_paid_at)}</span>`
+      :'<span class="c-dim">Not paid</span>'},
+  {k:'promo',t:'Promo / Founders',sm:1,s:a=>(a.promo_code||a.founders_tier||'').toLowerCase(),v:a=>{
+    const bits=[a.promo_code,a.founders_tier].filter(Boolean);
+    return bits.length?`<span class="c-dim">${bits.join(' · ')}</span>`:'<span class="c-dim">—</span>';}},
+  {k:'crn',t:'Company no.',sm:1,s:a=>a.crn||'',v:a=>a.crn?`<span class="c-ref">${a.crn}</span>`:'<span class="c-dim">—</span>'},
+  {k:'source',t:'Source',sm:1,s:a=>a.added_by||'',v:a=>a.added_by
+    ?`<span class="c-dim" title="Added by hand in this portal">Added by ${a.added_by}</span>`
+    :'<span class="c-dim">Signed up online</span>'},
+  {k:'seen',t:'Opened by',sm:1,s:a=>new Date(a.viewed_at||0).getTime()||0,v:a=>a.viewed_at
+    ?`<span class="c-dim" title="First opened ${fmtDate(a.viewed_at)}">${a.viewed_by||'team'} · ${fmtDay(a.viewed_at)}</span>`
+    :'<span class="c-no">Not opened</span>'},
+  {k:'submitted',t:'Submitted',on:1,sm:1,s:a=>new Date(a.submitted||0).getTime()||0,v:a=>`<span class="c-dim">${fmtDate(a.submitted)}</span>`},
+  {k:'updated',t:'Last change',sm:1,s:a=>new Date(a.updated_at||0).getTime()||0,v:a=>`<span class="c-dim">${a.updated_at?fmtDate(a.updated_at):'—'}</span>`},
 ];
+
+/* Which columns show is a per-person choice, kept in this browser. Falling back to
+   the `on` set means a new column added later just appears for everyone. */
+let crmCols=(()=>{try{const s=JSON.parse(localStorage.getItem('cp_cols')||'null');return Array.isArray(s)&&s.length?s:null}catch(e){return null}})();
+let colMenuOpen=false;
+function activeCols(){return crmCols?CRM_COLS.filter(c=>crmCols.includes(c.k)):CRM_COLS.filter(c=>c.on)}
+function toggleCol(k){
+  const cur=activeCols().map(c=>c.k);
+  const next=cur.includes(k)?cur.filter(x=>x!==k):CRM_COLS.filter(c=>cur.includes(c.k)||c.k===k).map(c=>c.k);
+  if(!next.length){showToast('Keep at least one column',true);return}
+  crmCols=next;localStorage.setItem('cp_cols',JSON.stringify(next));
+  renderQueue();
+}
+function resetCols(){crmCols=null;localStorage.removeItem('cp_cols');renderQueue()}
+function toggleColMenu(){colMenuOpen=!colMenuOpen;renderQueue()}
+function colMenuHtml(){
+  const on=activeCols().map(c=>c.k);
+  return`<div class="col-pick">
+    <button class="vs-btn${colMenuOpen?' on':''}" onclick="toggleColMenu()" title="Choose what the columns show">
+      <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="18" rx="1"/><rect x="14" y="3" width="7" height="18" rx="1"/></svg>Columns · ${on.length}
+    </button>
+    ${colMenuOpen?`<div class="col-menu">
+      <div class="col-menu-h">Show in the list</div>
+      ${CRM_COLS.map(c=>`<label class="col-opt${on.includes(c.k)?' on':''}" onclick="event.preventDefault();toggleCol('${c.k}')">
+        <span class="col-box"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></span>${c.t}</label>`).join('')}
+      <div class="col-menu-f"><button onclick="resetCols()">Back to the standard columns</button></div>
+    </div>`:''}
+  </div>`;
+}
 
 function crmMatch(a,term){
   if(!term)return true;
@@ -220,17 +337,31 @@ function crmMatch(a,term){
     .some(x=>(x||'').toString().toLowerCase().includes(t));
 }
 
-function renderCrm(list){
-  const rows=list.filter(a=>crmMatch(a,crmSearch));
-  const col=CRM_COLS.find(c=>c.k===crmSort.key)||CRM_COLS[CRM_COLS.length-1];
+function listToolsHtml(shown,total){
+  return`<div class="list-tools">
+      <div class="list-search">
+        <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input id="crm-search" type="text" placeholder="Search name, username, reference, email or phone" value="${crmSearch.replace(/"/g,'&quot;')}" oninput="setCrmSearch(this.value)">
+      </div>
+      ${getView(currentTab)==='list'?colMenuHtml():''}
+      <div class="list-count">${shown} of ${total}</div>
+    </div>`;
+}
+
+/* One table, already filtered. Used on its own for Approved and All, and once per
+   section on New Applications. */
+function crmTableHtml(list){
+  const cols=activeCols();
+  const rows=list.slice();
+  const col=cols.find(c=>c.k===crmSort.key)||CRM_COLS.find(c=>c.k===crmSort.key)||cols[cols.length-1];
   rows.sort((x,y)=>{
     const a=col.s(x),b=col.s(y);
     return(a<b?-1:a>b?1:0)*crmSort.dir;
   });
 
   const arrow=k=>crmSort.key===k?`<span class="th-ar">${crmSort.dir===1?'▲':'▼'}</span>`:'';
-  const head=CRM_COLS.map(c=>`<th class="${c.sm?'sm-hide ':''}th-${c.k}" onclick="setCrmSort('${c.k}')" title="Sort by ${c.t}">${c.t}${arrow(c.k)}</th>`).join('');
-  const span=CRM_COLS.length+2;
+  const head=cols.map((c,i)=>`<th class="${c.sm?'sm-hide ':''}${i===0?'stick1 ':''}th-${c.k}" onclick="setCrmSort('${c.k}')" title="Sort by ${c.t}">${c.t}${arrow(c.k)}</th>`).join('');
+  const span=cols.length+2;
 
   /* an approval re-renders the whole list — the row the reviewer had open stays open */
   const body=rows.map((a,i)=>{
@@ -238,25 +369,24 @@ function renderCrm(list){
     return`
     <tr class="r ${i%2?'row-b':'row-a'}${op}" id="row-${a.ref}" onclick="toggleRow('${a.ref}')">
       <td class="num">${i+1}</td>
-      ${CRM_COLS.map(c=>`<td class="td-${c.k}${c.sm?' sm-hide':''}">${c.v(a)}</td>`).join('')}
+      ${cols.map((c,j)=>`<td class="td-${c.k}${c.sm?' sm-hide':''}${j===0?' stick1':''}">${c.v(a)}</td>`).join('')}
       <td class="chev"><svg viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg></td>
     </tr>
     <tr class="det ${i%2?'row-b':'row-a'}${op}" id="det-${a.ref}"><td colspan="${span}"><div class="det-box">${appDetailHtml(a)}</div></td></tr>`;
   }).join('');
 
-  document.getElementById('main-content').innerHTML=`
-    ${viewSwitchHtml()}
-    <div class="list-tools">
-      <div class="list-search">
-        <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-        <input id="crm-search" type="text" placeholder="Search name, username, reference, email or phone" value="${crmSearch.replace(/"/g,'&quot;')}" oninput="setCrmSearch(this.value)">
-      </div>
-      <div class="list-count">${rows.length} of ${list.length}</div>
-    </div>
-    ${rows.length?`<div class="crm-wrap"><table class="crm">
+  return`<div class="crm-wrap"><table class="crm">
       <thead><tr><th class="num">#</th>${head}<th class="chev"></th></tr></thead>
       <tbody>${body}</tbody>
-    </table></div>`
+    </table></div>`;
+}
+
+function renderCrm(list){
+  const rows=list.filter(a=>crmMatch(a,crmSearch));
+  document.getElementById('main-content').innerHTML=`
+    ${viewSwitchHtml()}
+    ${listToolsHtml(rows.length,list.length)}
+    ${rows.length?crmTableHtml(rows)
     :`<div class="empty"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>Nothing matches "${crmSearch}".</div>`}`;
 }
 
@@ -268,7 +398,27 @@ function toggleRow(ref){
   const was=row.classList.contains('open');
   document.querySelectorAll('.crm tr.open').forEach(x=>x.classList.remove('open'));
   crmOpen=was?null:ref;
-  if(!was){row.classList.add('open');det.classList.add('open');}
+  if(!was){row.classList.add('open');det.classList.add('open');markSeen(ref);}
+}
+
+/* ── "somebody here has looked at this" ──
+   Recorded on the record the first time any team member opens it, through a database
+   function that checks their session — so it is the team's shared knowledge and one
+   browser's history can never fake it. Never blocks the reviewer: if the write fails
+   the record simply stays unopened. */
+async function markSeen(ref){
+  const a=QUEUE.find(x=>x.ref===ref);
+  if(!a||a.viewed_at||!TEAM)return;
+  a.viewed_at=new Date().toISOString();
+  a.viewed_by=TEAM.username;
+  try{
+    const r=await fetch(SB_URL+'/rest/v1/rpc/cleverpay_team_mark_seen',{
+      method:'POST',
+      headers:{'Content-Type':'application/json',apikey:SB_ANON,Authorization:'Bearer '+SB_ANON},
+      body:JSON.stringify({p_ref:ref,p_token:TEAM.token})
+    });
+    if(!r.ok){a.viewed_at=null;a.viewed_by=null;}
+  }catch(e){a.viewed_at=null;a.viewed_by=null;}
 }
 
 function ini(a){
@@ -393,7 +543,9 @@ function appCardHtml(a){
         <span class="chip ${isB?'chip-business':isF?'chip-freight':'chip-driver'}">${isB?'Business':isF?'Freight':'Driver'}</span>
         ${statusChip(a.status)}
         ${isB?'':(a.email_verified?`<span class="chip chip-approved" title="Email address confirmed">Email ✓</span>`:`<span class="chip chip-pending" title="Access stays locked until the email is confirmed">Email unconfirmed</span>`)}
+        ${(()=>{const n=netState(a);return n.t==='—'?'':`<span class="npill ${n.c}" title="${n.ti}">${n.t}</span>`})()}
         ${a.added_by?`<span class="chip chip-reviewing" title="Added manually by the HAF team">Added by ${a.added_by}</span>`:''}
+        ${a.viewed_at?`<span class="chip chip-seen" title="First opened ${fmtDate(a.viewed_at)}">Opened by ${a.viewed_by||'the team'}</span>`:''}
         ${missingReq.length?`<span class="chip" style="background:rgba(208,64,64,.1);color:var(--rd);border:1px solid rgba(208,64,64,.2)">${missingReq.length} doc${missingReq.length!==1?'s':''} missing</span>`:''}
       </div>
       <div class="chevron"><svg viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg></div>
@@ -407,7 +559,7 @@ function toggleCard(ref){
   const c=document.getElementById('card-'+ref);
   const was=c.classList.contains('expanded');
   document.querySelectorAll('.app-card.expanded').forEach(x=>x.classList.remove('expanded'));
-  if(!was)c.classList.add('expanded');
+  if(!was){c.classList.add('expanded');markSeen(ref);}
 }
 /* ── DOCUMENT VIEWER ──
    The file never has a public address. The portal asks the API for it with this
