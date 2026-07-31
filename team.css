@@ -296,3 +296,35 @@ a{color:var(--or);text-decoration:none}
   .dv-foot #dv-tick{margin-left:0;flex-basis:100%}
   .dv-count{order:5;width:100%;text-align:center}
 }
+
+/* ══ INTEGRATION PANEL — the back-office link (Brent and Gemma only) ══ */
+.ig-wrap{display:flex;flex-direction:column;gap:.9rem;max-width:780px}
+.ig-card{background:var(--p);border:1px solid var(--ln);border-radius:14px;padding:1.05rem 1.15rem}
+.ig-h{font-family:var(--dp);font-weight:800;font-size:.9rem;letter-spacing:-.02em;margin-bottom:.3rem}
+.ig-p{font-size:.78rem;color:var(--mu);line-height:1.55;margin-bottom:.75rem}
+.ig-note{font-size:.72rem;color:var(--mu);line-height:1.5;margin-top:.7rem;padding-top:.7rem;border-top:1px solid var(--ln)}
+
+.ig-status{display:flex;align-items:center;gap:.8rem}
+.ig-status>div:first-of-type{flex:1;min-width:0}
+.ig-status-t{font-size:.86rem;font-weight:700;line-height:1.35}
+.ig-status-s{font-size:.72rem;color:var(--mu);margin-top:.18rem}
+.ig-dot{width:11px;height:11px;border-radius:50%;flex:none}
+.ig-ok{background:var(--gn);box-shadow:0 0 0 4px var(--gn-d)}
+.ig-warn{background:var(--am);box-shadow:0 0 0 4px var(--am-d)}
+.ig-bad{background:var(--rd);box-shadow:0 0 0 4px var(--rd-d)}
+
+.ig-copy{display:flex;align-items:center;gap:.6rem;background:var(--p2);border:1px solid var(--ln);border-radius:10px;padding:.55rem .5rem .55rem .8rem}
+.ig-copy code{flex:1;min-width:0;font-family:'SF Mono',Consolas,monospace;font-size:.75rem;color:var(--tx);overflow-x:auto;white-space:nowrap}
+
+.ig-krow{display:flex;gap:2rem;flex-wrap:wrap;margin-bottom:.7rem}
+.ig-klabel{font-size:.66rem;text-transform:uppercase;letter-spacing:.08em;color:var(--mu);font-weight:700}
+.ig-kval{font-family:'SF Mono',Consolas,monospace;font-size:.92rem;font-weight:700;color:var(--or);letter-spacing:.03em;margin-top:.15rem}
+.ig-kv2{font-size:.8rem;margin-top:.2rem}
+.ig-btns{display:flex;gap:.5rem;flex-wrap:wrap}
+
+.ig-fields{display:flex;flex-wrap:wrap;gap:.4rem}
+.ig-field{font-size:.72rem;font-weight:600;padding:.28rem .65rem;border-radius:var(--pill);background:var(--or-d);color:var(--or);border:1px solid var(--or-g)}
+
+.ig-key-box{background:var(--p2);border:1px solid var(--or-g);border-radius:10px;padding:.8rem;margin:.6rem 0 .2rem}
+.ig-key-box code{font-family:'SF Mono',Consolas,monospace;font-size:.8rem;color:var(--or);word-break:break-all;line-height:1.5}
+@media(max-width:560px){.ig-status{flex-wrap:wrap}.ig-krow{gap:1rem}}

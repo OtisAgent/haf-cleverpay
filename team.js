@@ -58,12 +58,29 @@ function enterShell(){
   document.getElementById('gate').style.display='none';
   document.getElementById('shell').classList.add('show');
   document.getElementById('welcome-name').textContent=TEAM.name;
+  showIntegrationTab();
   loadConfig();
   loadQueue();
+}
+/* The Integration tab only appears for the two people who own the back-office link.
+   Hiding it is presentation only — the API refuses everyone else server-side. */
+const INTEGRATION_USERS=['bf638793','cleverg'];
+function canIntegrate(){return !!TEAM&&INTEGRATION_USERS.includes(String(TEAM.username||'').toLowerCase())}
+function showIntegrationTab(){
+  const bar=document.querySelector('.tab-bar');
+  const existing=document.getElementById('tab-integration');
+  if(!canIntegrate()){existing?.remove();return}
+  if(existing)return;
+  const t=document.createElement('div');
+  t.className='tab';t.id='tab-integration';t.textContent='Integration';
+  t.onclick=()=>setTab('integration');
+  bar.appendChild(t);
 }
 function doSignOut(){
   sessionStorage.removeItem('cp_team_session');
   TEAM=null;QUEUE=[];
+  currentTab='pending';
+  document.getElementById('tab-integration')?.remove();
   document.getElementById('shell').classList.remove('show');
   document.getElementById('gate').style.display='';
   document.getElementById('setpin-card').style.display='none';
@@ -90,13 +107,14 @@ function refreshQueue(){loadQueue();showToast('Queue refreshed')}
 /* ── TABS ── */
 function setTab(t){
   currentTab=t;
-  ['pending','reviewing','approved','rejected','all','settings'].forEach(x=>{
-    document.getElementById('tab-'+x).classList.toggle('active',x===t);
+  ['pending','reviewing','approved','rejected','all','settings','integration'].forEach(x=>{
+    document.getElementById('tab-'+x)?.classList.toggle('active',x===t);
   });
   renderView();
 }
 function renderView(){
   if(currentTab==='settings') renderSettings();
+  else if(currentTab==='integration') renderIntegration();
   else renderQueue();
 }
 
@@ -450,6 +468,124 @@ document.addEventListener('keydown',e=>{
   else if(e.key==='ArrowRight')stepDoc(1);
 });
 
+/* ══ INTEGRATION — the back-office link (Brent and Gemma only) ══
+   Everything here is read from the API, which checks who is asking. If a browser
+   ever showed this panel to the wrong person they would still get nothing back. */
+let INTEG=null;
+
+function fmtAgo(iso){
+  if(!iso)return'never';
+  const s=Math.floor((Date.now()-new Date(iso).getTime())/1000);
+  if(s<60)return'just now';
+  if(s<3600)return Math.floor(s/60)+' min ago';
+  if(s<86400)return Math.floor(s/3600)+' hr ago';
+  return fmtDate(iso);
+}
+
+async function renderIntegration(){
+  const el=document.getElementById('main-content');
+  if(!INTEG)el.innerHTML='<div class="empty">Checking the back-office link…</div>';
+  const r=await cpApi('/team/integration',{token:TEAM.token});
+  if(r.status===401){showToast('Session expired — please sign in again',true);doSignOut();return}
+  if(!r.ok){
+    el.innerHTML='<div class="empty">This area isn’t available on your login.</div>';
+    return;
+  }
+  INTEG=r.body;
+  drawIntegration();
+}
+
+function drawIntegration(){
+  const d=INTEG,k=d.key;
+  /* "working" means both halves are true: our side answered, and a key exists for
+     the back office to use. A green light with no key would be a lie. */
+  const live=d.live&&!!k;
+  const dot=live?'ig-ok':(d.live?'ig-warn':'ig-bad');
+  const line=!d.live
+    ?'Not working — we can’t reach the compliance records right now.'
+    :(!k?'No key yet — the back office can’t connect until you generate one.'
+        :'Working — the back office can connect.');
+  const lastTalk=k?(k.last_used_at?`Last used ${fmtAgo(k.last_used_at)} · ${k.use_count} request${k.use_count===1?'':'s'} in total`:'Not used yet — the back office hasn’t called us with this key.'):'';
+
+  document.getElementById('main-content').innerHTML=`
+  <div class="ig-wrap">
+    <div class="ig-card">
+      <div class="ig-status"><span class="ig-dot ${dot}"></span><div>
+        <div class="ig-status-t">${line}</div>
+        <div class="ig-status-s">${lastTalk?lastTalk+' · ':''}Checked ${fmtAgo(d.checked_at)}</div>
+      </div><button class="btn btn-gh" onclick="INTEG=null;renderIntegration()">Re-check</button></div>
+    </div>
+
+    <div class="ig-card">
+      <div class="ig-h">Back-office address</div>
+      <div class="ig-p">Give this to the back office along with the key. It is not linked anywhere and only answers to a valid key.</div>
+      <div class="ig-copy"><code id="ig-ep">${d.endpoint}</code>
+        <button class="btn btn-gh" onclick="igCopy('${d.endpoint}',this)">Copy</button></div>
+    </div>
+
+    <div class="ig-card">
+      <div class="ig-h">Access key</div>
+      ${k?`
+        <div class="ig-krow">
+          <div><div class="ig-klabel">Current key</div><div class="ig-kval">${k.prefix}…</div></div>
+          <div><div class="ig-klabel">Created</div><div class="ig-kv2">${fmtDate(k.created_at)} by ${k.created_by}</div></div>
+        </div>
+        <div class="ig-p">Only the first few characters are kept — the full key was shown once when it was made. If it has been lost or shared by mistake, replace it.</div>
+        <div class="ig-btns">
+          <button class="btn btn-review" onclick="igRotate()">Replace key</button>
+          <button class="btn btn-reject" onclick="igRevoke()">Switch off access</button>
+        </div>`
+      :`<div class="ig-p">There is no key yet. Generating one lets the back office read compliance status — and nothing else.</div>
+        <div class="ig-btns"><button class="btn btn-approve" onclick="igRotate()">Generate key</button></div>`}
+    </div>
+
+    <div class="ig-card">
+      <div class="ig-h">What the back office can see</div>
+      <div class="ig-p">Only these, for each account:</div>
+      <div class="ig-fields">${(d.shares||[]).map(s=>`<span class="ig-field">${s}</span>`).join('')}</div>
+      <div class="ig-note">No documents, no bank or payment details, and no phone numbers or email addresses ever leave through this link.</div>
+    </div>
+  </div>`;
+}
+
+function igCopy(txt,btn){
+  navigator.clipboard?.writeText(txt).then(()=>{
+    const was=btn.textContent;btn.textContent='Copied';setTimeout(()=>{btn.textContent=was},1600);
+  },()=>showToast('Couldn’t copy — select the text and copy it manually',true));
+}
+
+async function igRotate(){
+  const replacing=!!INTEG?.key;
+  if(replacing&&!confirm('Replace the current key?\n\nThe old key stops working immediately, so the back office will be cut off until someone gives them the new one.'))return;
+  const r=await cpApi('/team/integration/key',{method:'POST',token:TEAM.token,body:{}});
+  if(r.status===401){showToast('Session expired — please sign in again',true);doSignOut();return}
+  if(!r.ok){showToast(r.body?.error||'Could not create the key',true);return}
+  igShowKey(r.body.key,replacing);
+  INTEG=null;renderIntegration();
+}
+
+async function igRevoke(){
+  if(!confirm('Switch off the back-office link?\n\nThe key stops working straight away and the back office will not be able to read anything until a new key is generated.'))return;
+  const r=await cpApi('/team/integration/revoke',{method:'POST',token:TEAM.token,body:{}});
+  if(!r.ok){showToast(r.body?.error||'Could not switch it off',true);return}
+  showToast('Back-office access switched off');
+  INTEG=null;renderIntegration();
+}
+
+/* the one and only time the key is ever visible */
+function igShowKey(key,replaced){
+  document.getElementById('ig-key-title').textContent=replaced?'Your new key':'Your key';
+  document.getElementById('ig-key-val').textContent=key;
+  document.getElementById('ig-key-copy').onclick=function(){igCopy(key,this)};
+  document.getElementById('ig-key-ov').classList.add('open');
+}
+/* wipe it from the page as well as from view — once it's closed it's gone */
+function igCloseKey(){
+  document.getElementById('ig-key-ov').classList.remove('open');
+  document.getElementById('ig-key-val').textContent='';
+  document.getElementById('ig-key-copy').onclick=null;
+}
+
 /* ── INIT ── */
 const stored=sessionStorage.getItem('cp_team_session');
 if(stored){
@@ -457,5 +593,6 @@ if(stored){
   if(TEAM.mustSetPin)showSetPin();else enterShell();
 }
 
-/* Auto-refresh queue every 15s */
-setInterval(()=>{if(TEAM&&currentTab!=='settings')loadQueue(true)},15000);
+/* Auto-refresh queue every 15s — never while Settings or Integration is open,
+   so a refresh can't wipe a key the user has just been shown */
+setInterval(()=>{if(TEAM&&currentTab!=='settings'&&currentTab!=='integration')loadQueue(true)},15000);

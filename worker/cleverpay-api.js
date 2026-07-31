@@ -151,6 +151,56 @@ function alertNewEnquiry(env, ctx, row) {
   if (ctx && typeof ctx.waitUntil === 'function') ctx.waitUntil(p);
 }
 
+/* ── back-office integration — Brent and Gemma only ──
+   One key-authenticated endpoint the CleverPay back office reads compliance from.
+   Nothing about it is public: it is never linked from the sign-up site, there is no
+   docs page, and /team/integration answers a plain 404 to any other team member, so
+   a login outside the list cannot even tell the panel exists. Hiding the tab in the
+   browser is presentation; THIS is the security.
+
+   What crosses is deliberately narrow (Brent's call, 31 Jul): reference, name,
+   compliance status and dates. No documents, no bank or payment details, no
+   contact details. PARTNER_VIEW is the whole contract — if a field is not built
+   here it cannot leave, whatever the caller asks for. */
+const INTEGRATION_USERS = ['bf638793', 'cleverg'];
+const canIntegrate = (u) => INTEGRATION_USERS.includes(String(u || '').toLowerCase().trim());
+
+const newApiKey = () =>
+  'cpk_' + [...crypto.getRandomValues(new Uint8Array(20))].map(b => b.toString(16).padStart(2, '0')).join('');
+const keyHash = (k) => sha256('HAF-CP-KEY|' + k);
+
+function PARTNER_VIEW(a) {
+  return {
+    reference: a.ref,
+    name: a.type === 'driver' ? [a.fname, a.lname].filter(Boolean).join(' ') : (a.company || a.name || null),
+    account_type: a.type,
+    compliance_status: a.status,
+    email_confirmed: !!a.email_verified,
+    submitted_at: a.submitted || null,
+    approved_at: a.approved_at || null,
+    rejected_at: a.rejected_at || null,
+    updated_at: a.updated_at || null,
+  };
+}
+
+/* the key itself is never stored — only its hash, so a database leak cannot be replayed */
+async function apiKeyRow(env, req) {
+  const raw = req.headers.get('X-API-Key') || (req.headers.get('Authorization') || '').replace(/^Bearer /i, '');
+  const key = String(raw || '').trim();
+  if (!/^cpk_[a-f0-9]{40}$/.test(key)) return null;
+  const r = await sb(env, `/cleverpay_api_keys?key_hash=eq.${await keyHash(key)}&revoked_at=is.null&limit=1`);
+  return r.ok && r.body && r.body[0] ? r.body[0] : null;
+}
+
+/* "when it last talked to us" on the panel comes from this — never let it break a reply */
+function noteKeyUse(env, ctx, row, path) {
+  const p = sb(env, `/cleverpay_api_keys?id=eq.${row.id}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ last_used_at: new Date().toISOString(), last_used_path: path, use_count: (row.use_count || 0) + 1 }),
+  }).catch(() => {});
+  if (ctx && typeof ctx.waitUntil === 'function') ctx.waitUntil(p);
+}
+
 export default {
   async fetch(req, env, ctx) {
     const cors = corsHeaders(req);
@@ -266,6 +316,27 @@ export default {
         return J({ ok: true, months, redeemed_at: now }, 200, cors);
       }
 
+      /* ── back office: read compliance status with an API key ──
+         Deliberately NOT given CORS headers — this is server-to-server only, so no
+         web page in any browser can read it even if somebody pasted a key into one. */
+      if (p === '/partner/compliance' && req.method === 'GET') {
+        const bare = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
+        const key = await apiKeyRow(env, req);
+        if (!key) return new Response(JSON.stringify({ error: 'Not authorised.' }), { status: 401, headers: bare });
+        noteKeyUse(env, ctx, key, p);
+        const ref = (url.searchParams.get('ref') || '').trim();
+        if (ref) {
+          const app = await findApp(env, ref);
+          if (!app) return new Response(JSON.stringify({ error: 'Not found.' }), { status: 404, headers: bare });
+          return new Response(JSON.stringify(PARTNER_VIEW(app)), { status: 200, headers: bare });
+        }
+        const status = (url.searchParams.get('status') || '').replace(/[^a-z]/gi, '');
+        const q = status ? `&status=eq.${encodeURIComponent(status)}` : '';
+        const r = await sb(env, `/${APPS}?order=submitted.desc&limit=500${q}`);
+        const rows = (r.body || []).map(PARTNER_VIEW);
+        return new Response(JSON.stringify({ count: rows.length, accounts: rows }), { status: 200, headers: bare });
+      }
+
       /* ── team: log in ──
          First-time members have must_set_pin set: they sign in once with the one-time
          setup code they were given, then choose their own PIN (see /team/set-pin). */
@@ -371,6 +442,55 @@ export default {
           const r = await sb(env, `/${APPS}?ref=eq.${encodeURIComponent(app.ref)}`,
             { method: 'PATCH', body: JSON.stringify({ docs, updated_at: now }) });
           return r.ok ? J({ ok: true, docs }, 200, cors) : J({ error: 'Could not save that tick.' }, 500, cors);
+        }
+
+        /* ── the integration panel — Brent and Gemma only ──
+           Anyone else gets exactly the same 404 as a route that does not exist. */
+        if (p.startsWith('/team/integration')) {
+          if (!canIntegrate(who)) return J({ error: 'Not found.' }, 404, cors);
+          const kr = await sb(env, '/cleverpay_api_keys?revoked_at=is.null&order=created_at.desc&limit=1');
+          const active = kr.ok && kr.body && kr.body[0] ? kr.body[0] : null;
+          const summary = (k) => k && {
+            prefix: k.key_prefix, label: k.label, created_at: k.created_at, created_by: k.created_by,
+            last_used_at: k.last_used_at, use_count: k.use_count || 0,
+          };
+
+          if (p === '/team/integration' && req.method === 'GET') {
+            /* a real check, not a guess: if we cannot read the table the back office
+               reads, the panel must say so rather than show a comforting green line */
+            const probe = await sb(env, `/${APPS}?select=ref&limit=1`);
+            return J({
+              endpoint: url.origin + '/partner/compliance',
+              key: summary(active),
+              live: probe.ok,
+              checked_at: new Date().toISOString(),
+              shares: ['reference', 'name', 'account type', 'compliance status', 'dates'],
+            }, 200, cors);
+          }
+
+          /* generate or rotate — the plaintext key is returned this once and never again */
+          if (p === '/team/integration/key' && req.method === 'POST') {
+            const key = newApiKey();
+            const row = {
+              label: String(b.label || 'Back office').slice(0, 60),
+              key_hash: await keyHash(key), key_prefix: key.slice(0, 12), created_by: who,
+            };
+            const ins = await sb(env, '/cleverpay_api_keys', { method: 'POST', body: JSON.stringify(row) });
+            if (!ins.ok) return J({ error: 'Could not create the key — please try again.' }, 500, cors);
+            /* rotate: the old key stops working the moment the new one exists */
+            if (active) await sb(env, `/cleverpay_api_keys?id=eq.${active.id}`, {
+              method: 'PATCH', body: JSON.stringify({ revoked_at: new Date().toISOString(), revoked_by: who }) });
+            return J({ key, rotated: !!active, summary: summary(ins.body[0]) }, 200, cors);
+          }
+
+          if (p === '/team/integration/revoke' && req.method === 'POST') {
+            if (!active) return J({ error: 'There is no active key to switch off.' }, 400, cors);
+            const r = await sb(env, `/cleverpay_api_keys?id=eq.${active.id}`, {
+              method: 'PATCH', body: JSON.stringify({ revoked_at: new Date().toISOString(), revoked_by: who }) });
+            return r.ok ? J({ ok: true }, 200, cors) : J({ error: 'Could not switch the key off.' }, 500, cors);
+          }
+
+          return J({ error: 'Not found.' }, 404, cors);
         }
 
         if (p === '/team/config' && req.method === 'PUT') {
