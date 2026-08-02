@@ -5,6 +5,26 @@
 const SB = 'https://jsdwvogsxlnczzbefwgp.supabase.co/rest/v1';
 const APPS = 'cleverpay_applications';
 const OK_ORIGINS = ['https://clever.usehaf.co.uk', 'https://otisagent.github.io', 'https://plna.usehaf.co.uk'];
+/* Paid HAF KNECT memberships are recorded against the email that paid, and the
+   account is created here — so this is the only place that knows both halves.
+   Whenever an account is created or signs in we hand the pair to the network,
+   which links them if that email really paid and ignores us if it did not.
+   The key below is the network's PUBLIC key, the same one the KNECT dashboard
+   ships to every browser; the function it calls can only ever link a payment to
+   the account in front of it, never read the register or move a membership. */
+const NET = 'https://ggkpqqrtxtlafdkxcaqg.supabase.co/rest/v1/rpc/knect_claim_membership';
+const NET_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdna3BxcXJ0eHRsYWZka3hjYXFnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIxOTM2NjAsImV4cCI6MjA5Nzc2OTY2MH0.hB70KOYZu4dshwhsrxF_dFyBn0n72gStWTwxYGsLdgY';
+/* Never blocks the applicant: a slow or unhappy network must not hold up a
+   sign-up, and there is nothing for them to do about it if it fails. */
+function claimMembership(ctx, username, email) {
+  if (!username || !email) return;
+  const p = fetch(NET, {
+    method: 'POST',
+    headers: { apikey: NET_KEY, Authorization: 'Bearer ' + NET_KEY, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ p_username: username, p_email: email }),
+  }).catch(() => {});
+  if (ctx && ctx.waitUntil) ctx.waitUntil(p);
+}
 /* compliance files live in a PRIVATE bucket — reachable only with the service key, never by URL */
 const DOCS = 'https://jsdwvogsxlnczzbefwgp.supabase.co/storage/v1/object/cleverpay-docs/';
 const DOC_MIME = ['application/pdf', 'image/jpeg', 'image/png', 'image/heic', 'image/heif', 'image/webp'];
@@ -238,6 +258,7 @@ export default {
         const r = await sb(env, `/${APPS}`, { method: 'POST', body: JSON.stringify(row) });
         if (!r.ok) return J({ error: 'Could not save your application. Please try again.' }, 500, cors);
         alertNewEnquiry(env, ctx, r.body[0]);
+        claimMembership(ctx, r.body[0].username, r.body[0].email);
         return J(strip(r.body[0]), 200, cors);
       }
 
@@ -265,6 +286,9 @@ export default {
           const attempt = b.pinHash || await sha256('HAF-CP|' + app.username + '|' + (b.pin || ''));
           if (attempt !== app.pin_hash) return J({ error: 'Incorrect PIN.' }, 401, cors);
         }
+        /* also on the way in, so somebody who paid AFTER creating their account
+           is switched on at their next sign-in rather than waiting for anyone */
+        claimMembership(ctx, app.username, app.email);
         return J(strip(app), 200, cors);
       }
 
