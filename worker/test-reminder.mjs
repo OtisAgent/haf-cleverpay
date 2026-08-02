@@ -1,6 +1,6 @@
 /* Proof for the document reminder: the button the team clicks on a pending record,
-   the rules behind it, and the queue the sending run reads. Real portal files, real
-   worker module, stub database. Screenshots go to worker/_shots/.
+   and the rules behind it. Real portal files, real worker module, stub database.
+   The sending run itself is proved by a live send, not here. Screenshots go to worker/_shots/.
    Run: node worker/test-reminder.mjs */
 import { createServer } from 'node:http';
 import { readFileSync, writeFileSync, unlinkSync, mkdirSync, existsSync } from 'node:fs';
@@ -200,20 +200,7 @@ ok('freight gets the freight document list',
   stale.body.missing.includes('Certificate of Incorporation'), stale.body.missing);
 ok('second click the same day → held', (await api('/team/remind', auth({ ref: 'HAF-CP-NODOC' }))).status === 429);
 
-/* ── 2. the queue the sending run reads ── */
-console.log('\nThe sending queue');
-const due = await api('/team/reminders/due', auth(null, 'GET'));
-ok('due list holds the three just requested', due.status === 200 && due.body.length === 3, due.body.map(a => a.ref));
-ok('due records carry the email and the exact list',
-  due.body.every(a => a.email && Array.isArray(a.reminder_docs) && a.reminder_docs.length));
-ok('a PIN hash never leaves the building', due.body.every(a => a.pin_hash === undefined));
-const stamp = await api('/team/reminders/sent', auth({ ref: 'HAF-CP-NODOC' }));
-ok('the run stamps what it sent', stamp.status === 200 && !!apps[0].reminder_sent_at);
-const due2 = await api('/team/reminders/due', auth(null, 'GET'));
-ok('a sent reminder drops off the queue — nobody is chased twice for one click',
-  due2.body.length === 2 && !due2.body.some(a => a.ref === 'HAF-CP-NODOC'), due2.body.map(a => a.ref));
-
-/* ── 3. what the reviewer actually sees and clicks ── */
+/* ── 2. what the reviewer actually sees and clicks ── */
 console.log('\nThe portal');
 const browser = await chromium.launch({
   executablePath: process.env.HOME + '/.cache/ms-playwright/chromium-1228/chrome-linux64/chrome',

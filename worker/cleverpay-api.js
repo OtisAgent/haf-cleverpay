@@ -485,23 +485,6 @@ export default {
           return J({ ok: true, email: app.email, missing: missing.map(m => m.name), app: strip(r.body[0]) }, 200, cors);
         }
 
-        /* the reminder run reads its own queue: asked for by the team, not yet sent */
-        if (p === '/team/reminders/due' && req.method === 'GET') {
-          const r = await sb(env, `/${APPS}?reminder_requested_at=not.is.null&order=reminder_requested_at.asc&limit=100`);
-          const due = (r.body || []).filter(a =>
-            !a.reminder_sent_at || Date.parse(a.reminder_sent_at) < Date.parse(a.reminder_requested_at));
-          return J(due.map(strip), 200, cors);
-        }
-
-        /* and stamps what it actually sent, so nobody is chased twice for one click */
-        if (p === '/team/reminders/sent' && req.method === 'POST') {
-          const app = await findApp(env, b.ref || '');
-          if (!app) return J({ error: 'Not found.' }, 404, cors);
-          const r = await sb(env, `/${APPS}?ref=eq.${encodeURIComponent(app.ref)}`,
-            { method: 'PATCH', body: JSON.stringify({ reminder_sent_at: new Date().toISOString() }) });
-          return r.ok ? J({ ok: true }, 200, cors) : J({ error: 'Could not record that send.' }, 500, cors);
-        }
-
         /* ── the integration panel — Brent and Gemma only ──
            Anyone else gets exactly the same 404 as a route that does not exist. */
         if (p.startsWith('/team/integration')) {
