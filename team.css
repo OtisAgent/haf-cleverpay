@@ -256,6 +256,16 @@ table.crm{width:100%;min-width:820px;border-collapse:collapse}
 .btn-reject{background:var(--rd-d);color:var(--rd);border:1.5px solid rgba(208,64,64,.22)}.btn-reject:hover{background:var(--rd);color:#fff}
 .btn-gh{background:var(--p2);color:var(--mu);border:1.5px solid var(--lns)}.btn-gh:hover{color:var(--tx)}
 .btn-done{opacity:.5;cursor:default}
+/* chasing paperwork is a nudge, not a decision — outlined, so it never competes
+   with Approve or Reject for the eye */
+.btn-remind{background:var(--p2);color:var(--or);border:1.5px solid rgba(241,142,0,.35)}
+.btn-remind:hover{background:var(--or);color:#0e1113}
+.btn:disabled{opacity:.45;cursor:default}
+.btn:disabled:hover{filter:none}
+/* the exact list that will be asked for, shown before anything leaves the building */
+.rm-list{margin:0 0 .9rem;padding-left:1.05rem;font-size:.78rem;color:var(--tx);font-weight:600}
+.rm-list li{margin-bottom:.22rem}
+.rm-note{font-size:.7rem!important;color:var(--mu)}
 
 /* ── SETTINGS PANEL ── */
 .settings-panel{padding:1.1rem 0 4rem}

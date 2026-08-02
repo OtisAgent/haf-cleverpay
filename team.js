@@ -475,7 +475,7 @@ function appCompliance(a){
 }
 
 function appDetailHtml(a){
-  const{isF,isB,allDocRows}=appCompliance(a);
+  const{isF,isB,allDocRows,missingReq}=appCompliance(a);
 
   const driverRows=`
     <div class="dg"><div class="dl">Name</div><div class="dv">${a.fname||''} ${a.lname||''}</div></div>
@@ -517,8 +517,18 @@ function appDetailHtml(a){
     const emailBtn=(!isB&&!a.email_verified)?`<button class="btn btn-review" onclick="confirmEmail('${a.ref}')" title="Mark this applicant's email address as confirmed"><svg viewBox="0 0 24 24"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>Confirm email</button>`:'';
     if(a.status==='approved')return`${emailBtn}<button class="btn btn-gh btn-done">Approved ✓</button>${blockBtn}`;
     if(a.status==='rejected')return`<button class="btn btn-gh btn-done">Rejected</button>${blockBtn}`;
+    /* Nothing can be processed until the paperwork is in, so the queue chases it from
+       here instead of someone remembering to write the email by hand. */
+    const remindBtn=(()=>{
+      if(isB||!missingReq.length||!a.email)return'';
+      const n=missingReq.length;
+      const last=a.reminder_requested_at||a.reminder_sent_at;
+      if(last&&(Date.now()-Date.parse(last))<20*3600e3)
+        return`<button class="btn btn-gh" disabled title="Reminded ${fmtDate(last)}${a.reminder_by?' by '+a.reminder_by:''} — the next one can go tomorrow"><svg viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>Reminded today</button>`;
+      return`<button class="btn btn-remind" onclick="openRemind('${a.ref}')" title="Email them a link to upload the ${n} document${n!==1?'s':''} we are still waiting on"><svg viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>Send document reminder</button>`;
+    })();
     const rev=(a.status==='pending'||a.status==='enquiry')?`<button class="btn btn-review" onclick="markReviewing('${a.ref}')"><svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>Mark in review</button>`:'';
-    return`${rev}${emailBtn}<button class="btn btn-approve" onclick="approve('${a.ref}')"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>Approve</button><button class="btn btn-reject" onclick="openReject('${a.ref}')"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>Reject</button>${blockBtn}`;
+    return`${rev}${remindBtn}${emailBtn}<button class="btn btn-approve" onclick="approve('${a.ref}')"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>Approve</button><button class="btn btn-reject" onclick="openReject('${a.ref}')"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>Reject</button>${blockBtn}`;
   })();
 
   return`<div class="detail-sec">${isB?'Enquiry details':'Applicant details'}</div>
@@ -547,6 +557,7 @@ function appCardHtml(a){
         ${a.added_by?`<span class="chip chip-reviewing" title="Added manually by the HAF team">Added by ${a.added_by}</span>`:''}
         ${a.viewed_at?`<span class="chip chip-seen" title="First opened ${fmtDate(a.viewed_at)}">Opened by ${a.viewed_by||'the team'}</span>`:''}
         ${missingReq.length?`<span class="chip" style="background:rgba(208,64,64,.1);color:var(--rd);border:1px solid rgba(208,64,64,.2)">${missingReq.length} doc${missingReq.length!==1?'s':''} missing</span>`:''}
+        ${a.reminder_requested_at?`<span class="chip chip-seen" title="Document reminder sent ${fmtDate(a.reminder_requested_at)}${a.reminder_by?' by '+a.reminder_by:''}${a.reminder_count>1?' · '+a.reminder_count+' in total':''}">Reminded ${fmtDate(a.reminder_requested_at)}</span>`:''}
       </div>
       <div class="chevron"><svg viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg></div>
     </div>
@@ -732,6 +743,37 @@ async function update(ref,patch,okMsg){
   if(okMsg)showToast(okMsg,patch.status==='rejected');
   return true;
 }
+/* ── DOCUMENT REMINDER ──
+   The reviewer confirms the address and the exact list before anything leaves the
+   building — an applicant chased for a document they already sent stops trusting us. */
+let remindTarget=null;
+function openRemind(ref){
+  const a=QUEUE.find(x=>x.ref===ref);if(!a)return;
+  const{missingReq}=appCompliance(a);
+  remindTarget=ref;
+  document.getElementById('rm-who').textContent=displayName(a);
+  document.getElementById('rm-email').textContent=a.email||'no email on file';
+  document.getElementById('rm-list').innerHTML=missingReq.map(d=>`<li>${d.name}</li>`).join('');
+  document.getElementById('rm-go').disabled=false;
+  document.getElementById('rm-ov').classList.add('open');
+}
+function closeRemind(){document.getElementById('rm-ov').classList.remove('open');remindTarget=null}
+async function confirmRemind(){
+  const ref=remindTarget;if(!ref)return;
+  const go=document.getElementById('rm-go');
+  go.disabled=true;go.textContent='Sending…';
+  const r=await cpApi('/team/remind',{method:'POST',body:{ref},token:TEAM.token});
+  go.textContent='Send the reminder';
+  if(r.status===401){showToast('Session expired — please sign in again',true);doSignOut();return}
+  if(!r.ok){go.disabled=false;showToast(r.body?.error||'Could not send that reminder — try again',true);return}
+  const i=QUEUE.findIndex(a=>a.ref===ref);
+  if(i>=0&&r.body.app)QUEUE[i]={...r.body.app,rejectReason:r.body.app.reject_reason};
+  closeRemind();
+  renderQueue();
+  showToast(`Reminder on its way to ${r.body.email}`);
+}
+document.getElementById('rm-ov').addEventListener('click',function(e){if(e.target===this)closeRemind()});
+
 function openReject(ref){rejectTarget=ref;document.getElementById('reject-reason-text').value='';document.getElementById('modal-ov').classList.add('open')}
 function closeModal(){document.getElementById('modal-ov').classList.remove('open');rejectTarget=null}
 function confirmReject(){

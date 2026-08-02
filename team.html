@@ -120,6 +120,20 @@
   </div>
 </div>
 
+<!-- Chase the outstanding paperwork — the team sees exactly what will be asked for, and where it lands -->
+<div class="modal-ov" id="rm-ov">
+  <div class="modal">
+    <h2>Send a document reminder</h2>
+    <p>We will email <strong id="rm-who"></strong> at <strong id="rm-email"></strong> with a link to sign in and upload what is still outstanding:</p>
+    <ul class="rm-list" id="rm-list"></ul>
+    <p class="rm-note">One reminder per applicant per day. It goes from the HAF mailbox within the half hour, and this card records that you sent it.</p>
+    <div class="modal-btns">
+      <button class="mbt mbt-gh" onclick="closeRemind()">Cancel</button>
+      <button class="mbt mbt-green" id="rm-go" onclick="confirmRemind()">Send the reminder</button>
+    </div>
+  </div>
+</div>
+
 <!-- Document viewer — opens the real file the applicant uploaded -->
 <div class="doc-ov" id="doc-ov" onclick="if(event.target===this)closeDoc()">
   <div class="doc-modal">

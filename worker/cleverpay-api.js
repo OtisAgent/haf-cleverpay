@@ -54,6 +54,16 @@ async function findApp(env, id) {
   return r.ok && r.body && r.body[0] ? r.body[0] : null;
 }
 
+/* Which required documents are still outstanding on this application.
+   Worked out from the config the team saved — the same list the portal shows —
+   so a reminder can never ask for a document the settings no longer require. */
+function missingRequired(cfg, app) {
+  const set = app.type === 'freight' ? (cfg && cfg.freight) : (cfg && cfg.driver);
+  const defs = (set && Array.isArray(set.docs) ? set.docs : []).filter(d => d.status === 'required');
+  const have = (Array.isArray(app.docs) ? app.docs : []).map(d => d.id);
+  return defs.filter(d => !have.includes(d.id)).map(d => ({ id: d.id, name: d.name, hint: d.hint || '' }));
+}
+
 async function teamUser(env, req) {
   const m = (req.headers.get('Authorization') || '').match(/^Bearer (.+)$/);
   if (!m) return null;
@@ -442,6 +452,54 @@ export default {
           const r = await sb(env, `/${APPS}?ref=eq.${encodeURIComponent(app.ref)}`,
             { method: 'PATCH', body: JSON.stringify({ docs, updated_at: now }) });
           return r.ok ? J({ ok: true, docs }, 200, cors) : J({ error: 'Could not save that tick.' }, 500, cors);
+        }
+
+        /* ── chase the documents we are still waiting on ──
+           Nothing can be processed until the paperwork is in, so the queue needs a
+           one-click nudge. The click is recorded here with who sent it and exactly
+           which documents were outstanding at that moment; the email itself goes out
+           from the HAF mailbox on the next reminder run. One per applicant per day —
+           a chase that lands twice in an afternoon reads as harassment. */
+        if (p === '/team/remind' && req.method === 'POST') {
+          const app = await findApp(env, b.ref || '');
+          if (!app) return J({ error: 'Not found.' }, 404, cors);
+          if (app.type === 'business') return J({ error: 'Business enquiries do not have compliance documents.' }, 400, cors);
+          if (!app.email) return J({ error: 'There is no email address on this application.' }, 400, cors);
+          const cr = await sb(env, '/cleverpay_portal_config?id=eq.1&limit=1');
+          const cfg = cr.ok && cr.body && cr.body[0] ? cr.body[0].config : null;
+          if (!cfg) return J({ error: 'Could not read the document settings — try again in a moment.' }, 503, cors);
+          const missing = missingRequired(cfg, app);
+          if (!missing.length) return J({ error: 'Every required document is already in — there is nothing to chase.' }, 400, cors);
+          const last = app.reminder_requested_at || app.reminder_sent_at;
+          if (last && Date.now() - Date.parse(last) < 20 * 3600e3)
+            return J({ error: 'This applicant has already been reminded today — you can send another tomorrow.' }, 429, cors);
+          const now = new Date().toISOString();
+          const r = await sb(env, `/${APPS}?ref=eq.${encodeURIComponent(app.ref)}`, {
+            method: 'PATCH',
+            body: JSON.stringify({
+              reminder_requested_at: now, reminder_by: who, reminder_docs: missing,
+              reminder_count: (app.reminder_count || 0) + 1, updated_at: now,
+            }),
+          });
+          if (!r.ok || !r.body || !r.body[0]) return J({ error: 'Could not queue that reminder — please try again.' }, 500, cors);
+          return J({ ok: true, email: app.email, missing: missing.map(m => m.name), app: strip(r.body[0]) }, 200, cors);
+        }
+
+        /* the reminder run reads its own queue: asked for by the team, not yet sent */
+        if (p === '/team/reminders/due' && req.method === 'GET') {
+          const r = await sb(env, `/${APPS}?reminder_requested_at=not.is.null&order=reminder_requested_at.asc&limit=100`);
+          const due = (r.body || []).filter(a =>
+            !a.reminder_sent_at || Date.parse(a.reminder_sent_at) < Date.parse(a.reminder_requested_at));
+          return J(due.map(strip), 200, cors);
+        }
+
+        /* and stamps what it actually sent, so nobody is chased twice for one click */
+        if (p === '/team/reminders/sent' && req.method === 'POST') {
+          const app = await findApp(env, b.ref || '');
+          if (!app) return J({ error: 'Not found.' }, 404, cors);
+          const r = await sb(env, `/${APPS}?ref=eq.${encodeURIComponent(app.ref)}`,
+            { method: 'PATCH', body: JSON.stringify({ reminder_sent_at: new Date().toISOString() }) });
+          return r.ok ? J({ ok: true }, 200, cors) : J({ error: 'Could not record that send.' }, 500, cors);
         }
 
         /* ── the integration panel — Brent and Gemma only ──
