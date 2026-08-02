@@ -4,6 +4,12 @@
    applicant queue, which holds real people's details. */
 import { chromium } from 'playwright-core';
 
+/* the box has changed chromium build more than once — take whichever is installed */
+const CHROME = [
+  process.env.HOME + '/.cache/ms-playwright/chromium-1228/chrome-linux64/chrome',
+  process.env.HOME + '/.cache/ms-playwright/chromium-1140/chrome-linux/chrome',
+].find(p => { try { return statSync(p).isFile(); } catch { return false; } });
+
 const SITE = 'https://clever.usehaf.co.uk/team.html';
 const SESSIONS = {
   Brent: { token: 'OTISVERIFY-BRENT-31JUL', username: 'bf638793', name: 'Brent Ford', role: 'admin' },
@@ -15,7 +21,7 @@ let pass = 0, fail = 0;
 const ok = (n, c, d) => { if (c) { pass++; console.log('  PASS  ' + n); } else { fail++; console.log('  FAIL  ' + n + (d !== undefined ? '  → ' + JSON.stringify(d) : '')); } };
 
 const browser = await chromium.launch({
-  executablePath: process.env.HOME + '/.cache/ms-playwright/chromium-1228/chrome-linux64/chrome',
+  executablePath: CHROME,
   args: ['--no-sandbox'],
 });
 

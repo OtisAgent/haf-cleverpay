@@ -3,9 +3,15 @@
    The sending run itself is proved by a live send, not here. Screenshots go to worker/_shots/.
    Run: node worker/test-reminder.mjs */
 import { createServer } from 'node:http';
-import { readFileSync, writeFileSync, unlinkSync, mkdirSync, existsSync } from 'node:fs';
+import { readFileSync, writeFileSync, unlinkSync, mkdirSync, existsSync, statSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { chromium } from 'playwright-core';
+
+/* the box has changed chromium build more than once — take whichever is installed */
+const CHROME = [
+  process.env.HOME + '/.cache/ms-playwright/chromium-1228/chrome-linux64/chrome',
+  process.env.HOME + '/.cache/ms-playwright/chromium-1140/chrome-linux/chrome',
+].find(p => { try { return statSync(p).isFile(); } catch { return false; } });
 
 const ROOT = new URL('../', import.meta.url);
 const SHOTS = new URL('./_shots/', import.meta.url);
@@ -37,6 +43,8 @@ const apps = [
     email: 'full@example.invalid', phone: '07700900703', dob: '1990-01-01', vtype: 'MWB van',
     vreg: 'EF56 GHI', status: 'pending', email_verified: true, submitted: day(3), updated_at: day(3),
     pin_hash: sha('HAF-CP|FL990101|' + PIN),
+    dvla_licence_no: 'MORGA657054SM9IJ', dvla_check_code: 'Ab12Cd34', ni_number: 'AB123456C',
+    dvla_code_at: day(1),
     docs: LIVE_CONFIG.driver.docs.filter(d => d.status === 'required')
       .map(d => ({ id: d.id, filename: d.id + '.pdf', size: 50000, path: 'HAF-CP-FULL/' + d.id })) },
   /* chased two hours ago — the day's chase is spent */
@@ -182,9 +190,13 @@ const done = await api('/team/remind', auth({ ref: 'HAF-CP-DONE' }));
 ok('chased two hours ago → held until tomorrow', done.status === 429, done.body);
 
 const REQ = LIVE_CONFIG.driver.docs.filter(d => d.status === 'required');
+/* licence number, DVLA check code, National Insurance number — compliance, but not files */
+const RECORD = 3;
+const DRIVER_ITEMS = REQ.length + RECORD;
 const first = await api('/team/remind', auth({ ref: 'HAF-CP-NODOC' }));
 ok('never uploaded → reminder accepted', first.status === 200 && first.body.ok === true, first.body);
-ok('asks for every required document', first.body.missing && first.body.missing.length === REQ.length, first.body.missing);
+ok('asks for every required document and the driving record check',
+  first.body.missing && first.body.missing.length === DRIVER_ITEMS, first.body.missing);
 ok('records who sent it', apps[0].reminder_by === 'cleverg' && apps[0].reminder_count === 1, apps[0].reminder_by);
 
 const part = await api('/team/remind', auth({ ref: 'HAF-CP-PART' }));
@@ -192,7 +204,8 @@ const partMissing = first.body.missing.length - 3;
 ok('half-uploaded → asks only for what is outstanding',
   part.status === 200 && part.body.missing.length === partMissing, part.body.missing);
 ok('never asks for a document already held',
-  !part.body.missing.some(n => /MOT|Driving licence/i.test(n)), part.body.missing);
+  !part.body.missing.some(n => ['MOT certificate', 'Driving licence — front', 'Driving licence — back'].includes(n)),
+  part.body.missing);
 
 const stale = await api('/team/remind', auth({ ref: 'HAF-CP-STALE' }));
 ok('chased three days ago → chaseable again', stale.status === 200, stale.body);
@@ -203,7 +216,7 @@ ok('second click the same day → held', (await api('/team/remind', auth({ ref: 
 /* ── 2. what the reviewer actually sees and clicks ── */
 console.log('\nThe portal');
 const browser = await chromium.launch({
-  executablePath: process.env.HOME + '/.cache/ms-playwright/chromium-1228/chrome-linux64/chrome',
+  executablePath: CHROME,
   args: ['--no-sandbox'],
 });
 async function signIn(page) {
@@ -273,7 +286,7 @@ await openCard(p3, target);
 await p3.click(`#card-${target} .btn-remind`);
 await p3.waitForSelector('#rm-ov.open', { timeout: 3000 });
 const listed = await p3.locator('#rm-list li').count();
-ok('the confirm step lists the exact outstanding documents', listed === REQ.length, listed);
+ok('the confirm step lists the exact outstanding documents', listed === DRIVER_ITEMS, listed);
 ok('the confirm step shows the address it will go to',
   (await p3.locator('#rm-email').innerText()) === 'nodoc@example.invalid');
 await p3.screenshot({ path: SHOTS.pathname + 'remind-confirm-1280.png' });

@@ -4,9 +4,15 @@
    a third team member. Screenshots go to worker/_shots/.
    Run: node worker/test-panel.mjs */
 import { createServer } from 'node:http';
-import { readFileSync, writeFileSync, unlinkSync, mkdirSync, existsSync } from 'node:fs';
+import { readFileSync, writeFileSync, unlinkSync, mkdirSync, existsSync, statSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { chromium } from 'playwright-core';
+
+/* the box has changed chromium build more than once — take whichever is installed */
+const CHROME = [
+  process.env.HOME + '/.cache/ms-playwright/chromium-1228/chrome-linux64/chrome',
+  process.env.HOME + '/.cache/ms-playwright/chromium-1140/chrome-linux/chrome',
+].find(p => { try { return statSync(p).isFile(); } catch { return false; } });
 
 const ROOT = new URL('../', import.meta.url);
 const SHOTS = new URL('./_shots/', import.meta.url);
@@ -118,7 +124,7 @@ let pass = 0, fail = 0;
 const ok = (n, c, d) => { if (c) { pass++; console.log('  PASS  ' + n); } else { fail++; console.log('  FAIL  ' + n + (d !== undefined ? '  → ' + JSON.stringify(d) : '')); } };
 
 const browser = await chromium.launch({
-  executablePath: process.env.HOME + '/.cache/ms-playwright/chromium-1228/chrome-linux64/chrome',
+  executablePath: CHROME,
   args: ['--no-sandbox'],
 });
 
@@ -203,7 +209,8 @@ await login(page, 'admin');
 ok('no Integration tab anywhere on the page', await page.locator('#tab-integration').count() === 0);
 ok('the word "Integration" appears nowhere', !(await page.locator('.tab-bar').innerText()).includes('Integration'));
 await page.click('#tab-all');   /* the made-up driver is approved, so not on Pending */
-await page.waitForSelector('.app-card');
+/* the All tab has been the CRM list since the list view shipped — rows, not cards */
+await page.waitForSelector('.crm tbody tr, .app-card');
 ok('they still see the normal queue', (await page.locator('#main-content').innerText()).includes('McTestface'));
 await page.screenshot({ path: new URL('admin-notab-1280.png', SHOTS).pathname, fullPage: true });
 

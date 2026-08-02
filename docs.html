@@ -67,6 +67,49 @@
     <div style="font-size:.68rem;color:var(--mu);margin-top:.35rem">Screenshot or copy this — it'll also be in your approval email. Code is unique to you.</div>
   </div>
 
+  <!-- Driving record check — drivers only, filled in rather than uploaded -->
+  <div id="rec-check" style="display:none">
+    <div class="section-label">Driving record check</div>
+    <div class="rc-block" id="rc-block">
+      <div class="rc-lead">A photo of your licence shows us the card. It doesn't show us your <strong>record</strong> — any points, or whether the licence is still valid. GOV.UK lets you share that yourself with a check code, and it's the only way we're allowed to see it.</div>
+
+      <div class="rc-how">
+        <div class="rc-how-t">How to get your check code — about two minutes</div>
+        <ol>
+          <li>Open the GOV.UK page below.</li>
+          <li>Enter your driving licence number, your National Insurance number and the postcode on your licence.</li>
+          <li>Choose <strong>"Get a code to share your driving record"</strong>.</li>
+          <li>Copy the 8-character code it gives you into the box below.</li>
+        </ol>
+        <a class="rc-govlink" href="https://www.gov.uk/view-driving-licence" target="_blank" rel="noopener">
+          <svg viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+          View or share your driving licence on GOV.UK
+        </a>
+      </div>
+
+      <div class="rc-field">
+        <label class="rc-label" for="rc-lic">Driving licence number</label>
+        <span class="rc-sub">The 16 characters printed at <strong>5</strong> on the front of your photocard. We need this as well as the code — the code doesn't work on its own.</span>
+        <input class="rc-input" id="rc-lic" type="text" maxlength="20" autocomplete="off" spellcheck="false" placeholder="MORGA657054SM9IJ">
+        <div class="rc-err" id="err-rc-lic"></div>
+      </div>
+
+      <div class="rc-field">
+        <label class="rc-label" for="rc-code">DVLA check code</label>
+        <span class="rc-sub">8 letters and numbers from the GOV.UK page. Enter it exactly as shown — it's case sensitive, and it expires 21 days after you create it.</span>
+        <input class="rc-input" id="rc-code" type="text" maxlength="12" autocomplete="off" spellcheck="false" placeholder="Ab12 3Cd4">
+        <div class="rc-err" id="err-rc-code"></div>
+      </div>
+
+      <div class="rc-field">
+        <label class="rc-label" for="rc-ni">National Insurance number</label>
+        <span class="rc-sub">You need it to create the code above, and we need it to set your payments up.</span>
+        <input class="rc-input" id="rc-ni" type="text" maxlength="13" autocomplete="off" spellcheck="false" placeholder="AB 12 34 56 C">
+        <div class="rc-err" id="err-rc-ni"></div>
+      </div>
+    </div>
+  </div>
+
   <div id="doc-section"></div>
 
   <div class="info-box">
@@ -142,6 +185,50 @@ const uploaded = {};
 let totalReq = 0;
 let app = null;
 
+/* ── driving record check ──
+   Same rules as the API enforces, checked here first so somebody typing their
+   licence number from memory is told immediately rather than at the last click.
+   The check code is NOT upper-cased on the way through: DVLA codes are case
+   sensitive and "tidying" them breaks the lookup at the other end. */
+const RC = {
+  lic:  {re:/^[A-Z9]{5}\d{6}[A-Z9]{2}\d[A-Z]{2}$/, up:true,
+         msg:"That doesn't look like a licence number — it's 16 characters, at 5 on the front of your photocard."},
+  code: {re:/^[A-Za-z0-9]{8}$/, up:false,
+         msg:"A check code is 8 letters and numbers. Copy it exactly as GOV.UK showed it."},
+  ni:   {re:/^[A-CEGHJ-PR-TW-Z][A-CEGHJ-NPR-TW-Z]\d{6}[A-D]$/, up:true,
+         msg:"That doesn't look right — two letters, six numbers, then one letter, like AB123456C."},
+};
+const rcClean = (k,v) => { const s = String(v||'').replace(/[\s-]/g,''); return RC[k].up ? s.toUpperCase() : s; };
+const rcValue  = k => rcClean(k, (document.getElementById('rc-'+k)||{}).value);
+const rcValid  = k => RC[k].re.test(rcValue(k));
+const isDriver = () => app && app.type === 'driver';
+
+function rcCheck(k, touched){
+  const input = document.getElementById('rc-'+k);
+  const err   = document.getElementById('err-rc-'+k);
+  if(!input) return false;
+  const raw = rcValue(k);
+  const good = RC[k].re.test(raw);
+  input.classList.toggle('ok', good);
+  /* only scold once they have stopped typing — never mid-keystroke */
+  const bad = touched && !!raw && !good;
+  input.classList.toggle('bad', bad);
+  err.textContent = bad ? RC[k].msg : '';
+  err.classList.toggle('show', bad);
+  return good;
+}
+const rcComplete = () => !isDriver() || ['lic','code','ni'].every(rcValid);
+function rcDone(){ return isDriver() ? ['lic','code','ni'].filter(rcValid).length : 0; }
+
+function wireRecordCheck(){
+  document.getElementById('rec-check').style.display = '';
+  ['lic','code','ni'].forEach(k => {
+    const el = document.getElementById('rc-'+k);
+    el.addEventListener('input', () => { rcCheck(k, false); updateProgress(); });
+    el.addEventListener('blur',  () => { rcCheck(k, true);  updateProgress(); });
+  });
+}
+
 async function loadPage(){
   const raw = localStorage.getItem('cp_application');
   if(!raw){ window.location.href='index.html'; return; }
@@ -162,11 +249,13 @@ async function loadPage(){
     }
   }
 
-  const isDriver = app.type === 'driver';
-  document.getElementById('page-kicker').textContent = isDriver ? 'Driver Account' : 'Freight Forwarder Account';
-  document.getElementById('page-sub').textContent = isDriver
+  const isD = app.type === 'driver';
+  document.getElementById('page-kicker').textContent = isD ? 'Driver Account' : 'Freight Forwarder Account';
+  document.getElementById('page-sub').textContent = isD
     ? 'We need these to verify your eligibility as an HAF driver. All files are held securely.'
     : 'A few documents to confirm your business before we activate your freight account.';
+
+  if(isD) wireRecordCheck();
 
   const docs = await getDocList(app.type);
   totalReq = docs.filter(d => d.req).length;
@@ -274,27 +363,40 @@ async function handleUpload(id, name, req, input, card){
 
 function updateProgress(){
   const reqUploaded = Object.values(uploaded).filter(u => u.req).length;
-  const total = document.querySelectorAll('.doc-card').length;
-  const totalUp = Object.keys(uploaded).length;
+  /* the record check is three more things they have to complete, so it counts
+     towards the bar — otherwise it reads "all done" with the check still empty */
+  const rcTotal = isDriver() ? 3 : 0;
+  const total = document.querySelectorAll('.doc-card').length + rcTotal;
+  const totalUp = Object.keys(uploaded).length + rcDone();
+  const allReq = reqUploaded >= totalReq && rcComplete();
 
   document.getElementById('up-count').textContent = totalUp + ' / ' + total;
   const pct = total ? (totalUp / total * 100) : 0;
   const fill = document.getElementById('up-fill');
   fill.style.width = pct + '%';
-  fill.classList.toggle('complete', reqUploaded >= totalReq);
+  fill.classList.toggle('complete', allReq);
+  const rcBlock = document.getElementById('rc-block');
+  if(rcBlock) rcBlock.classList.toggle('rc-done', rcComplete());
 
   const btn = document.getElementById('submit-btn');
-  btn.disabled = reqUploaded < totalReq;
-  if(reqUploaded >= totalReq){
+  btn.disabled = !allReq;
+  if(allReq){
     btn.textContent = '';
     btn.innerHTML = 'Submit application <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>';
   }
 }
 
 async function submitDocs(){
+  if(isDriver() && !rcComplete()){
+    ['lic','code','ni'].forEach(k => rcCheck(k, true));
+    document.getElementById('rec-check').scrollIntoView({behavior:'smooth', block:'center'});
+    return;
+  }
   const docList = Object.entries(uploaded).map(([id, d]) =>
     ({id, filename: d.name, req: d.req, path: d.path, mime: d.mime, size: d.size}));
-  const r = await cpApi('/docs', { method: 'POST', body: { ref: app.ref, pinHash: app.pinHash, docs: docList } });
+  const body = { ref: app.ref, pinHash: app.pinHash, docs: docList };
+  if(isDriver()) body.dvla = { licence: rcValue('lic'), code: rcValue('code'), ni: rcValue('ni') };
+  const r = await cpApi('/docs', { method: 'POST', body });
   if(!r.ok){ alert(r.body?.error || 'Could not submit — please try again.'); return; }
   localStorage.setItem('cp_application', JSON.stringify({...r.body, pinHash: app.pinHash}));
   window.location.href = 'status.html';

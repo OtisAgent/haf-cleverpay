@@ -279,6 +279,12 @@ const CRM_COLS=[
     return missingReq.length
       ?`<span class="c-miss">${uploaded.length} in · ${missingReq.length} missing</span>`
       :`<span class="c-yes">All ${uploaded.length} in</span>`;}},
+  /* Brent 2 Aug — the driving record is its own line: a licence photo is not a record check */
+  {k:'record',t:'Record check',on:1,sm:1,s:a=>a.type!=='driver'?-1:(a.dvla_checked_at?2:(a.dvla_check_code?1:0)),v:a=>{
+    if(a.type!=='driver')return'<span class="c-dim">—</span>';
+    if(a.dvla_checked_at)return`<span class="c-yes" title="Checked on GOV.UK by ${a.dvla_checked_by||'the team'} · ${fmtDate(a.dvla_checked_at)}">Checked · ${fmtDay(a.dvla_checked_at)}</span>`;
+    if(a.dvla_check_code){const g=codeAge(a);return`<span class="${g&&g.expired?'c-miss':'c-dim'}" title="Code supplied, nobody has run the check yet">Code in · ${g?g.txt:''}</span>`}
+    return'<span class="c-miss">No code yet</span>';}},
   {k:'vehicle',t:'Vehicle',on:1,sm:1,s:a=>(a.vtype||'').toLowerCase(),v:a=>
     a.type!=='driver'?'<span class="c-dim">—</span>'
     :`<span class="c-dim">${a.vtype||'Not given'}${a.vreg?` · <span class="c-reg">${a.vreg}</span>`:''}</span>`},
@@ -471,11 +477,114 @@ function appCompliance(a){
     ...uploaded.filter(d=>{const def=docDefs.find(x=>x.id===d.id);return !def||def.status==='optional';})
       .map(d=>docRow(d,{cls:'badge-opt',txt:'Optional'})),
   ];
-  return{isF,isB,docDefs,uploaded,reqDefs,missingReq,allDocRows};
+  /* The driving-record check is compliance but not a file, so it never appears as
+     a document row — it has its own block. It DOES count as outstanding, though,
+     or the queue would show "nothing missing" on an applicant we cannot clear. */
+  const missingRec=recordGaps(a);
+  const missingAll=[...missingReq,...missingRec];
+
+  return{isF,isB,docDefs,uploaded,reqDefs,missingReq,missingRec,missingAll,allDocRows};
+}
+
+/* ── DRIVING RECORD CHECK ──
+   Brent, 2 Aug: a licence photo proves the card, not the record. GOV.UK's
+   "view or share your driving licence" turns the driver's own record into a
+   check code the team can look up — so we hold the licence number (the code is
+   useless without it), the code itself, and the National Insurance number the
+   driver needs to generate it. Codes die after 21 days, so the age is shown
+   rather than left for somebody to discover on the GOV.UK page. */
+const DVLA_URL='https://www.gov.uk/view-driving-licence';
+const CODE_LIFE_DAYS=21;
+
+function recordGaps(a){
+  if(a.type!=='driver')return[];
+  const gaps=[];
+  if(!a.dvla_licence_no)gaps.push({id:'dvla-licence-no',name:'Driving licence number'});
+  if(!a.dvla_check_code)gaps.push({id:'dvla-check-code',name:'DVLA check code'});
+  if(!a.ni_number)gaps.push({id:'ni-number',name:'National Insurance number'});
+  return gaps;
+}
+
+function codeAge(a){
+  if(!a.dvla_check_code)return null;
+  if(!a.dvla_code_at)return{days:null,expired:false,txt:'Date unknown'};
+  const days=Math.floor((Date.now()-Date.parse(a.dvla_code_at))/86400000);
+  const left=CODE_LIFE_DAYS-days;
+  if(left<=0)return{days,expired:true,txt:'Expired — ask for a new code'};
+  return{days,expired:false,txt:left===1?'Expires tomorrow':'Expires in '+left+' days'};
+}
+
+/* NI numbers are hidden until somebody actually needs to read one. Nothing is
+   protected by this — the value is already on the page — it just stops a whole
+   queue of people's NI numbers sitting in the open on a shared screen. */
+function maskNi(n){return n?n.slice(0,2)+'••••••'+n.slice(-1):''}
+function revealNi(ref){
+  const el=document.getElementById('ni-'+ref);
+  if(!el)return;
+  const on=el.dataset.shown==='1';
+  el.dataset.shown=on?'0':'1';
+  el.textContent=on?maskNi(el.dataset.full):el.dataset.full;
+  const btn=document.getElementById('nibtn-'+ref);
+  if(btn)btn.textContent=on?'Show':'Hide';
+}
+
+function copyVal(v,label){
+  const done=()=>showToast(label+' copied');
+  if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(v).then(done).catch(()=>done());
+  else done();
+}
+
+function recordCheckHtml(a){
+  if(a.type!=='driver')return'';
+  const lic=a.dvla_licence_no,code=a.dvla_check_code,ni=a.ni_number;
+  const age=codeAge(a);
+  const on=!!a.dvla_checked_at;
+  const val=(v,label)=>v
+    ?`<span class="dv mono">${v}</span><button class="rc-copy" onclick="copyVal('${v}','${label}')" title="Copy ${label}"><svg viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>`
+    :`<span class="rc-gap">Not supplied yet</span>`;
+
+  const codeLine=code
+    ?`${val(code,'check code')}<span class="rc-age${age&&age.expired?' bad':''}">${age?age.txt:''}</span>`
+    :`<span class="rc-gap">Not supplied yet</span>`;
+
+  const niLine=ni
+    ?`<span class="dv mono" id="ni-${a.ref}" data-full="${ni}" data-shown="0">${maskNi(ni)}</span><button class="rc-copy rc-text" id="nibtn-${a.ref}" onclick="revealNi('${a.ref}')">Show</button>`
+    :`<span class="rc-gap">Not supplied yet</span>`;
+
+  const ready=lic&&code;
+  const openBtn=`<a class="btn btn-review" href="${DVLA_URL}" target="_blank" rel="noopener" title="${ready?'Open GOV.UK and enter the licence number and check code above':'Nothing to look up yet — the licence number and code are still outstanding'}"><svg viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>Check on GOV.UK</a>`;
+
+  const tick=`<div class="rc-confirm${on?' on':''}" onclick="tickDvla('${a.ref}')" title="${on?'Confirmed by '+(a.dvla_checked_by||'the team')+' · '+fmtDate(a.dvla_checked_at):(ready?'Tick once you have run the check on GOV.UK':'Nothing to confirm until the licence number and code are in')}">
+      <div class="dc-chk${on?' on':''}"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></div>
+      <span>${on?'Record checked by '+(a.dvla_checked_by||'the team')+' · '+fmtDate(a.dvla_checked_at):'Confirm you have checked this record'}</span>
+    </div>`;
+
+  return`<div class="detail-sec">Driving record check</div>
+    <div class="rc-panel${on?' on':''}">
+      <div class="rc-line"><div class="dl">Licence number</div><div class="rc-v">${val(lic,'licence number')}</div></div>
+      <div class="rc-line"><div class="dl">DVLA check code</div><div class="rc-v">${codeLine}</div></div>
+      <div class="rc-line"><div class="dl">National Insurance</div><div class="rc-v">${niLine}</div></div>
+      <div class="rc-actions">${openBtn}${tick}</div>
+    </div>`;
+}
+
+/* Ticked only after somebody has genuinely looked — the name and time go on the record. */
+async function tickDvla(ref){
+  const a=QUEUE.find(x=>x.ref===ref);
+  if(!a)return;
+  if(!a.dvla_check_code&&!a.dvla_checked_at)return showToast('There is no check code on this application yet',true);
+  const next=!a.dvla_checked_at;
+  const r=await cpApi('/team/dvla-check',{method:'POST',token:TEAM.token,body:{ref:ref,checked:next}});
+  if(!r.ok)return showToast((r.body&&r.body.error)||'Could not save that check',true);
+  Object.assign(a,r.body.app||{});
+  renderView();
+  const c=document.getElementById('card-'+ref);
+  if(c)c.classList.add('expanded');
+  showToast(next?'Driving record marked as checked':'Check removed');
 }
 
 function appDetailHtml(a){
-  const{isF,isB,allDocRows,missingReq}=appCompliance(a);
+  const{isF,isB,allDocRows,missingAll}=appCompliance(a);
 
   const driverRows=`
     <div class="dg"><div class="dl">Name</div><div class="dv">${a.fname||''} ${a.lname||''}</div></div>
@@ -520,12 +629,12 @@ function appDetailHtml(a){
     /* Nothing can be processed until the paperwork is in, so the queue chases it from
        here instead of someone remembering to write the email by hand. */
     const remindBtn=(()=>{
-      if(isB||!missingReq.length||!a.email)return'';
-      const n=missingReq.length;
+      if(isB||!missingAll.length||!a.email)return'';
+      const n=missingAll.length;
       const last=a.reminder_requested_at||a.reminder_sent_at;
       if(last&&(Date.now()-Date.parse(last))<20*3600e3)
         return`<button class="btn btn-gh" disabled title="Reminded ${fmtDate(last)}${a.reminder_by?' by '+a.reminder_by:''} — the next one can go tomorrow"><svg viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>Reminded today</button>`;
-      return`<button class="btn btn-remind" onclick="openRemind('${a.ref}')" title="Email them a link to upload the ${n} document${n!==1?'s':''} we are still waiting on"><svg viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>Send document reminder</button>`;
+      return`<button class="btn btn-remind" onclick="openRemind('${a.ref}')" title="Email them about the ${n} thing${n!==1?'s':''} we are still waiting on"><svg viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>Send document reminder</button>`;
     })();
     const rev=(a.status==='pending'||a.status==='enquiry')?`<button class="btn btn-review" onclick="markReviewing('${a.ref}')"><svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>Mark in review</button>`:'';
     return`${rev}${remindBtn}${emailBtn}<button class="btn btn-approve" onclick="approve('${a.ref}')"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>Approve</button><button class="btn btn-reject" onclick="openReject('${a.ref}')"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>Reject</button>${blockBtn}`;
@@ -536,12 +645,13 @@ function appDetailHtml(a){
     ${freightExtras}
     ${isB?'':`<div class="detail-sec">Compliance documents</div>
     <div class="doc-rows">${allDocRows.join('')||'<div style="font-size:.74rem;color:var(--mu);padding:.2rem 0">No documents submitted yet.</div>'}</div>`}
+    ${recordCheckHtml(a)}
     <div class="detail-sec">Actions</div>
     <div class="action-bar">${actions}</div>`;
 }
 
 function appCardHtml(a){
-  const{isF,isB,missingReq}=appCompliance(a);
+  const{isF,isB,missingAll}=appCompliance(a);
   return`<div class="app-card" id="card-${a.ref}">
     <div class="app-head" id="head-${a.ref}">
       <div class="app-avatar">${ini(a)}</div>
@@ -556,7 +666,8 @@ function appCardHtml(a){
         ${(()=>{const n=netState(a);return n.t==='—'?'':`<span class="npill ${n.c}" title="${n.ti}">${n.t}</span>`})()}
         ${a.added_by?`<span class="chip chip-reviewing" title="Added manually by the HAF team">Added by ${a.added_by}</span>`:''}
         ${a.viewed_at?`<span class="chip chip-seen" title="First opened ${fmtDate(a.viewed_at)}">Opened by ${a.viewed_by||'the team'}</span>`:''}
-        ${missingReq.length?`<span class="chip" style="background:rgba(208,64,64,.1);color:var(--rd);border:1px solid rgba(208,64,64,.2)">${missingReq.length} doc${missingReq.length!==1?'s':''} missing</span>`:''}
+        ${missingAll.length?`<span class="chip" title="Still waiting on: ${missingAll.map(d=>d.name).join(', ')}" style="background:rgba(208,64,64,.1);color:var(--rd);border:1px solid rgba(208,64,64,.2)">${missingAll.length} outstanding</span>`:''}
+        ${(a.type==='driver'&&a.dvla_checked_at)?`<span class="chip chip-approved" title="Driving record checked on GOV.UK by ${a.dvla_checked_by||'the team'} · ${fmtDate(a.dvla_checked_at)}">Record ✓</span>`:''}
         ${a.reminder_requested_at?`<span class="chip chip-seen" title="Document reminder sent ${fmtDate(a.reminder_requested_at)}${a.reminder_by?' by '+a.reminder_by:''}${a.reminder_count>1?' · '+a.reminder_count+' in total':''}">Reminded ${fmtDate(a.reminder_requested_at)}</span>`:''}
       </div>
       <div class="chevron"><svg viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg></div>
@@ -749,11 +860,11 @@ async function update(ref,patch,okMsg){
 let remindTarget=null;
 function openRemind(ref){
   const a=QUEUE.find(x=>x.ref===ref);if(!a)return;
-  const{missingReq}=appCompliance(a);
+  const{missingAll}=appCompliance(a);
   remindTarget=ref;
   document.getElementById('rm-who').textContent=displayName(a);
   document.getElementById('rm-email').textContent=a.email||'no email on file';
-  document.getElementById('rm-list').innerHTML=missingReq.map(d=>`<li>${d.name}</li>`).join('');
+  document.getElementById('rm-list').innerHTML=missingAll.map(d=>`<li>${d.name}</li>`).join('');
   document.getElementById('rm-go').disabled=false;
   document.getElementById('rm-ov').classList.add('open');
 }

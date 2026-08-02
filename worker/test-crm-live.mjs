@@ -1,11 +1,17 @@
 /* Live check on the crm-list preview against the real API.
    Structure only — no screenshots and nothing about a real applicant is printed. */
 import { chromium } from 'playwright-core';
+
+/* the box has changed chromium build more than once — take whichever is installed */
+const CHROME = [
+  process.env.HOME + '/.cache/ms-playwright/chromium-1228/chrome-linux64/chrome',
+  process.env.HOME + '/.cache/ms-playwright/chromium-1140/chrome-linux/chrome',
+].find(p => { try { return statSync(p).isFile(); } catch { return false; } });
 const SITE = 'https://crm-list.clever-preview.pages.dev/team.html';
 const S = { token: 'OTISVERIFY-CRM-31JUL-B', username: 'bf638793', name: 'Brent Ford', role: 'admin' };
 let pass = 0, fail = 0;
 const ok = (n, c, d) => { c ? (pass++, console.log('  PASS  ' + n)) : (fail++, console.log('  FAIL  ' + n + (d !== undefined ? '  → ' + JSON.stringify(d) : ''))); };
-const browser = await chromium.launch({ executablePath: process.env.HOME + '/.cache/ms-playwright/chromium-1228/chrome-linux64/chrome', args: ['--no-sandbox'] });
+const browser = await chromium.launch({ executablePath: CHROME, args: ['--no-sandbox'] });
 const ctx = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
 const page = await ctx.newPage();
 const errs = [];
