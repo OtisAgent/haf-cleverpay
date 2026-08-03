@@ -3,6 +3,7 @@
    anyone's PIN, and only ever opens the Integration tab — never screenshots the
    applicant queue, which holds real people's details. */
 import { chromium } from 'playwright-core';
+import { statSync } from 'node:fs';
 
 /* the box has changed chromium build more than once — take whichever is installed */
 const CHROME = [
