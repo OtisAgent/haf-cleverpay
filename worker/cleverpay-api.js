@@ -281,38 +281,41 @@ function noteKeyUse(env, ctx, row, path) {
 export default {
   async fetch(req, env, ctx) {
     const cors = corsHeaders(req);
+    const bad = (error, status) => J({ error }, status, cors);
     const M = req.method;                 /* read once — it is tested on every route */
     if (M === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
     const url = new URL(req.url);
     const p = url.pathname.replace(/\/+$/, '') || '/';
+    /* every route below is a path+method pair — read once, tested cheaply */
+    const R = (path, method) => p === path && M === method;
     let b = {};
     /* /docs/file carries raw file bytes, so it must not be read as JSON */
     if (M !== 'GET' && p !== '/docs/file') { try { b = await req.json(); } catch {} }
 
     try {
       /* ── public: config (doc requirements + rebates) ── */
-      if (p === '/config' && req.method === 'GET') {
+      if (R('/config', 'GET')) {
         const r = await sb(env, '/cleverpay_portal_config?id=eq.1&limit=1');
         return J(r.body && r.body[0] ? r.body[0].config : null, 200, cors);
       }
 
       /* ── applicant: sign up ── */
-      if (p === '/apply' && req.method === 'POST') {
-        if (!b.type || !b.username || !b.pinHash) return J({ error: 'Missing required fields.' }, 400, cors);
+      if (R('/apply', 'POST')) {
+        if (!b.type || !b.username || !b.pinHash) return bad('Missing required fields.', 400);
         const dupe = await findApp(env, b.username);
-        if (dupe) return J({ error: 'An application already exists for this username. Log in instead, or contact the HAF team.' }, 409, cors);
+        if (dupe) return bad('An application already exists for this username. Log in instead, or contact the HAF team.', 409);
         const row = pickFields(b);
         row.ref = newRef(); row.status = 'pending'; row.docs = b.docs || [];
         const r = await sb(env, `/${APPS}`, { method: 'POST', body: S(row) });
-        if (!r.ok) return J({ error: 'Could not save your application. Please try again.' }, 500, cors);
+        if (!r.ok) return bad('Could not save your application. Please try again.', 500);
         alertNewEnquiry(env, ctx, r.body[0]);
         return J(strip(r.body[0]), 200, cors);
       }
 
       /* ── public: business account enquiry (no login created — HAF team follows up) ── */
-      if (p === '/enquiry' && req.method === 'POST') {
-        if (!b.company || !b.name || !b.email || !b.phone) return J({ error: 'Please fill in company, contact name, email and mobile.' }, 400, cors);
-        if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(b.email)) return J({ error: 'That email address doesn’t look right.' }, 400, cors);
+      if (R('/enquiry', 'POST')) {
+        if (!b.company || !b.name || !b.email || !b.phone) return bad('Please fill in company, contact name, email and mobile.', 400);
+        if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(b.email)) return bad('That email address doesn’t look right.', 400);
         const row = {
           type: 'business', status: 'enquiry', ref: newRef(), docs: [],
           company: St(b.company).slice(0, 120), name: St(b.name).slice(0, 120),
@@ -320,89 +323,89 @@ export default {
           notes: St(b.notes || '').slice(0, 1500),
         };
         const r = await sb(env, `/${APPS}`, { method: 'POST', body: S(row) });
-        if (!r.ok) return J({ error: 'Could not send your enquiry. Please try again.' }, 500, cors);
+        if (!r.ok) return bad('Could not send your enquiry. Please try again.', 500);
         alertNewEnquiry(env, ctx, row);
         return J({ ok: true, ref: row.ref }, 200, cors);
       }
 
       /* ── applicant: log in ── */
-      if (p === '/login' && req.method === 'POST') {
+      if (R('/login', 'POST')) {
         const app = await findApp(env, b.id || '');
-        if (!app) return J({ error: 'No application found with that username or reference.' }, 404, cors);
+        if (!app) return bad('No application found with that username or reference.', 404);
         if (app.pin_hash) {
           const attempt = b.pinHash || await sha256('HAF-CP|' + app.username + '|' + (b.pin || ''));
-          if (attempt !== app.pin_hash) return J({ error: 'Incorrect PIN.' }, 401, cors);
+          if (attempt !== app.pin_hash) return bad('Incorrect PIN.', 401);
         }
         return J(strip(app), 200, cors);
       }
 
       /* ── applicant: save docs / poll status (needs ref + matching pin) ── */
-      if (p === '/docs' && req.method === 'POST') {
+      if (R('/docs', 'POST')) {
         const app = await findApp(env, b.ref || '');
-        if (!app || (app.pin_hash && app.pin_hash !== b.pinHash)) return J({ error: NOAUTH }, 401, cors);
+        if (!app || (app.pin_hash && app.pin_hash !== b.pinHash)) return bad(NOAUTH, 401);
         const patch = { docs: b.docs || [], updated_at: nowIso() };
         if (b.dvla) {
           const v = readDvla(b.dvla, app);
-          if (v.error) return J({ error: v.error }, 400, cors);
+          if (v.error) return bad(v.error, 400);
           Object.assign(patch, v.patch);
         }
         const r = await patchApp(env, app.ref, patch);
-        return r.ok ? J(strip(r.body[0]), 200, cors) : J({ error: 'Could not save documents.' }, 500, cors);
+        return r.ok ? J(strip(r.body[0]), 200, cors) : bad('Could not save documents.', 500);
       }
       /* ── applicant: upload one real file (raw bytes; ref/doc id/pin in the query) ── */
-      if (p === '/docs/file' && req.method === 'POST') {
+      if (R('/docs/file', 'POST')) {
         const q = url.searchParams;
         const app = await findApp(env, q.get('ref') || '');
-        if (!app || (app.pin_hash && app.pin_hash !== q.get('k'))) return J({ error: NOAUTH }, 401, cors);
+        if (!app || (app.pin_hash && app.pin_hash !== q.get('k'))) return bad(NOAUTH, 401);
         const id = (q.get('id') || '').replace(/[^a-z0-9_-]/gi, '').slice(0, 40);
-        if (!id) return J({ error: 'Missing document type.' }, 400, cors);
+        if (!id) return bad('Missing document type.', 400);
         const mime = (req.headers.get('Content-Type') || '').split(';')[0].toLowerCase();
-        if (!DOC_MIME.includes(mime)) return J({ error: 'Please upload a PDF or a photo (JPG, PNG or HEIC).' }, 415, cors);
+        if (!DOC_MIME.includes(mime)) return bad('Please upload a PDF or a photo (JPG, PNG or HEIC).', 415);
         const bytes = await req.arrayBuffer();
-        if (!bytes.byteLength) return J({ error: 'That file looks empty.' }, 400, cors);
-        if (bytes.byteLength > 15728640) return J({ error: 'That file is over 15MB — please upload a smaller copy.' }, 413, cors);
+        if (!bytes.byteLength) return bad('That file looks empty.', 400);
+        if (bytes.byteLength > 15728640) return bad('That file is over 15MB — please upload a smaller copy.', 413);
         const path = `${app.ref}/${id}`;
         const up = await store(env, path, { method: 'POST', body: bytes,
           headers: { [CT]: mime, 'x-upsert': 'true' } });
-        if (!up.ok) return J({ error: 'Could not store that file — please try again.' }, 502, cors);
+        if (!up.ok) return bad('Could not store that file — please try again.', 502);
         return J({ ok: true, path, size: bytes.byteLength, mime }, 200, cors);
       }
 
-      if (p === '/application' && req.method === 'GET') {
+      if (R('/application', 'GET')) {
         const app = await findApp(env, url.searchParams.get('ref') || '');
-        if (!app || (app.pin_hash && app.pin_hash !== url.searchParams.get('k'))) return J({ error: NOTFOUND }, 404, cors);
+        if (!app || (app.pin_hash && app.pin_hash !== url.searchParams.get('k'))) return bad(NOTFOUND, 404);
         return J(strip(app), 200, cors);
       }
 
       /* ── PLNA: redeem a Founders code for free Pro months (single-use, atomic) ── */
-      if (p === '/promo/redeem' && req.method === 'POST') {
+      if (R('/promo/redeem', 'POST')) {
         const code = St(b.code || '').toUpperCase().trim();
         const user = St(b.username || '').toUpperCase().trim();
-        if (!user) return J({ error: 'Missing username.' }, 400, cors);
-        if (!/^H[631K]PRO-[A-Z0-9]{4,10}$/.test(code)) return J({ error: 'That code doesn’t look right — check it and try again.' }, 400, cors);
+        if (!user) return bad('Missing username.', 400);
+        if (!/^H[631K]PRO-[A-Z0-9]{4,10}$/.test(code)) return bad('That code doesn’t look right — check it and try again.', 400);
         const MONTHS = { H6: 6, H3: 3, H1: 1 };
         const months = MONTHS[code.slice(0, 2)];
-        if (!months) return J({ error: 'This code doesn’t include free PLNA Pro time.' }, 400, cors);
+        if (!months) return bad('This code doesn’t include free PLNA Pro time.', 400);
         const r = await sb(env, `/${APPS}?promo_code=eq.${E(code)}&limit=1`);
         const app = r.ok && r.body && r.body[0];
-        if (!app) return J({ error: 'Code not recognised — check it matches the code from your sign-up.' }, 404, cors);
-        if (app.username && app.username.toUpperCase() !== user) return J({ error: 'This code belongs to a different account.' }, 403, cors);
+        if (!app) return bad('Code not recognised — check it matches the code from your sign-up.', 404);
+        if (app.username && app.username.toUpperCase() !== user) return bad('This code belongs to a different account.', 403);
         if (app.promo_redeemed_at) {
           if ((app.promo_redeemed_by || '').toUpperCase() === user)
             return J({ ok: true, months, redeemed_at: app.promo_redeemed_at, already: true }, 200, cors);
-          return J({ error: 'This code has already been used.' }, 409, cors);
+          return bad('This code has already been used.', 409);
         }
         const now = nowIso();
         const u2 = await sb(env, `/${APPS}?promo_code=eq.${E(code)}&promo_redeemed_at=is.null`, {
           method: 'PATCH', body: S({ promo_redeemed_at: now, promo_redeemed_by: user }) });
-        if (!u2.ok || !u2.body || !u2.body[0]) return J({ error: 'Could not redeem just now — please try again.' }, 500, cors);
+        if (!u2.ok || !u2.body || !u2.body[0]) return bad('Could not redeem just now — please try again.', 500);
         return J({ ok: true, months, redeemed_at: now }, 200, cors);
       }
 
       /* ── back office: read compliance status with an API key ──
          Deliberately NOT given CORS headers — this is server-to-server only, so no
          web page in any browser can read it even if somebody pasted a key into one. */
-      if (p === '/partner/compliance' && req.method === 'GET') {
+      if (R('/partner/compliance', 'GET')) {
         const bare = { [CT]: AJ, 'Cache-Control': 'no-store' };
         const key = await apiKeyRow(env, req);
         if (!key) return new Response(S({ error: NOAUTH }), { status: 401, headers: bare });
@@ -423,17 +426,17 @@ export default {
       /* ── team: log in ──
          First-time members have must_set_pin set: they sign in once with the one-time
          setup code they were given, then choose their own PIN (see /team/set-pin). */
-      if (p === '/team/login' && req.method === 'POST') {
+      if (R('/team/login', 'POST')) {
         const u = (b.username || '').toLowerCase().trim();
         const hash = await sha256('HAF-CP-TEAM|' + u + '|' + (b.password || ''));
         const r = await sb(env, `/cleverpay_team_users?username=eq.${E(u)}&limit=1`);
         const user = r.ok && r.body && r.body[0];
-        if (!user) return J({ error: 'Wrong username or password.' }, 401, cors);
+        if (!user) return bad('Wrong username or password.', 401);
         const first = !!user.must_set_pin;
         const ok = first
           ? !!user.setup_code && (b.password || '').trim().toUpperCase() === user.setup_code.toUpperCase()
           : user.pw_hash === hash;
-        if (!ok) return J({ error: first ? 'That setup code is not right.' : 'Wrong username or password.' }, 401, cors);
+        if (!ok) return bad(first ? 'That setup code is not right.' : 'Wrong username or password.', 401);
         const token = crypto.randomUUID() + crypto.randomUUID().replace(/-/g, '');
         const expires = new Date(Date.now() + (first ? 36e5 : 7 * 864e5)).toISOString();
         await sb(env, '/cleverpay_team_sessions', { method: 'POST', body: S({ token, username: u, expires_at: expires }) });
@@ -443,23 +446,23 @@ export default {
       /* ── team: everything below needs a session ── */
       if (p.startsWith('/team/')) {
         const who = await teamUser(env, req);
-        if (!who) return J({ error: 'Session expired — sign in again.' }, 401, cors);
+        if (!who) return bad('Session expired — sign in again.', 401);
         const ur = await sb(env, `/cleverpay_team_users?username=eq.${E(who)}&limit=1`);
         const me = ur.ok && ur.body && ur.body[0];
-        if (!me) return J({ error: 'Session expired — sign in again.' }, 401, cors);
+        if (!me) return bad('Session expired — sign in again.', 401);
 
         /* choose / change your own PIN — nobody else ever sets it for you */
-        if (p === '/team/set-pin' && req.method === 'POST') {
+        if (R('/team/set-pin', 'POST')) {
           const pin = (b.pin || '').trim();
-          if (!/^\d{4,6}$/.test(pin)) return J({ error: 'Your PIN must be 4 to 6 numbers.' }, 400, cors);
+          if (!/^\d{4,6}$/.test(pin)) return bad('Your PIN must be 4 to 6 numbers.', 400);
           if (!me.must_set_pin) {
             const current = await sha256('HAF-CP-TEAM|' + who + '|' + (b.currentPin || ''));
-            if (current !== me.pw_hash) return J({ error: 'Your current PIN is not right.' }, 401, cors);
+            if (current !== me.pw_hash) return bad('Your current PIN is not right.', 401);
           }
           const pw = await sha256('HAF-CP-TEAM|' + who + '|' + pin);
           const r = await sb(env, `/cleverpay_team_users?username=eq.${E(who)}`,
             { method: 'PATCH', body: S({ pw_hash: pw, must_set_pin: false, setup_code: null }) });
-          if (!r.ok) return J({ error: 'Could not save your PIN — please try again.' }, 500, cors);
+          if (!r.ok) return bad('Could not save your PIN — please try again.', 500);
           const tk = (req.headers.get('Authorization') || '').replace(/^Bearer /, '');
           await sb(env, `/cleverpay_team_sessions?token=eq.${E(tk)}`,
             { method: 'PATCH', body: S({ expires_at: new Date(Date.now() + 7 * 864e5).toISOString() }) });
@@ -467,29 +470,29 @@ export default {
         }
 
         /* a first-time member sees nothing else until their PIN is set */
-        if (me.must_set_pin) return J({ error: 'Choose your PIN first.' }, 403, cors);
+        if (me.must_set_pin) return bad('Choose your PIN first.', 403);
 
-        if (p === '/team/applications' && req.method === 'GET') {
+        if (R('/team/applications', 'GET')) {
           const r = await sb(env, `/${APPS}?order=submitted.desc&limit=500`);
           return J((r.body || []).map(strip), 200, cors);
         }
 
         /* manual add by team (drivers or freight) */
-        if (p === '/team/applications' && req.method === 'POST') {
-          if (!b.type || !b.username) return J({ error: 'Missing required fields.' }, 400, cors);
+        if (R('/team/applications', 'POST')) {
+          if (!b.type || !b.username) return bad('Missing required fields.', 400);
           const dupe = await findApp(env, b.username);
-          if (dupe) return J({ error: `${b.username} already exists (ref ${dupe.ref}, status ${dupe.status}).` }, 409, cors);
+          if (dupe) return bad(`${b.username} already exists (ref ${dupe.ref}, status ${dupe.status}).`, 409);
           const row = pickFields(b);
           row.ref = newRef(); row.added_by = who; row.docs = b.docs || [];
           row.status = b.status === 'approved' ? 'approved' : 'pending';
           if (row.status === 'approved') row.approved_at = nowIso();
           const r = await sb(env, `/${APPS}`, { method: 'POST', body: S(row) });
-          return r.ok ? J(strip(r.body[0]), 200, cors) : J({ error: 'Could not add — please try again.' }, 500, cors);
+          return r.ok ? J(strip(r.body[0]), 200, cors) : bad('Could not add — please try again.', 500);
         }
 
         /* status / docs updates from the queue */
         const m = p.match(/^\/team\/applications\/([A-Za-z0-9-]+)$/);
-        if (m && req.method === 'PATCH') {
+        if (m && M === 'PATCH') {
           const patch = { updated_at: nowIso() };
           if (b.status) {
             patch.status = b.status;
@@ -498,58 +501,58 @@ export default {
           }
           if (b.docs !== undefined) patch.docs = b.docs;
           const r = await patchApp(env, m[1], patch);
-          return r.ok && r.body[0] ? J(strip(r.body[0]), 200, cors) : J({ error: 'Update failed.' }, 500, cors);
+          return r.ok && r.body[0] ? J(strip(r.body[0]), 200, cors) : bad('Update failed.', 500);
         }
 
         /* ── reviewer opens the actual file — bytes proxied through this session, never a public link ── */
-        if (p === '/team/doc' && req.method === 'GET') {
+        if (R('/team/doc', 'GET')) {
           const app = await findApp(env, url.searchParams.get('ref') || '');
           const id = (url.searchParams.get('id') || '').replace(/[^a-z0-9_-]/gi, '');
           const d = app && (Array.isArray(app.docs) ? app.docs : []).find(x => x.id === id);
-          if (!d) return J({ error: 'No such document on this application.' }, 404, cors);
-          if (!d.path) return J({ error: 'no_file' }, 404, cors);
+          if (!d) return bad('No such document on this application.', 404);
+          if (!d.path) return bad('no_file', 404);
           const f = await store(env, d.path, { method: 'GET' });
-          if (!f.ok) return J({ error: 'That file could not be opened.' }, 502, cors);
+          if (!f.ok) return bad('That file could not be opened.', 502);
           return new Response(f.body, { status: 200, headers: { ...cors,
             [CT]: d.mime || f.headers.get('Content-Type') || 'application/octet-stream',
             'Content-Disposition': `inline; filename="${St(d.filename || id).replace(/["\r\n]/g, '')}"` } });
         }
 
         /* ── reviewer ticks a document off — recorded on the application with who and when ── */
-        if (p === '/team/doc-check' && req.method === 'POST') {
+        if (R('/team/doc-check', 'POST')) {
           const app = await findApp(env, b.ref || '');
-          if (!app) return J({ error: NOTFOUND }, 404, cors);
+          if (!app) return bad(NOTFOUND, 404);
           const now = nowIso();
           const docs = (Array.isArray(app.docs) ? app.docs : []).map(d => d.id !== b.id ? d
             : { ...d, checked: !!b.checked, checked_by: b.checked ? who : null, checked_at: b.checked ? now : null });
           const r = await patchApp(env, app.ref, { docs, updated_at: now });
-          return r.ok ? J({ ok: true, docs }, 200, cors) : J({ error: 'Could not save that tick.' }, 500, cors);
+          return r.ok ? J({ ok: true, docs }, 200, cors) : bad('Could not save that tick.', 500);
         }
 
         /* ── reviewer confirms they have actually run the driving record on GOV.UK ──
            Recorded with who and when, the same as a document tick, so "checked"
            always has a name against it. Re-checking is expected: if the driver
            supplies a newer code the confirmation is cleared automatically. */
-        if (p === '/team/dvla-check' && req.method === 'POST') {
+        if (R('/team/dvla-check', 'POST')) {
           const app = await findApp(env, b.ref || '');
-          if (!app) return J({ error: NOTFOUND }, 404, cors);
-          if (!app.dvla_check_code) return J({ error: 'There is no check code on this application yet — chase it first.' }, 400, cors);
+          if (!app) return bad(NOTFOUND, 404);
+          if (!app.dvla_check_code) return bad('There is no check code on this application yet — chase it first.', 400);
           const now = nowIso();
           const patch = b.checked === false
             ? { dvla_checked_at: null, dvla_checked_by: null, updated_at: now }
             : { dvla_checked_at: now, dvla_checked_by: who, updated_at: now };
           const r = await patchApp(env, app.ref, patch);
-          return r.ok && r.body[0] ? J({ ok: true, app: strip(r.body[0]) }, 200, cors) : J({ error: 'Could not save that check.' }, 500, cors);
+          return r.ok && r.body[0] ? J({ ok: true, app: strip(r.body[0]) }, 200, cors) : bad('Could not save that check.', 500);
         }
 
         /* ── the team can correct what the driver typed (a transposed digit stops the lookup dead) ── */
-        if (p === '/team/dvla' && req.method === 'PUT') {
+        if (R('/team/dvla', 'PUT')) {
           const app = await findApp(env, b.ref || '');
-          if (!app) return J({ error: NOTFOUND }, 404, cors);
+          if (!app) return bad(NOTFOUND, 404);
           const v = readDvla(b, app);
-          if (v.error) return J({ error: v.error }, 400, cors);
+          if (v.error) return bad(v.error, 400);
           const r = await patchApp(env, app.ref, { ...v.patch, updated_at: nowIso() });
-          return r.ok && r.body[0] ? J({ ok: true, app: strip(r.body[0]) }, 200, cors) : J({ error: 'Could not save that.' }, 500, cors);
+          return r.ok && r.body[0] ? J({ ok: true, app: strip(r.body[0]) }, 200, cors) : bad('Could not save that.', 500);
         }
 
         /* ── chase the documents we are still waiting on ──
@@ -558,19 +561,19 @@ export default {
            which documents were outstanding at that moment; the email itself goes out
            from the HAF mailbox on the next reminder run. One per applicant per day —
            a chase that lands twice in an afternoon reads as harassment. */
-        if (p === '/team/remind' && req.method === 'POST') {
+        if (R('/team/remind', 'POST')) {
           const app = await findApp(env, b.ref || '');
-          if (!app) return J({ error: NOTFOUND }, 404, cors);
-          if (app.type === 'business') return J({ error: 'Business enquiries do not have compliance documents.' }, 400, cors);
-          if (!app.email) return J({ error: 'There is no email address on this application.' }, 400, cors);
+          if (!app) return bad(NOTFOUND, 404);
+          if (app.type === 'business') return bad('Business enquiries do not have compliance documents.', 400);
+          if (!app.email) return bad('There is no email address on this application.', 400);
           const cr = await sb(env, '/cleverpay_portal_config?id=eq.1&limit=1');
           const cfg = cr.ok && cr.body && cr.body[0] ? cr.body[0].config : null;
-          if (!cfg) return J({ error: 'Could not read the document settings — try again in a moment.' }, 503, cors);
+          if (!cfg) return bad('Could not read the document settings — try again in a moment.', 503);
           const missing = missingRequired(cfg, app);
-          if (!missing.length) return J({ error: 'Every required document is already in — there is nothing to chase.' }, 400, cors);
+          if (!missing.length) return bad('Every required document is already in — there is nothing to chase.', 400);
           const last = app.reminder_requested_at || app.reminder_sent_at;
           if (last && Date.now() - Date.parse(last) < 20 * 3600e3)
-            return J({ error: 'This applicant has already been reminded today — you can send another tomorrow.' }, 429, cors);
+            return bad('This applicant has already been reminded today — you can send another tomorrow.', 429);
           const now = nowIso();
           const r = await sb(env, `/${APPS}?ref=eq.${E(app.ref)}`, {
             method: 'PATCH',
@@ -579,14 +582,14 @@ export default {
               reminder_count: (app.reminder_count || 0) + 1, updated_at: now,
             }),
           });
-          if (!r.ok || !r.body || !r.body[0]) return J({ error: 'Could not queue that reminder — please try again.' }, 500, cors);
+          if (!r.ok || !r.body || !r.body[0]) return bad('Could not queue that reminder — please try again.', 500);
           return J({ ok: true, email: app.email, missing: missing.map(m => m.name), app: strip(r.body[0]) }, 200, cors);
         }
 
         /* ── the integration panel — Brent and Gemma only ──
            Anyone else gets exactly the same 404 as a route that does not exist. */
         if (p.startsWith('/team/integration')) {
-          if (!canIntegrate(who)) return J({ error: NOTFOUND }, 404, cors);
+          if (!canIntegrate(who)) return bad(NOTFOUND, 404);
           const kr = await sb(env, '/cleverpay_api_keys?revoked_at=is.null&order=created_at.desc&limit=1');
           const active = kr.ok && kr.body && kr.body[0] ? kr.body[0] : null;
           const summary = (k) => k && {
@@ -594,7 +597,7 @@ export default {
             last_used_at: k.last_used_at, use_count: k.use_count || 0,
           };
 
-          if (p === '/team/integration' && req.method === 'GET') {
+          if (R('/team/integration', 'GET')) {
             /* a real check, not a guess: if we cannot read the table the back office
                reads, the panel must say so rather than show a comforting green line */
             const probe = await sb(env, `/${APPS}?select=ref&limit=1`);
@@ -608,39 +611,39 @@ export default {
           }
 
           /* generate or rotate — the plaintext key is returned this once and never again */
-          if (p === '/team/integration/key' && req.method === 'POST') {
+          if (R('/team/integration/key', 'POST')) {
             const key = newApiKey();
             const row = {
               label: St(b.label || 'Back office').slice(0, 60),
               key_hash: await keyHash(key), key_prefix: key.slice(0, 12), created_by: who,
             };
             const ins = await sb(env, '/cleverpay_api_keys', { method: 'POST', body: S(row) });
-            if (!ins.ok) return J({ error: 'Could not create the key — please try again.' }, 500, cors);
+            if (!ins.ok) return bad('Could not create the key — please try again.', 500);
             /* rotate: the old key stops working the moment the new one exists */
             if (active) await sb(env, `/cleverpay_api_keys?id=eq.${active.id}`, {
               method: 'PATCH', body: S({ revoked_at: nowIso(), revoked_by: who }) });
             return J({ key, rotated: !!active, summary: summary(ins.body[0]) }, 200, cors);
           }
 
-          if (p === '/team/integration/revoke' && req.method === 'POST') {
-            if (!active) return J({ error: 'There is no active key to switch off.' }, 400, cors);
+          if (R('/team/integration/revoke', 'POST')) {
+            if (!active) return bad('There is no active key to switch off.', 400);
             const r = await sb(env, `/cleverpay_api_keys?id=eq.${active.id}`, {
               method: 'PATCH', body: S({ revoked_at: nowIso(), revoked_by: who }) });
-            return r.ok ? J({ ok: true }, 200, cors) : J({ error: 'Could not switch the key off.' }, 500, cors);
+            return r.ok ? J({ ok: true }, 200, cors) : bad('Could not switch the key off.', 500);
           }
 
-          return J({ error: NOTFOUND }, 404, cors);
+          return bad(NOTFOUND, 404);
         }
 
-        if (p === '/team/config' && req.method === 'PUT') {
+        if (R('/team/config', 'PUT')) {
           const r = await sb(env, '/cleverpay_portal_config?id=eq.1', { method: 'PATCH', body: S({ config: b }) });
-          return r.ok ? J({ ok: true }, 200, cors) : J({ error: 'Could not save settings.' }, 500, cors);
+          return r.ok ? J({ ok: true }, 200, cors) : bad('Could not save settings.', 500);
         }
       }
 
-      return J({ error: NOTFOUND }, 404, cors);
+      return bad(NOTFOUND, 404);
     } catch (e) {
-      return J({ error: 'Server error.' }, 500, cors);
+      return bad('Server error.', 500);
     }
   }
 };
