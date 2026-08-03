@@ -26,7 +26,9 @@ const srv = createServer((req, res) => {
   } catch { res.writeHead(404).end('no'); }
 });
 await new Promise(r => srv.listen(8798, r));
-const SITE = 'http://127.0.0.1:8798';
+/* SITE=https://clever.usehaf.co.uk runs the identical measurements against the real
+   portal after a deploy — the form is only opened, never submitted */
+const SITE = process.env.SITE || 'http://127.0.0.1:8798';
 
 let pass = 0, fail = 0;
 const ok = (n, c, d) => { if (c) { pass++; console.log('  PASS  ' + n); } else { fail++; console.log('  FAIL  ' + n + (d !== undefined ? '  → ' + JSON.stringify(d) : '')); } };

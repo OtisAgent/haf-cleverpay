@@ -61,6 +61,20 @@ const style = await page.evaluate(() => {
   const modal = document.querySelector('#add-ov .modal');
   return {
     divider: px(sec.borderTopWidth), sectionTop: px(sec.paddingTop), sectionBottom: px(sec.marginBottom),
+    /* the gaps a person actually sees, not the section's own padding vs margin —
+       those are different kinds of space and comparing them proves nothing.
+       Above the line the space comes from the last input's own bottom margin. */
+    ...(() => {
+      const box = document.querySelector('.add-docs').getBoundingClientRect();
+      const shown = document.querySelector('#add-driver-fields').offsetParent !== null
+        ? '#add-driver-fields' : '#add-freight-fields';
+      const inputs = [...document.querySelectorAll(shown + ' .fi')];
+      const meta = document.querySelector('.add-meta-row').getBoundingClientRect();
+      return {
+        gapAboveLine: box.top - inputs[inputs.length - 1].getBoundingClientRect().bottom,
+        gapBelowSection: meta.top - box.bottom,
+      };
+    })(),
     rowBorder: rs ? px(rs.borderTopWidth) : 0, rowPadY: rs ? px(rs.paddingTop) : 0,
     rowRadius: rs ? px(rs.borderTopLeftRadius) : 0,
     gap: px(ws.rowGap), listMax: px(ws.maxHeight), listScrolls: wrap.scrollHeight > wrap.clientHeight + 1,
@@ -78,8 +92,10 @@ ok('each document sits in its own outlined card', style.rowBorder > 0 && style.r
 ok('the Attach buttons look like buttons', style.btnBorder > 0 && style.btnRadius > 0, style);
 ok('the open/close control looks like a button', style.togBorder > 0, style.togBorder);
 ok('the cards are evenly spaced', style.gap > 0, style.gap);
-ok('the space above and below the section is balanced',
-  Math.abs(style.sectionTop - style.sectionBottom) < 6, style);
+ok('the divider sits centred between the fields and the heading',
+  Math.abs(style.gapAboveLine - style.sectionTop) <= 1.5, style);
+ok('the section leaves the same gap below it that the rest of the form uses',
+  Math.abs(style.gapBelowSection - 17.5) <= 1, style);
 ok('a long list scrolls inside the form instead of stretching it', style.listScrolls, style);
 ok('the whole form still fits the screen', style.modalFits, style);
 ok('Add account stays in view', style.submitVisible, style);
