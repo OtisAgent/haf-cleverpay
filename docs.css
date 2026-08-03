@@ -104,6 +104,30 @@ input,button{font:inherit;color:inherit;border:none;outline:none;background:none
 .info-box{background:var(--p);border:1px solid var(--ln);border-radius:var(--rx);padding:.75rem .9rem;margin-bottom:1.1rem;font-size:.76rem;color:var(--mu);line-height:1.6;display:flex;gap:.6rem;align-items:flex-start}
 .info-box svg{flex-shrink:0;color:var(--mu);width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;margin-top:.1rem}
 
+/* ── DRIVING RECORD CHECK ──
+   Not an upload: three things the driver types in. Styled as one block so it
+   reads as a single job ("get your check code"), not three loose boxes. */
+.rc-block{background:var(--p);border:1.5px solid var(--lns);border-radius:var(--rs);padding:1rem;margin-bottom:1.4rem}
+.rc-block.rc-done{border-color:var(--gn);background:var(--gn-d)}
+.rc-lead{font-size:.76rem;color:var(--mu);line-height:1.6;margin-bottom:.85rem}
+.rc-how{background:var(--p2);border:1px solid var(--ln);border-radius:var(--rx);padding:.75rem .9rem;margin-bottom:.9rem}
+.rc-how-t{font-size:.72rem;font-weight:800;color:var(--tx);margin-bottom:.4rem}
+.rc-how ol{margin:0;padding-left:1.05rem;font-size:.73rem;color:var(--mu);line-height:1.7}
+.rc-govlink{display:inline-flex;align-items:center;gap:.4rem;margin-top:.6rem;font-size:.74rem;font-weight:800;color:var(--or);text-decoration:none;border:1.5px solid var(--or-g);border-radius:var(--pill);padding:.42rem .85rem;transition:all .15s}
+.rc-govlink:hover{background:var(--or-d);border-color:var(--or)}
+.rc-govlink svg{width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+.rc-field{margin-bottom:.75rem}
+.rc-field:last-child{margin-bottom:0}
+.rc-label{font-size:.74rem;font-weight:700;color:var(--tx);display:block;margin-bottom:.25rem}
+.rc-sub{font-size:.68rem;color:var(--mu);display:block;margin-bottom:.35rem;line-height:1.5}
+.rc-input{width:100%;background:var(--p2);border:1.5px solid var(--lns);border-radius:var(--rx);padding:.62rem .8rem;font-size:.85rem;font-weight:600;letter-spacing:.06em;color:var(--tx);cursor:text;transition:border-color .15s}
+.rc-input::placeholder{color:var(--su);font-weight:500;letter-spacing:.04em}
+.rc-input:focus{border-color:var(--or)}
+.rc-input.ok{border-color:var(--gn)}
+.rc-input.bad{border-color:var(--rd)}
+.rc-err{font-size:.68rem;color:var(--rd);margin-top:.25rem;line-height:1.5;display:none}
+.rc-err.show{display:block}
+
 /* upload in flight / upload refused — the applicant must never be left guessing */
 .doc-card.uploading{border-color:var(--or);background:var(--or-d)}
 .doc-card.uploading .doc-status{background:var(--or-d);border-color:var(--or);color:var(--or)}

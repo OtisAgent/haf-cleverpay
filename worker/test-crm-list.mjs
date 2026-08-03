@@ -3,9 +3,15 @@
    database seeded with 24 accounts — the scale the card view stops coping with.
    Screenshots go to worker/_shots/.  Run: node worker/test-crm-list.mjs */
 import { createServer } from 'node:http';
-import { readFileSync, writeFileSync, unlinkSync, mkdirSync, existsSync } from 'node:fs';
+import { readFileSync, writeFileSync, unlinkSync, mkdirSync, existsSync, statSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { chromium } from 'playwright-core';
+
+/* the box has changed chromium build more than once — take whichever is installed */
+const CHROME = [
+  process.env.HOME + '/.cache/ms-playwright/chromium-1228/chrome-linux64/chrome',
+  process.env.HOME + '/.cache/ms-playwright/chromium-1140/chrome-linux/chrome',
+].find(p => { try { return statSync(p).isFile(); } catch { return false; } });
 
 const ROOT = new URL('../', import.meta.url);
 const SHOTS = new URL('./_shots/', import.meta.url);
@@ -185,7 +191,7 @@ let pass = 0, fail = 0;
 const ok = (n, c, d) => { if (c) { pass++; console.log('  PASS  ' + n); } else { fail++; console.log('  FAIL  ' + n + (d !== undefined ? '  → ' + JSON.stringify(d) : '')); } };
 
 const browser = await chromium.launch({
-  executablePath: process.env.HOME + '/.cache/ms-playwright/chromium-1228/chrome-linux64/chrome',
+  executablePath: CHROME,
   args: ['--no-sandbox'],
 });
 
@@ -216,8 +222,8 @@ ok('the first column after the number is the username',
   /^username/i.test((await page.locator('.crm thead th').nth(1).innerText()).trim()));
 ok('the reference sits next to it',
   /^reference/i.test((await page.locator('.crm thead th').nth(2).innerText()).trim()));
-ok('the record continues to the right of them (13 columns of record)',
-  await page.locator('.crm thead th').count() === 15);
+ok('the record continues to the right of them (14 columns of record, including the driving record check)',
+  await page.locator('.crm thead th').count() === 16);
 ok('the compliance verdict has its own column', await page.locator('.crm th.th-checked').count() === 1);
 ok('so does where they stand in the network', await page.locator('.crm th.th-network').count() === 1);
 ok('and the vehicle', await page.locator('.crm th.th-vehicle').count() === 1);
@@ -254,7 +260,7 @@ console.log('\n── choosing columns ──');
 await page.click('.col-pick .vs-btn');
 await page.waitForTimeout(200);
 ok('the Columns menu opens', await page.locator('.col-menu').isVisible());
-ok('it lists every column there is', await page.locator('.col-opt').count() === 20);
+ok('it lists every column there is', await page.locator('.col-opt').count() === 21);
 await page.locator('.col-opt:has-text("Membership")').click();
 await page.waitForTimeout(250);
 ok('ticking Membership adds the column', await page.locator('.crm th.th-membership').count() === 1);
@@ -273,7 +279,7 @@ await page.waitForTimeout(150);
 await page.locator('.col-menu-f button').click();
 await page.waitForTimeout(250);
 ok('the reset puts the standard columns back',
-  await page.locator('.crm thead th').count() === 15 && await page.locator('.crm th.th-phone').count() === 1);
+  await page.locator('.crm thead th').count() === 16 && await page.locator('.crm th.th-phone').count() === 1);
 await page.click('.col-pick .vs-btn');
 await page.waitForTimeout(150);
 
