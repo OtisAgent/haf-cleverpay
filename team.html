@@ -206,6 +206,19 @@
       </div>
     </div>
 
+    <!-- Documents the team already holds — attached while the account is created, so
+         nobody has to come back and chase paperwork that was on the desk all along. -->
+    <div class="add-docs">
+      <div class="add-docs-head">
+        <div>
+          <div class="fl" style="margin:0">Documents <span class="add-docs-opt">optional</span></div>
+          <div class="add-docs-sub" id="add-docs-sub">Attach anything you already hold — it lands on their record exactly like their own upload.</div>
+        </div>
+        <button type="button" class="add-docs-toggle" id="add-docs-toggle" onclick="toggleAddDocs()">Attach documents</button>
+      </div>
+      <div class="add-doc-rows" id="add-doc-rows" style="display:none"></div>
+    </div>
+
     <div class="add-meta-row">
       <div class="add-uname-box">
         <div class="fl" style="margin:0 0 .15rem">HAF username</div>
@@ -256,7 +269,29 @@
 .add-uname{font-family:'SF Mono',Consolas,monospace;font-weight:700;font-size:.95rem;color:var(--or);letter-spacing:.04em}
 .mbt-or{background:var(--or);color:#0e1113}
 #add-ov .modal{max-height:88vh;overflow-y:auto}
-@media(max-width:560px){.add-grid{grid-template-columns:1fr}.add-meta-row{flex-direction:column;align-items:stretch}}
+.add-docs{margin-top:.85rem;border-top:1px solid var(--bd);padding-top:.7rem}
+.add-docs-head{display:flex;align-items:center;justify-content:space-between;gap:.7rem}
+.add-docs-opt{font-weight:600;color:var(--mu);text-transform:none;letter-spacing:0}
+.add-docs-sub{font-size:.7rem;color:var(--mu);margin-top:.12rem;max-width:34ch}
+.add-docs-toggle{flex:none;background:transparent;border:1.5px solid var(--bd);border-radius:9px;color:var(--tx);font-family:inherit;font-size:.73rem;font-weight:700;padding:.4rem .7rem;cursor:pointer}
+.add-docs-toggle:hover{border-color:var(--or);color:var(--or)}
+.add-docs-toggle.on{border-color:var(--or);color:var(--or)}
+.add-doc-rows{margin-top:.6rem;max-height:230px;overflow-y:auto;border:1px solid var(--bd);border-radius:10px}
+.adr{display:flex;align-items:center;gap:.6rem;padding:.42rem .6rem;border-bottom:1px solid var(--bd)}
+.adr:last-child{border-bottom:none}
+.adr.on{background:rgba(241,142,0,.06)}
+.adr-name{flex:1;min-width:0;font-size:.74rem;font-weight:600;display:flex;align-items:center;gap:.4rem}
+.adr-badge{flex:none;font-size:.6rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;padding:.1rem .3rem;border-radius:5px}
+.adr-req{background:rgba(241,142,0,.14);color:var(--or)}
+.adr-opt{background:rgba(255,255,255,.06);color:var(--mu)}
+.adr-file{flex:none;max-width:12rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.68rem;color:var(--mu)}
+.adr-file.err{color:#ff6b6b}
+.adr-btn{flex:none;background:transparent;border:1px solid var(--bd);border-radius:7px;color:var(--tx);font-family:inherit;font-size:.68rem;font-weight:700;padding:.24rem .55rem;cursor:pointer}
+.adr-btn:hover{border-color:var(--or);color:var(--or)}
+@media(max-width:560px){.add-grid{grid-template-columns:1fr}.add-meta-row{flex-direction:column;align-items:stretch}
+  .add-docs-head{flex-direction:column;align-items:stretch}.add-docs-sub{max-width:none}
+  .add-docs-toggle{align-self:flex-start;margin-top:.45rem}
+  .adr{flex-wrap:wrap;gap:.3rem .6rem}.adr-name{flex:1 0 100%}.adr-file{flex:1;max-width:none}}
 </style>
 
 <script src="api.js"></script>

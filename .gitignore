@@ -1,3 +1,6 @@
 worker/_shots/
 worker/_panel-worker.mjs
 worker/_test-worker.mjs
+worker/_addfiles/
+worker/_shots/
+worker/_*.mjs
