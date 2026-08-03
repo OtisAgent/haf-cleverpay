@@ -261,8 +261,9 @@
 .add-btn{display:inline-flex;align-items:center;gap:.35rem;background:var(--or);color:#0e1113;border:none;border-radius:9px;padding:.42rem .8rem;font-family:inherit;font-size:.76rem;font-weight:700;cursor:pointer;transition:filter .15s}
 .add-btn:hover{filter:brightness(1.08)}
 .add-type-row{display:flex;gap:.5rem;margin:.9rem 0 .9rem}
-.add-type{flex:1;padding:.55rem;border-radius:10px;border:1.5px solid var(--bd);background:transparent;color:var(--tx);font-family:inherit;font-size:.78rem;font-weight:600;cursor:pointer}
-.add-type.active{border-color:var(--or);color:var(--or);background:rgba(241,142,0,.07)}
+.add-type{flex:1;padding:.55rem;border-radius:var(--rx);border:1.5px solid var(--lns);background:var(--p2);color:var(--mu);font-family:inherit;font-size:.78rem;font-weight:600;cursor:pointer;transition:all .14s}
+.add-type:hover{color:var(--tx)}
+.add-type.active{border-color:var(--or-g);color:var(--or);background:var(--or-d)}
 .add-grid{display:grid;grid-template-columns:1fr 1fr;gap:.15rem .7rem}
 .add-meta-row{display:flex;gap:.7rem;align-items:flex-end;margin-top:.5rem}
 .add-uname-box{background:rgba(241,142,0,.07);border:1px solid rgba(241,142,0,.25);border-radius:10px;padding:.5rem .8rem}
@@ -271,7 +272,12 @@
 #add-ov .modal{max-height:88vh;overflow-y:auto}
 /* Same card language as the document list on an applicant's record, so the team
    reads one layout in both places. Tokens only — an undefined one loses the border. */
-.add-docs{margin:.35rem 0 .9rem;border-top:1px solid var(--ln);padding-top:.8rem}
+/* Spacing is measured, not guessed (worker/test-add-docs-spacing.mjs). No top margin:
+   the fields already end on their own .75rem, which sits the rule 12px below them
+   against 12.8px above the heading — centred. The 1.25rem tail wins the margin
+   collapse with the meta row's .5rem, so section-to-section stays the 20px the rest
+   of the form uses. */
+.add-docs{margin:0 0 1.25rem;border-top:1px solid var(--ln);padding-top:.8rem}
 .add-docs-head{display:flex;align-items:center;justify-content:space-between;gap:.75rem}
 .add-docs-opt{font-weight:600;color:var(--mu);text-transform:none;letter-spacing:0}
 .add-docs-sub{font-size:.7rem;line-height:1.45;color:var(--mu);margin-top:.15rem;max-width:46ch}
