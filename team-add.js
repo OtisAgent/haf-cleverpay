@@ -72,7 +72,7 @@ function renderAddDocs(){
       <button type="button" class="adr-btn" onclick="${f?`addDropFile('${d.id}')`:`addPickFile('${d.id}')`}">${f?'Remove':'Attach'}</button>
       <input type="file" id="adri-${d.id}" accept="${ADD_ACCEPT}" style="display:none" onchange="addFileChosen('${d.id}',this)">
     </div>`;
-  }).join('')||'<div style="font-size:.72rem;color:var(--mu);padding:.5rem .6rem">No document list is set up for this account type yet.</div>';
+  }).join('')||'<div class="adr-empty">No document list is set up for this account type yet.</div>';
   updateAddDocCount();
 }
 

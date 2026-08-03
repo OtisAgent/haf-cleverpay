@@ -265,6 +265,18 @@ ok('the HAF username still builds itself', (await page.locator('#add-uname').inn
   await page.locator('#add-uname').innerText());
 await page.screenshot({ path: SHOTS.pathname + 'add-docs-1280.png' });
 
+/* the team can flip the portal to dark, so the section has to hold there too */
+await page.evaluate(() => { document.documentElement.dataset.theme = 'dark'; });
+await page.waitForTimeout(120);
+await page.screenshot({ path: SHOTS.pathname + 'add-docs-dark-1280.png' });
+ok('the document rows keep their outline in dark mode',
+  await page.evaluate(() => {
+    const r = document.querySelector('.adr'), b = document.querySelector('.adr-btn');
+    const bw = (el) => parseFloat(getComputedStyle(el).borderTopWidth) > 0;
+    return bw(r) && bw(b) && getComputedStyle(document.querySelector('.add-docs')).borderTopWidth !== '0px';
+  }));
+await page.evaluate(() => { document.documentElement.dataset.theme = 'light'; });
+
 await page.click('#add-submit');
 await modalClosed(page, 15000);
 await page.waitForTimeout(600);
