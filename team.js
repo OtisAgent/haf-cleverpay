@@ -624,7 +624,17 @@ function appDetailHtml(a){
     if(a.status==='blocked')return`<button class="btn btn-approve" onclick="unblockAcc('${a.ref}')"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>Unblock (back to pending)</button>`;
     const blockBtn=isB?'':`<button class="btn btn-reject" onclick="blockAcc('${a.ref}')" title="Refuse this account all access — including PLNA"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>Block</button>`;
     const emailBtn=(!isB&&!a.email_verified)?`<button class="btn btn-review" onclick="confirmEmail('${a.ref}')" title="Mark this applicant's email address as confirmed"><svg viewBox="0 0 24 24"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>Confirm email</button>`:'';
-    if(a.status==='approved')return`${emailBtn}<button class="btn btn-gh btn-done">Approved ✓</button>${blockBtn}`;
+    if(a.status==='approved'){
+      /* Approving settles the compliance check. Letting the person IN is a second,
+         deliberate press by a named reviewer — Brent, 3 Aug: "only send when
+         cleverpay team - gemma confirms them / once gemma approves - allow them
+         into the network and PLNA system". Nothing emails anybody a login until
+         this button has been pressed on that record. */
+      const rel=a.access_confirmed_at
+        ?`<button class="btn btn-gh btn-done" title="Let in by ${a.access_confirmed_by||'the team'} · ${fmtDate(a.access_confirmed_at)} — network on, login details emailed">Access released ✓</button>`
+        :`<button class="btn btn-approve" onclick="releaseAccess('${a.ref}')" title="Confirm this person and let them in — HAF KNECT network on, PLNA opened, login details emailed"><svg viewBox="0 0 24 24"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>Confirm &amp; release access</button>`;
+      return`${emailBtn}<button class="btn btn-gh btn-done">Approved ✓</button>${rel}${blockBtn}`;
+    }
     if(a.status==='rejected')return`<button class="btn btn-gh btn-done">Rejected</button>${blockBtn}`;
     /* Nothing can be processed until the paperwork is in, so the queue chases it from
        here instead of someone remembering to write the email by hand. */
@@ -800,7 +810,20 @@ function markReviewing(ref){update(ref,{status:'reviewing'},'Marked as in review
 function approve(ref){
   const a=QUEUE.find(x=>x.ref===ref);
   if(a&&a.type!=='business'&&!a.email_verified){openApproveEmail(ref);return}
-  update(ref,{status:'approved'},a&&a.type==='business'?'Enquiry approved':'Approved — access is unlocked');
+  update(ref,{status:'approved'},a&&a.type==='business'?'Enquiry approved':'Approved — press Confirm & release when you are happy to let them in');
+}
+/* ── CONFIRM & RELEASE ──
+   The one door into the network. It records WHO let this person in, switches HAF
+   KNECT on, opens PLNA to them, and is the only signal the email engine accepts
+   before it sends anybody their login details. Deliberately a second press with a
+   plain-English warning: approving a record and letting a stranger into the
+   network are different decisions and should feel different. */
+async function releaseAccess(ref){
+  const a=QUEUE.find(x=>x.ref===ref);if(!a)return;
+  const who=[a.fname,a.lname].filter(Boolean).join(' ')||a.company||a.name||ref;
+  const warn=a.email_verified?'':'\n\nNote: they have not confirmed their email address yet.';
+  if(!confirm(`Let ${who} in?\n\nThis switches their HAF KNECT network access on, opens PLNA to them, and emails them their login details.${warn}`))return;
+  await update(ref,{confirm_access:true},'Access released — their login details are on the way');
 }
 let approveTarget=null;
 function openApproveEmail(ref){

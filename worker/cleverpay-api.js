@@ -496,10 +496,27 @@ export default {
           const patch = { updated_at: nowIso() };
           if (b.status) {
             patch.status = b.status;
-            if (b.status === 'approved') patch.approved_at = nowIso();
+            if (b.status === 'approved') { patch.approved_at = nowIso(); patch.approved_by = who; }
             if (b.status === 'rejected') { patch.rejected_at = nowIso(); patch.reject_reason = b.rejectReason || null; }
           }
           if (b.docs !== undefined) patch.docs = b.docs;
+          /* ── Confirm & release access ──
+             Brent, 3 Aug: "only send when cleverpay team - gemma confirms them
+             / once gemma approves - allow them into the network and PLNA
+             system". Approving moves a record through the queue; THIS is the
+             separate, deliberate press that says a named compliance reviewer
+             has looked at the person and is happy for them to be let in. It
+             stamps who and when, switches the HAF KNECT network on, and is the
+             only thing the email engine will accept as permission to send
+             somebody their login details. */
+          if (b.confirm_access) {
+            patch.status = 'approved';
+            patch.approved_at = patch.approved_at || nowIso();
+            patch.approved_by = patch.approved_by || who;
+            patch.access_confirmed_at = nowIso();
+            patch.access_confirmed_by = who;
+            patch.knect = true;
+          }
           const r = await patchApp(env, m[1], patch);
           return r.ok && r.body[0] ? J(strip(r.body[0]), 200, cors) : bad('Update failed.', 500);
         }
