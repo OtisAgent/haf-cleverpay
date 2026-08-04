@@ -86,6 +86,7 @@
     <div class="tab" id="tab-approved" onclick="setTab('approved')">Approved <span class="tab-count" id="tc-approved">0</span></div>
     <div class="tab" id="tab-rejected" onclick="setTab('rejected')">Rejected <span class="tab-count" id="tc-rejected">0</span></div>
     <div class="tab" id="tab-all" onclick="setTab('all')">All</div>
+    <div class="tab" id="tab-archived" onclick="setTab('archived')">Archived <span class="tab-count" id="tc-archived">0</span></div>
     <div class="tab" id="tab-settings" onclick="setTab('settings')">⚙ Settings</div>
   </div>
 
@@ -130,6 +131,42 @@
     <div class="modal-btns">
       <button class="mbt mbt-gh" onclick="closeRemind()">Cancel</button>
       <button class="mbt mbt-green" id="rm-go" onclick="confirmRemind()">Send the reminder</button>
+    </div>
+  </div>
+</div>
+
+<!-- Clear an application and send the applicant back to the start.
+     Everything it destroys is spelled out before the press, because none of it comes back. -->
+<div class="modal-ov" id="cl-ov">
+  <div class="modal">
+    <h2>Clear this application and send it back</h2>
+    <p><strong id="cl-who"></strong> starts again. We will:</p>
+    <ul class="rm-list">
+      <li>take <strong id="cl-docs"></strong> off the record and delete the files</li>
+      <li>clear the driving licence number, DVLA check code and National Insurance number, and both checks</li>
+      <li>put the account back to pending</li>
+      <li id="cl-access">switch their HAF KNECT and PLNA access back off</li>
+      <li>email <strong id="cl-email"></strong> asking them to sign in and send everything again</li>
+    </ul>
+    <p class="rm-note">Their login stays the same, so they can get straight back in. Nothing here can be undone — if you only want it off your list, archive it instead.</p>
+    <div class="modal-btns">
+      <button class="mbt mbt-gh" onclick="closeClear()">Cancel</button>
+      <button class="mbt mbt-red" id="cl-go" onclick="confirmClear()">Clear it and send it back</button>
+    </div>
+  </div>
+</div>
+
+<!-- Delete for good. Typing the reference is the point: it cannot be done by reflex. -->
+<div class="modal-ov" id="dl-ov">
+  <div class="modal">
+    <h2>Delete this application for good</h2>
+    <p>The record for <strong id="dl-who"></strong> and every document on it will be removed. There is no undo, and no copy kept.</p>
+    <p class="rm-note">This removes their CleverPay record only — if they already have a HAF KNECT or PLNA account, that stays until it is closed there. The compliance group is told who deleted what.</p>
+    <p>Type <strong id="dl-ref"></strong> to confirm:</p>
+    <input id="dl-confirm" class="fi" autocomplete="off" spellcheck="false" oninput="dlTyped()" placeholder="HAF-CP-…">
+    <div class="modal-btns">
+      <button class="mbt mbt-gh" onclick="closeDelete()">Cancel</button>
+      <button class="mbt mbt-red" id="dl-go" onclick="confirmDelete()" disabled>Delete it for good</button>
     </div>
   </div>
 </div>

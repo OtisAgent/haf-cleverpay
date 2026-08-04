@@ -107,7 +107,7 @@ function refreshQueue(){loadQueue();showToast('Queue refreshed')}
 /* ── TABS ── */
 function setTab(t){
   currentTab=t;
-  ['pending','reviewing','approved','rejected','all','settings','integration'].forEach(x=>{
+  ['pending','reviewing','approved','rejected','all','archived','settings','integration'].forEach(x=>{
     document.getElementById('tab-'+x)?.classList.toggle('active',x===t);
   });
   renderView();
@@ -122,8 +122,14 @@ function renderView(){
 }
 
 /* ── KPI ── */
-function updateKPIs(q){
+function updateKPIs(all){
+  /* An archived record is one somebody has deliberately put out of the way, so it
+     counts towards nothing: a pending total that includes applications nobody is
+     working on is a number you stop trusting. */
+  const q=all.filter(a=>!a.archived);
   const n=(s)=>q.filter(a=>a.status===s).length;
+  const tcA=document.getElementById('tc-archived');
+  if(tcA)tcA.textContent=all.length-q.length;
   /* business enquiries arrive as status 'enquiry' — they queue with pending */
   const nPending=n('pending')+n('enquiry');
   document.getElementById('kpi-pending').textContent=nPending;
@@ -190,7 +196,11 @@ function pendingSections(list){
 function renderQueue(){
   const q=QUEUE;
   updateKPIs(q);
-  const filtered=currentTab==='all'?q:q.filter(a=>a.status===currentTab||(currentTab==='pending'&&a.status==='enquiry'));
+  /* Archived records live in one tab of their own and nowhere else — that is the
+     whole point of archiving one. Everything else shows the working queue. */
+  const live=currentTab==='archived'?q.filter(a=>a.archived):q.filter(a=>!a.archived);
+  const filtered=currentTab==='all'||currentTab==='archived'?live
+    :live.filter(a=>a.status===currentTab||(currentTab==='pending'&&a.status==='enquiry'));
   const el=document.getElementById('main-content');
   const mode=getView(currentTab);
   if(!filtered.length){
@@ -676,7 +686,8 @@ function appDetailHtml(a){
     <div class="doc-rows">${allDocRows.join('')||'<div style="font-size:.74rem;color:var(--mu);padding:.2rem 0">No documents submitted yet.</div>'}</div>`}
     ${recordCheckHtml(a)}
     <div class="detail-sec">Actions</div>
-    <div class="action-bar">${actions}</div>`;
+    <div class="action-bar">${actions}</div>
+    ${manageBar(a)}`;
 }
 
 function appCardHtml(a){

@@ -232,3 +232,101 @@ document.getElementById('edit-ov').addEventListener('click',function(e){if(e.tar
 document.addEventListener('keydown',function(e){
   if(e.key==='Escape'&&document.getElementById('edit-ov').classList.contains('open'))closeEdit();
 });
+
+/* ── TAKING A RECORD OFF THE PORTAL ──
+   Brent, 4 Aug: "allow us to delete application off the portal or archive or clear
+   and resend to the user". Three buttons, and they are deliberately not equal.
+
+   Archive is one press and reversible, so it asks nothing: the record is hidden
+   from the working tabs and sits in Archived until somebody puts it back. Nothing
+   about it changes — not the status, not the documents, not their access.
+
+   Clear and Delete both destroy something, so both explain what in full before
+   the press, and Delete is only offered to the two people who can actually do it
+   (the API refuses everyone else regardless) and only once the reference has been
+   typed out. A confirm box you can dismiss with the space bar is not a decision. */
+function manageBar(a){
+  const arch=a.archived
+    ?`<button class="btn btn-approve" onclick="setArchived('${a.ref}',false)" title="Put this back in the working tabs"><svg viewBox="0 0 24 24"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>Restore to the queue</button>`
+    :`<button class="btn btn-gh" onclick="setArchived('${a.ref}',true)" title="Hide this from the working tabs — nothing else changes and you can put it back"><svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="5"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><line x1="10" y1="12" x2="14" y2="12"/></svg>Archive</button>`;
+  const clear=a.type==='business'?''
+    :`<button class="btn btn-review" onclick="openClear('${a.ref}')" title="Wipe what they sent and ask them to do it again"><svg viewBox="0 0 24 24"><polyline points="3 2 3 8 9 8"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>Clear &amp; send back</button>`;
+  const del=canIntegrate()
+    ?`<button class="btn btn-reject" onclick="openDelete('${a.ref}')" title="Remove this application and its documents for good"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>Delete</button>`:'';
+  return`<div class="detail-sec">Manage this record</div><div class="manage-bar">${arch}${clear}${del}</div>`;
+}
+
+async function setArchived(ref,on){
+  const r=await cpApi('/team/archive',{method:'POST',token:TEAM.token,body:{ref:ref,archived:on}});
+  if(r.status===401){showToast('Session expired — please sign in again',true);doSignOut();return}
+  if(!r.ok){showToast((r.body&&r.body.error)||'Could not save that — try again',true);return}
+  edApply(ref,r.body.app);
+  renderQueue();
+  showToast(on?'Archived — it is in the Archived tab if you need it back':'Back in the queue');
+}
+
+let CLEAR_REF=null;
+function openClear(ref){
+  const a=QUEUE.find(x=>x.ref===ref);if(!a)return;
+  CLEAR_REF=ref;
+  const n=(Array.isArray(a.docs)?a.docs:[]).length;
+  document.getElementById('cl-who').textContent=displayName(a);
+  document.getElementById('cl-email').textContent=a.email||'no email on file';
+  document.getElementById('cl-docs').textContent=n===1?'1 document':n+' documents';
+  document.getElementById('cl-access').style.display=a.access_confirmed_at?'':'none';
+  document.getElementById('cl-go').disabled=false;
+  document.getElementById('cl-ov').classList.add('open');
+}
+function closeClear(){document.getElementById('cl-ov').classList.remove('open');CLEAR_REF=null}
+async function confirmClear(){
+  const ref=CLEAR_REF;if(!ref)return;
+  const go=document.getElementById('cl-go');
+  go.disabled=true;go.textContent='Clearing…';
+  const r=await cpApi('/team/clear',{method:'POST',token:TEAM.token,body:{ref:ref}});
+  go.textContent='Clear it and send it back';
+  if(r.status===401){showToast('Session expired — please sign in again',true);doSignOut();return}
+  if(!r.ok){go.disabled=false;showToast((r.body&&r.body.error)||'Could not clear that — try again',true);return}
+  closeClear();
+  edApply(ref,r.body.app);
+  renderQueue();
+  showToast(r.body.emailed
+    ?'Cleared — the email is on its way to '+r.body.email
+    :'Cleared. No email was sent: this applicant is opted out or blocked.',!r.body.emailed);
+}
+
+let DELETE_REF=null;
+function openDelete(ref){
+  const a=QUEUE.find(x=>x.ref===ref);if(!a)return;
+  DELETE_REF=ref;
+  document.getElementById('dl-who').textContent=displayName(a);
+  document.getElementById('dl-ref').textContent=a.ref;
+  const box=document.getElementById('dl-confirm');
+  box.value='';
+  document.getElementById('dl-go').disabled=true;
+  document.getElementById('dl-ov').classList.add('open');
+  setTimeout(()=>box.focus(),50);
+}
+function closeDelete(){document.getElementById('dl-ov').classList.remove('open');DELETE_REF=null}
+function dlTyped(){
+  const a=QUEUE.find(x=>x.ref===DELETE_REF);
+  const v=document.getElementById('dl-confirm').value.trim().toUpperCase();
+  document.getElementById('dl-go').disabled=!a||v!==String(a.ref).toUpperCase();
+}
+async function confirmDelete(){
+  const ref=DELETE_REF;if(!ref)return;
+  const go=document.getElementById('dl-go');
+  go.disabled=true;go.textContent='Deleting…';
+  const r=await cpApi('/team/delete',{method:'POST',token:TEAM.token,
+    body:{ref:ref,confirm:document.getElementById('dl-confirm').value.trim()}});
+  go.textContent='Delete it for good';
+  if(r.status===401){showToast('Session expired — please sign in again',true);doSignOut();return}
+  if(!r.ok){go.disabled=false;showToast((r.body&&r.body.error)||'Could not delete that — try again',true);return}
+  const i=QUEUE.findIndex(x=>x.ref===ref);
+  if(i>=0)QUEUE.splice(i,1);
+  closeDelete();
+  renderQueue();
+  showToast('Deleted — '+r.body.ref+' is gone, and the compliance group has been told');
+}
+['cl-ov','dl-ov'].forEach(id=>document.getElementById(id).addEventListener('click',function(e){
+  if(e.target===this){id==='cl-ov'?closeClear():closeDelete()}
+}));

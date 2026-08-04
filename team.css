@@ -271,7 +271,10 @@ table.crm{width:100%;min-width:820px;border-collapse:collapse}
 .rc-confirm.on{color:var(--gn);font-weight:700}
 
 /* ── ACTIONS ── */
-.action-bar{display:flex;gap:.55rem;flex-wrap:wrap}
+/* The decision buttons and the manage-this-record buttons look the same but are
+   not the same bar: one moves the application forward, the other files or removes
+   it. They carry separate classes so a card still has exactly one action bar. */
+.action-bar,.manage-bar{display:flex;gap:.55rem;flex-wrap:wrap}
 .btn{display:inline-flex;align-items:center;gap:.32rem;font-weight:800;font-size:.8rem;border-radius:var(--pill);padding:.56rem 1.2rem;transition:all .14s;cursor:pointer;border:none;line-height:1;white-space:nowrap}
 .btn svg{width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
 .btn-approve{background:var(--gn);color:#fff;box-shadow:0 4px 12px rgba(45,171,96,.28)}.btn-approve:hover{filter:brightness(1.08)}
@@ -346,7 +349,7 @@ table.crm{width:100%;min-width:820px;border-collapse:collapse}
 @media(max-width:580px){
   .detail-grid{grid-template-columns:1fr}
   .rf-row{grid-template-columns:1fr}
-  .action-bar .btn{flex:1;justify-content:center}
+  .action-bar .btn,.manage-bar .btn{flex:1;justify-content:center}
 }
 
 /* ── PHONE LAYOUT (rebuilt 2026-07-28) ──

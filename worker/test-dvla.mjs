@@ -126,11 +126,22 @@ const dbSrv = createServer(async (req, res) => {
 });
 await new Promise(r => dbSrv.listen(8798, r));
 
-const src = readFileSync(new URL('./cleverpay-api.js', import.meta.url), 'utf8')
+const swap = s => s
   .replace('https://jsdwvogsxlnczzbefwgp.supabase.co/rest/v1', 'http://127.0.0.1:8798/rest/v1');
+const src = swap(readFileSync(new URL('./cleverpay-api.js', import.meta.url), 'utf8'));
 const tmp = new URL('./_dvla-worker.mjs', import.meta.url);
 writeFileSync(tmp, src);
-const worker = (await import(tmp.href)).default;
+const apiWorker = (await import(tmp.href)).default;
+/* The back office runs as its own worker in production, reached over a private
+   binding because a single script no longer fits the 20,000-character deploy
+   pipe. The harness wires the two together the same way, so what is tested here
+   is the same path a request takes live. */
+const adminSrc = swap(readFileSync(new URL('./cleverpay-admin.js', import.meta.url), 'utf8'));
+const atmp = new URL('./_dvla-admin.mjs', import.meta.url);
+writeFileSync(atmp, adminSrc);
+const adminWorker = (await import(atmp.href)).default;
+const worker = { fetch: (req, env, ctx) => apiWorker.fetch(req,
+  { ...env, ADMIN: { fetch: r => adminWorker.fetch(r, {}, ctx) } }, ctx) };
 
 const MIME = { html: 'text/html', js: 'text/javascript', css: 'text/css' };
 const siteSrv = createServer(async (req, res) => {
@@ -242,9 +253,12 @@ await submit('HAF-CP-REC02', 'RC900202', { licence: LIC, code: 'Nw55Nw55', ni: N
 ok('re-saving the same code leaves the check and its date alone',
   rec02.dvla_code_at === stampBefore && !!rec02.dvla_checked_at, [rec02.dvla_code_at, rec02.dvla_checked_at]);
 
-const fix = await api('/team/dvla', auth({ ref: 'HAF-CP-REC01', licence: LIC, code: 'Fx11Fx11', ni: NI }, 'PUT'));
+/* The team corrects the driving record through the same Edit details panel as
+   every other correction — /team/dvla was a second door onto the same three
+   fields that no page ever opened, so it went when the worker was split. */
+const fix = await api('/team/edit', auth({ ref: 'HAF-CP-REC01', dvla: { licence: LIC, code: 'Fx11Fx11', ni: NI } }));
 ok('the team can correct a transposed digit for the driver', fix.status === 200 && find('HAF-CP-REC01').dvla_check_code === 'Fx11Fx11', fix.body);
-const fixBad = await api('/team/dvla', auth({ ref: 'HAF-CP-REC01', licence: 'RUBBISH', code: CODE, ni: NI }, 'PUT'));
+const fixBad = await api('/team/edit', auth({ ref: 'HAF-CP-REC01', dvla: { licence: 'RUBBISH', code: CODE, ni: NI } }));
 ok('but the team cannot save nonsense either', fixBad.status === 400, fixBad.body);
 
 /* ── 4. the private partner API must not leak any of this ── */

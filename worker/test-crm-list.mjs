@@ -156,11 +156,22 @@ const dbSrv = createServer(async (req, res) => {
 });
 await new Promise(r => dbSrv.listen(8796, r));
 
-const src = readFileSync(new URL('./cleverpay-api.js', import.meta.url), 'utf8')
+const swap = s => s
   .replace('https://jsdwvogsxlnczzbefwgp.supabase.co/rest/v1', 'http://127.0.0.1:8796/rest/v1');
+const src = swap(readFileSync(new URL('./cleverpay-api.js', import.meta.url), 'utf8'));
 const tmp = new URL('./_crm-worker.mjs', import.meta.url);
 writeFileSync(tmp, src);
-const worker = (await import(tmp.href)).default;
+const apiWorker = (await import(tmp.href)).default;
+/* The back office runs as its own worker in production, reached over a private
+   binding because a single script no longer fits the 20,000-character deploy
+   pipe. The harness wires the two together the same way, so what is tested here
+   is the same path a request takes live. */
+const adminSrc = swap(readFileSync(new URL('./cleverpay-admin.js', import.meta.url), 'utf8'));
+const atmp = new URL('./_crm-admin.mjs', import.meta.url);
+writeFileSync(atmp, adminSrc);
+const adminWorker = (await import(atmp.href)).default;
+const worker = { fetch: (req, env, ctx) => apiWorker.fetch(req,
+  { ...env, ADMIN: { fetch: r => adminWorker.fetch(r, {}, ctx) } }, ctx) };
 
 const MIME = { html: 'text/html', js: 'text/javascript', css: 'text/css' };
 const siteSrv = createServer(async (req, res) => {

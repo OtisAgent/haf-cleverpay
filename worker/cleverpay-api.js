@@ -323,7 +323,7 @@ export default {
     const R = (path, method) => p === path && M === method;
     let b = {};
     /* /docs/file carries raw file bytes, so it must not be read as JSON */
-    if (M !== 'GET' && p !== '/docs/file') { try { b = await req.json(); } catch {} }
+    if (M !== 'GET' && p !== '/docs/file' && !p.startsWith('/team/')) { try { b = await req.json(); } catch {} }
 
     try {
       /* ── public: config (doc requirements + rebates) ── */
@@ -473,303 +473,30 @@ export default {
         return new Response(S({ count: rows.length, accounts: rows }), { status: 200, headers: bare });
       }
 
-      /* ── team: log in ──
-         First-time members have must_set_pin set: they sign in once with the one-time
-         setup code they were given, then choose their own PIN (see /team/set-pin). */
-      if (R('/team/login', 'POST')) {
-        const u = (b.username || '').toLowerCase().trim();
-        const hash = await sha256('HAF-CP-TEAM|' + u + '|' + (b.password || ''));
-        const r = await sb(env, `/cleverpay_team_users?username=eq.${E(u)}&limit=1`);
-        const user = r.ok && r.body && r.body[0];
-        if (!user) return bad('Wrong username or password.', 401);
-        const first = !!user.must_set_pin;
-        const ok = first
-          ? !!user.setup_code && (b.password || '').trim().toUpperCase() === user.setup_code.toUpperCase()
-          : user.pw_hash === hash;
-        if (!ok) return bad(first ? 'That setup code is not right.' : 'Wrong username or password.', 401);
-        const token = crypto.randomUUID() + crypto.randomUUID().replace(/-/g, '');
-        const expires = new Date(Date.now() + (first ? 36e5 : 7 * 864e5)).toISOString();
-        await sb(env, '/cleverpay_team_sessions', { method: 'POST', body: S({ token, username: u, expires_at: expires }) });
-        return J({ token, username: u, name: user.name, role: user.role, mustSetPin: first }, 200, cors);
-      }
+      /* ── team back office: a worker of its own ──
+         Everything under /team/ now runs in cleverpay-admin. The reason is the
+         pipe: a deploy of this script has to fit inside 20,000 characters, the
+         single worker had reached 21,579, and no change of any size could go
+         live or even to a preview. The back office is where the work happens,
+         so it moved out.
 
-      /* ── team: everything below needs a session ── */
+         It has no public address — it is reachable only through this binding —
+         and it holds no secret at rest: the database key travels on the request
+         and is used for that request only. So the key still lives in exactly one
+         place, which is here. */
       if (p.startsWith('/team/')) {
-        const who = await teamUser(env, req);
-        if (!who) return bad('Session expired — sign in again.', 401);
-        const ur = await sb(env, `/cleverpay_team_users?username=eq.${E(who)}&limit=1`);
-        const me = ur.ok && ur.body && ur.body[0];
-        if (!me) return bad('Session expired — sign in again.', 401);
-
-        /* choose / change your own PIN — nobody else ever sets it for you */
-        if (R('/team/set-pin', 'POST')) {
-          const pin = (b.pin || '').trim();
-          if (!/^\d{4,6}$/.test(pin)) return bad('Your PIN must be 4 to 6 numbers.', 400);
-          if (!me.must_set_pin) {
-            const current = await sha256('HAF-CP-TEAM|' + who + '|' + (b.currentPin || ''));
-            if (current !== me.pw_hash) return bad('Your current PIN is not right.', 401);
-          }
-          const pw = await sha256('HAF-CP-TEAM|' + who + '|' + pin);
-          const r = await sb(env, `/cleverpay_team_users?username=eq.${E(who)}`,
-            { method: 'PATCH', body: S({ pw_hash: pw, must_set_pin: false, setup_code: null }) });
-          if (!r.ok) return bad('Could not save your PIN — please try again.', 500);
-          const tk = (req.headers.get('Authorization') || '').replace(/^Bearer /, '');
-          await sb(env, `/cleverpay_team_sessions?token=eq.${E(tk)}`,
-            { method: 'PATCH', body: S({ expires_at: new Date(Date.now() + 7 * 864e5).toISOString() }) });
-          return J({ ok: true }, 200, cors);
-        }
-
-        /* a first-time member sees nothing else until their PIN is set */
-        if (me.must_set_pin) return bad('Choose your PIN first.', 403);
-
-        if (R('/team/applications', 'GET')) {
-          const r = await sb(env, `/${APPS}?order=submitted.desc&limit=500`);
-          return J((r.body || []).map(strip), 200, cors);
-        }
-
-        /* manual add by team (drivers or freight) */
-        if (R('/team/applications', 'POST')) {
-          if (!b.type || !b.username) return bad('Missing required fields.', 400);
-          const dupe = await findApp(env, b.username);
-          if (dupe) return bad(`${b.username} already exists (ref ${dupe.ref}, status ${dupe.status}).`, 409);
-          const row = pickFields(b);
-          row.ref = newRef(); row.added_by = who; row.docs = b.docs || [];
-          row.status = b.status === 'approved' ? 'approved' : 'pending';
-          if (row.status === 'approved') row.approved_at = nowIso();
-          const r = await sb(env, `/${APPS}`, { method: 'POST', body: S(row) });
-          return r.ok ? J(strip(r.body[0]), 200, cors) : bad('Could not add — please try again.', 500);
-        }
-
-        /* status / docs updates from the queue */
-        const m = p.match(/^\/team\/applications\/([A-Za-z0-9-]+)$/);
-        if (m && M === 'PATCH') {
-          const patch = { updated_at: nowIso() };
-          if (b.status) {
-            patch.status = b.status;
-            if (b.status === 'approved') { patch.approved_at = nowIso(); patch.approved_by = who; }
-            if (b.status === 'rejected') { patch.rejected_at = nowIso(); patch.reject_reason = b.rejectReason || null; }
-          }
-          if (b.docs !== undefined) patch.docs = b.docs;
-          /* ── Confirm & release access ──
-             Brent, 3 Aug: "only send when cleverpay team - gemma confirms them
-             / once gemma approves - allow them into the network and PLNA
-             system". Approving moves a record through the queue; THIS is the
-             separate, deliberate press that says a named compliance reviewer
-             has looked at the person and is happy for them to be let in. It
-             stamps who and when, switches the HAF KNECT network on, and is the
-             only thing the email engine will accept as permission to send
-             somebody their login details. */
-          if (b.confirm_access) {
-            patch.status = 'approved';
-            patch.approved_at = patch.approved_at || nowIso();
-            patch.approved_by = patch.approved_by || who;
-            patch.access_confirmed_at = nowIso();
-            patch.access_confirmed_by = who;
-            patch.knect = true;
-          }
-          const r = await patchApp(env, m[1], patch);
-          return r.ok && r.body[0] ? J(strip(r.body[0]), 200, cors) : bad('Update failed.', 500);
-        }
-
-        /* ── reviewer opens the actual file — bytes proxied through this session, never a public link ── */
-        if (R('/team/doc', 'GET')) {
-          const app = await findApp(env, url.searchParams.get('ref') || '');
-          const id = (url.searchParams.get('id') || '').replace(/[^a-z0-9_-]/gi, '');
-          const d = app && (Array.isArray(app.docs) ? app.docs : []).find(x => x.id === id);
-          if (!d) return bad('No such document on this application.', 404);
-          if (!d.path) return bad('no_file', 404);
-          const f = await store(env, d.path, { method: 'GET' });
-          if (!f.ok) return bad('That file could not be opened.', 502);
-          return new Response(f.body, { status: 200, headers: { ...cors,
-            [CT]: d.mime || f.headers.get('Content-Type') || 'application/octet-stream',
-            'Content-Disposition': `inline; filename="${St(d.filename || id).replace(/["\r\n]/g, '')}"` } });
-        }
-
-        /* ── team takes a file back off the record ──
-           A file attached to the wrong person is worse than a missing one, so
-           whoever added it must be able to undo it in the same place. */
-        if (R('/team/doc-remove', 'POST')) {
-          const app = await findApp(env, b.ref || '');
-          if (!app) return bad(NOTFOUND, 404);
-          const id = St(b.id || '').replace(/[^a-z0-9_-]/gi, '');
-          const held = (Array.isArray(app.docs) ? app.docs : []);
-          if (!held.some(d => d.id === id)) return bad('No such document on this application.', 404);
-          const docs = held.filter(d => d.id !== id);
-          const r = await patchApp(env, app.ref, { docs, updated_at: nowIso() });
-          if (!r.ok || !r.body[0]) return bad('Could not remove that document.', 500);
-          return J({ ok: true, app: strip(r.body[0]) }, 200, cors);
-        }
-
-        /* ── reviewer ticks a document off — recorded on the application with who and when ── */
-        if (R('/team/doc-check', 'POST')) {
-          const app = await findApp(env, b.ref || '');
-          if (!app) return bad(NOTFOUND, 404);
-          const now = nowIso();
-          const docs = (Array.isArray(app.docs) ? app.docs : []).map(d => d.id !== b.id ? d
-            : { ...d, checked: !!b.checked, checked_by: b.checked ? who : null, checked_at: b.checked ? now : null });
-          const r = await patchApp(env, app.ref, { docs, updated_at: now });
-          return r.ok ? J({ ok: true, docs }, 200, cors) : bad('Could not save that tick.', 500);
-        }
-
-        /* ── reviewer confirms they have actually run the driving record on GOV.UK ──
-           Recorded with who and when, the same as a document tick, so "checked"
-           always has a name against it. Re-checking is expected: if the driver
-           supplies a newer code the confirmation is cleared automatically. */
-        if (R('/team/dvla-check', 'POST')) {
-          const app = await findApp(env, b.ref || '');
-          if (!app) return bad(NOTFOUND, 404);
-          if (!app.dvla_check_code) return bad('There is no check code on this application yet — chase it first.', 400);
-          const now = nowIso();
-          const patch = b.checked === false
-            ? { dvla_checked_at: null, dvla_checked_by: null, updated_at: now }
-            : { dvla_checked_at: now, dvla_checked_by: who, updated_at: now };
-          const r = await patchApp(env, app.ref, patch);
-          return r.ok && r.body[0] ? J({ ok: true, app: strip(r.body[0]) }, 200, cors) : bad('Could not save that check.', 500);
-        }
-
-        /* ── team corrects what is held on the record ──
-           Brent, 4 Aug: "allow us to edit information if we need to". A surname
-           typed wrong at sign-up, a dead email, a transposed digit in a licence
-           number — none of that should mean starting the person's application
-           again. Only what a human can legitimately correct is writable here:
-           the status, the approval and release stamps, the payment record and
-           anybody's PIN are all deliberately out of reach, because those are
-           decisions, not details. The username is out of reach too — it is how
-           they sign in to CleverPay, KNECT and PLNA, so changing it would lock
-           them out of all three.
-
-           Two consequences are handled rather than hidden. A new email address
-           has not been confirmed by the person who owns it, so the confirmation
-           is cleared and they must confirm again — otherwise a typo becomes a
-           way past the access door. And a new check code is a new record, so
-           the driving-record tick clears itself (readDvla already does this).
-           Every save writes its own line of history into the record notes: no
-           column exists for an audit trail, and a compliance file that cannot
-           say who changed it is worth less than one nobody touched. */
-        if (R('/team/edit', 'POST')) {
-          const app = await findApp(env, b.ref || '');
-          if (!app) return bad(NOTFOUND, 404);
-          const f = b.fields && typeof b.fields === 'object' ? b.fields : {};
-          const patch = {}, changed = [];
-          for (const k of Object.keys(EDIT_FIELDS)) {
-            if (f[k] === undefined) continue;
-            let v = St(f[k]).trim();
-            if (k === 'vreg') v = v.toUpperCase();
-            const next = v === '' ? null : v;
-            if ((app[k] == null ? null : app[k]) === next) continue;
-            patch[k] = next; changed.push(EDIT_FIELDS[k]);
-          }
-          if (patch.email !== undefined) {
-            if (patch.email === null) return bad('An account needs an email address — it is how they are told anything.', 400);
-            if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(patch.email)) return bad('That email address doesn’t look right.', 400);
-            /* the new owner of this address has confirmed nothing yet */
-            patch.email_verified = false; patch.email_verified_at = null;
-            patch.email_confirm_token = null; patch.email_confirm_sent_at = null;
-          }
-          if (b.dvla) {
-            const v = readDvla(b.dvla, app);
-            if (v.error) return bad(v.error, 400);
-            for (const [k, val] of Object.entries(v.patch)) {
-              if ((app[k] == null ? null : app[k]) === val) continue;
-              patch[k] = val;
-              if (DVLA_LABELS[k]) changed.push(DVLA_LABELS[k]);
-            }
-          }
-          /* notes carry the history block, so they are compared on their free text alone */
-          if (f.notes !== undefined && St(f.notes).trim() !== freeNotes(app.notes).trim()) changed.push('the notes');
-          if (!changed.length) return J({ ok: true, app: strip(app), changed: [] }, 200, cors);
-          patch.notes = recordHistory(f.notes, app.notes, who, changed);
-          patch.updated_at = nowIso();
-          const r = await patchApp(env, app.ref, patch);
-          if (!r.ok || !r.body[0]) return bad('Could not save those changes — please try again.', 500);
-          return J({ ok: true, app: strip(r.body[0]), changed }, 200, cors);
-        }
-
-        /* ── chase the documents we are still waiting on ──
-           Nothing can be processed until the paperwork is in, so the queue needs a
-           one-click nudge. The click is recorded here with who sent it and exactly
-           which documents were outstanding at that moment; the email itself goes out
-           from the HAF mailbox on the next reminder run. One per applicant per day —
-           a chase that lands twice in an afternoon reads as harassment. */
-        if (R('/team/remind', 'POST')) {
-          const app = await findApp(env, b.ref || '');
-          if (!app) return bad(NOTFOUND, 404);
-          if (app.type === 'business') return bad('Business enquiries do not have compliance documents.', 400);
-          if (!app.email) return bad('There is no email address on this application.', 400);
-          const cr = await sb(env, '/cleverpay_portal_config?id=eq.1&limit=1');
-          const cfg = cr.ok && cr.body && cr.body[0] ? cr.body[0].config : null;
-          if (!cfg) return bad('Could not read the document settings — try again in a moment.', 503);
-          const missing = missingRequired(cfg, app);
-          if (!missing.length) return bad('Every required document is already in — there is nothing to chase.', 400);
-          const last = app.reminder_requested_at || app.reminder_sent_at;
-          if (last && Date.now() - Date.parse(last) < 20 * 3600e3)
-            return bad('This applicant has already been reminded today — you can send another tomorrow.', 429);
-          const now = nowIso();
-          const r = await sb(env, `/${APPS}?ref=eq.${E(app.ref)}`, {
-            method: 'PATCH',
-            body: S({
-              reminder_requested_at: now, reminder_by: who, reminder_docs: missing,
-              reminder_count: (app.reminder_count || 0) + 1, updated_at: now,
-            }),
-          });
-          if (!r.ok || !r.body || !r.body[0]) return bad('Could not queue that reminder — please try again.', 500);
-          return J({ ok: true, email: app.email, missing: missing.map(m => m.name), app: strip(r.body[0]) }, 200, cors);
-        }
-
-        /* ── the integration panel — Brent and Gemma only ──
-           Anyone else gets exactly the same 404 as a route that does not exist. */
-        if (p.startsWith('/team/integration')) {
-          if (!canIntegrate(who)) return bad(NOTFOUND, 404);
-          const kr = await sb(env, '/cleverpay_api_keys?revoked_at=is.null&order=created_at.desc&limit=1');
-          const active = kr.ok && kr.body && kr.body[0] ? kr.body[0] : null;
-          const summary = (k) => k && {
-            prefix: k.key_prefix, label: k.label, created_at: k.created_at, created_by: k.created_by,
-            last_used_at: k.last_used_at, use_count: k.use_count || 0,
-          };
-
-          if (R('/team/integration', 'GET')) {
-            /* a real check, not a guess: if we cannot read the table the back office
-               reads, the panel must say so rather than show a comforting green line */
-            const probe = await sb(env, `/${APPS}?select=ref&limit=1`);
-            return J({
-              endpoint: url.origin + '/partner/compliance',
-              key: summary(active),
-              live: probe.ok,
-              checked_at: nowIso(),
-              shares: ['reference', 'name', 'account type', 'compliance status', 'dates'],
-            }, 200, cors);
-          }
-
-          /* generate or rotate — the plaintext key is returned this once and never again */
-          if (R('/team/integration/key', 'POST')) {
-            const key = newApiKey();
-            const row = {
-              label: St(b.label || 'Back office').slice(0, 60),
-              key_hash: await keyHash(key), key_prefix: key.slice(0, 12), created_by: who,
-            };
-            const ins = await sb(env, '/cleverpay_api_keys', { method: 'POST', body: S(row) });
-            if (!ins.ok) return bad('Could not create the key — please try again.', 500);
-            /* rotate: the old key stops working the moment the new one exists */
-            if (active) await sb(env, `/cleverpay_api_keys?id=eq.${active.id}`, {
-              method: 'PATCH', body: S({ revoked_at: nowIso(), revoked_by: who }) });
-            return J({ key, rotated: !!active, summary: summary(ins.body[0]) }, 200, cors);
-          }
-
-          if (R('/team/integration/revoke', 'POST')) {
-            if (!active) return bad('There is no active key to switch off.', 400);
-            const r = await sb(env, `/cleverpay_api_keys?id=eq.${active.id}`, {
-              method: 'PATCH', body: S({ revoked_at: nowIso(), revoked_by: who }) });
-            return r.ok ? J({ ok: true }, 200, cors) : bad('Could not switch the key off.', 500);
-          }
-
-          return bad(NOTFOUND, 404);
-        }
-
-        if (R('/team/config', 'PUT')) {
-          const r = await sb(env, '/cleverpay_portal_config?id=eq.1', { method: 'PATCH', body: S({ config: b }) });
-          return r.ok ? J({ ok: true }, 200, cors) : bad('Could not save settings.', 500);
-        }
+        if (!env.ADMIN) return bad('The back office is not reachable just now — please tell HAF.', 503);
+        const h = new Headers(req.headers);
+        h.set('x-cp-key', env.SB_KEY);
+        h.set('x-cp-tg', env.TG_TOKEN || '');
+        h.set('x-cp-tgchat', env.TG_CHAT || '');
+        h.set('x-cp-origin', url.origin);
+        return env.ADMIN.fetch(new Request(url.toString(), {
+          method: M, headers: h,
+          body: M === 'GET' ? undefined : await req.arrayBuffer(),
+        }));
       }
+
 
       return bad(NOTFOUND, 404);
     } catch (e) {

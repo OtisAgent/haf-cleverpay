@@ -91,11 +91,22 @@ const dbSrv = createServer(async (req, res) => {
 });
 await new Promise(r => dbSrv.listen(8798, r));
 
-const src = readFileSync(new URL('./cleverpay-api.js', import.meta.url), 'utf8')
+const swap = s => s
   .replace('https://jsdwvogsxlnczzbefwgp.supabase.co/rest/v1', 'http://127.0.0.1:8798/rest/v1');
+const src = swap(readFileSync(new URL('./cleverpay-api.js', import.meta.url), 'utf8'));
 const tmp = new URL('./_pop-worker.mjs', import.meta.url);
 writeFileSync(tmp, src);
-const worker = (await import(tmp.href)).default;
+const apiWorker = (await import(tmp.href)).default;
+/* The back office runs as its own worker in production, reached over a private
+   binding because a single script no longer fits the 20,000-character deploy
+   pipe. The harness wires the two together the same way, so what is tested here
+   is the same path a request takes live. */
+const adminSrc = swap(readFileSync(new URL('./cleverpay-admin.js', import.meta.url), 'utf8'));
+const atmp = new URL('./_pop-admin.mjs', import.meta.url);
+writeFileSync(atmp, adminSrc);
+const adminWorker = (await import(atmp.href)).default;
+const worker = { fetch: (req, env, ctx) => apiWorker.fetch(req,
+  { ...env, ADMIN: { fetch: r => adminWorker.fetch(r, {}, ctx) } }, ctx) };
 
 /* one origin for the pages and the API, so the browser isn't fighting CORS */
 const MIME = { html: 'text/html', js: 'text/javascript', css: 'text/css' };
@@ -235,7 +246,17 @@ const cardText = await card.innerText();
 ok('the passport shows by name, not by code', cardText.includes('Passport — proof of person'), cardText.slice(0, 400));
 ok('the utility bill shows by name, not by code', cardText.includes('Utility bill — proof of person'));
 ok('the team can open the uploaded file', await card.locator('button.doc-open').count() >= 2);
-ok('the licence they did not upload is not flagged as missing', !cardText.includes('Driving licence — proof of person'));
+/* Since the team can put a file on a record by hand (4 Aug), an optional document
+   nobody uploaded still gets a row — otherwise a passport the office holds on email
+   could never be attached at all. What must never happen is it being called
+   outstanding: the applicant chose the passport and the utility bill, so the licence
+   is an offer, not a gap. */
+const licRow = card.locator('#drow-HAF-CP-FRT01-id-licence');
+ok('the licence they did not upload is offered, not demanded',
+  await licRow.count() === 1 && await licRow.locator('.badge-opt').count() === 1,
+  await licRow.count() ? await licRow.innerText() : 'no row');
+ok('and it is not flagged as missing',
+  await licRow.locator('.badge-missing').count() === 0 && !(await licRow.getAttribute('class')).includes('missing'));
 await page.screenshot({ path: new URL('pop-queue-1280.png', SHOTS).pathname, fullPage: true });
 await ctx.close();
 
