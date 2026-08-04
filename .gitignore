@@ -4,3 +4,5 @@ worker/_test-worker.mjs
 worker/_addfiles/
 worker/_shots/
 worker/_*.mjs
+worker/_preview-site/
+worker/_preview-spec.json
