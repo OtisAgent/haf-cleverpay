@@ -242,6 +242,22 @@
   </div>
 </div>
 
+<!-- Correcting a record that already exists. The body is drawn by team-edit.js from
+     the account itself, because a driver, a forwarder and a business enquiry hold
+     different information — and only a driver has the driving-record codes. -->
+<div class="modal-ov" id="edit-ov">
+  <div class="modal" style="max-width:560px">
+    <h2 id="edit-title">Edit account</h2>
+    <p id="edit-sub"></p>
+    <div id="edit-body"></div>
+    <div class="gate-err" id="edit-err" style="margin-top:.6rem"></div>
+    <div class="modal-btns">
+      <button class="mbt mbt-gh" onclick="closeEdit()">Cancel</button>
+      <button class="mbt mbt-or" id="edit-save" onclick="saveEdit()">Save changes</button>
+    </div>
+  </div>
+</div>
+
 <!-- The generated key, shown once and never again -->
 <div class="modal-ov" id="ig-key-ov">
   <div class="modal">
@@ -304,11 +320,40 @@
   .add-docs-toggle{align-self:flex-start;margin-top:.5rem}
   .adr{flex-wrap:wrap;gap:.35rem .5rem;padding:.45rem .6rem}
   .adr-name{flex:1 0 100%}.adr-file{flex:1;max-width:none}}
+
+/* ── putting a file on a record by hand, and correcting what it holds ── */
+/* the panel is taller than a phone screen, so it scrolls inside itself —
+   without this the Save button sits below the fold and cannot be reached */
+#edit-ov .modal{max-height:88vh;overflow-y:auto}
+.doc-add{display:inline-flex;align-items:center;gap:.28rem;flex-shrink:0;font-size:.66rem;font-weight:800;letter-spacing:.02em;
+  padding:.24rem .55rem;border-radius:var(--pill);cursor:pointer;font-family:inherit;
+  background:var(--p2);color:var(--mu);border:1.5px solid var(--lns);transition:all .14s}
+.doc-add:hover{color:var(--tx);border-color:var(--mu)}
+.doc-add svg{width:11px;height:11px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+.doc-del{padding:.24rem .35rem}
+.doc-del:hover{color:var(--rd);border-color:rgba(208,64,64,.45);background:rgba(208,64,64,.08)}
+.doc-row.absent{background:var(--p2);border-style:dashed}
+.doc-row.uploading{opacity:.55;pointer-events:none}
+.doc-byteam{margin-left:.4rem;font-size:.6rem;font-weight:700;color:var(--mu);border:1px solid var(--lns);
+  border-radius:var(--pill);padding:.02rem .3rem;vertical-align:middle}
+.ed-sec{font-size:.62rem;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:var(--mu);
+  margin:1rem 0 .5rem;padding-bottom:.3rem;border-bottom:1px solid var(--ln)}
+.ed-sec:first-child{margin-top:.4rem}
+.ed-note{font-size:.66rem;color:var(--mu);line-height:1.5;margin:-.2rem 0 .2rem}
+.ed-notes{width:100%;resize:vertical;min-height:56px;line-height:1.5}
+.ed-hist{display:flex;flex-direction:column;gap:.2rem;max-height:132px;overflow-y:auto;
+  background:var(--p2);border:1px solid var(--ln);border-radius:var(--rx);padding:.45rem .6rem}
+.ed-hist-line{font-size:.66rem;color:var(--mu);line-height:1.45}
+@media(max-width:640px){
+  .doc-add{padding:.22rem .45rem;font-size:.62rem}
+  .ed-hist{max-height:96px}
+}
 </style>
 
 <script src="api.js"></script>
 <script src="team-config.js"></script>
 <script src="team.js"></script>
 <script src="team-add.js"></script>
+<script src="team-edit.js"></script>
 </body>
 </html>

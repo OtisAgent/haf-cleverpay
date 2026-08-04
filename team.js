@@ -467,15 +467,29 @@ function appCompliance(a){
       ?`<button class="doc-open" onclick="openDoc('${a.ref}','${d.id}')" title="Open this document">
           <svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>View</button>`
       :`<span class="doc-nofile" title="Submitted before the document store existed — ask them to upload it again">No file held</span>`;
-    return`<div class="doc-row"><div class="dc-chk${on?' on':''}" id="chk-${a.ref}-${d.id}" onclick="tickDoc('${a.ref}','${d.id}')" title="${d.checked_by?'Checked by '+d.checked_by+' · '+fmtDate(d.checked_at):'Tick once you have checked this document'}"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></div><div class="doc-row-name">${def?def.name:d.id}</div><div class="doc-row-file">${d.filename||'—'}${d.size?' · '+fmtSize(d.size):''}</div>${open}<span class="doc-row-badge ${badge.cls}">${badge.txt}</span></div>`;
+    /* Paperwork often arrives by email or on WhatsApp instead of through the upload
+       page, so every row can take a file by hand — Brent, 4 Aug. A file the office
+       put on says so on the row: it is not the same evidence as one the driver sent. */
+    const byTeam=d.by_team
+      ?`<span class="doc-byteam" title="Added by ${d.added_by||'the team'}${d.added_at?' · '+fmtDate(d.added_at):''}">by ${d.added_by||'team'}</span>`:'';
+    return`<div class="doc-row" id="drow-${a.ref}-${d.id}"><div class="dc-chk${on?' on':''}" id="chk-${a.ref}-${d.id}" onclick="tickDoc('${a.ref}','${d.id}')" title="${d.checked_by?'Checked by '+d.checked_by+' · '+fmtDate(d.checked_at):'Tick once you have checked this document'}"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></div><div class="doc-row-name">${def?def.name:d.id}${byTeam}</div><div class="doc-row-file">${d.filename||'—'}${d.size?' · '+fmtSize(d.size):''}</div>${open}${docAddBtn(a.ref,d.id,true)}<span class="doc-row-badge ${badge.cls}">${badge.txt}</span></div>`;
   };
+
+  /* A document type that was never supplied still needs a way in, so the missing
+     rows carry the same button — optional ones included, or an optional document
+     the team holds could never be put on the record at all. */
+  const missingRow=(d,badge)=>`<div class="doc-row ${badge.cls==='badge-missing'?'missing':'absent'}" id="drow-${a.ref}-${d.id}"><div class="dc-chk" style="opacity:.4"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></div><div class="doc-row-name">${d.name}</div><div class="doc-row-file">—</div>${docAddBtn(a.ref,d.id,false)}<span class="doc-row-badge ${badge.cls}">${badge.txt}</span></div>`;
+
+  const uploadedIdSet=uploadedIds;
+  const missingOpt=docDefs.filter(d=>d.status!=='required'&&!uploadedIdSet.includes(d.id));
 
   const allDocRows=[
     ...uploaded.filter(d=>{const def=docDefs.find(x=>x.id===d.id);return def&&def.status==='required';})
       .map(d=>docRow(d,{cls:'badge-ok',txt:'Uploaded'})),
-    ...missingReq.map(d=>`<div class="doc-row missing"><div class="dc-chk" style="opacity:.4"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></div><div class="doc-row-name">${d.name}</div><div class="doc-row-file">—</div><span class="doc-row-badge badge-missing">Missing</span></div>`),
+    ...missingReq.map(d=>missingRow(d,{cls:'badge-missing',txt:'Missing'})),
     ...uploaded.filter(d=>{const def=docDefs.find(x=>x.id===d.id);return !def||def.status==='optional';})
       .map(d=>docRow(d,{cls:'badge-opt',txt:'Optional'})),
+    ...missingOpt.map(d=>missingRow(d,{cls:'badge-opt',txt:'Optional'})),
   ];
   /* The driving-record check is compliance but not a file, so it never appears as
      a document row — it has its own block. It DOES count as outstanding, though,
@@ -620,8 +634,13 @@ function appDetailHtml(a){
     <div class="info-row"><span class="ir-label">Payment model</span><span class="ir-val">Pay upfront — no credit</span></div>
   `:'';
 
+  /* Brent, 4 Aug: "allow us to edit information if we need to". Available on every
+     record whatever its state — a wrong email on an approved account is exactly the
+     one you most need to fix, and it never touches the status or the access door. */
+  const editBtn=`<button class="btn btn-gh" onclick="openEdit('${a.ref}')" title="Correct the details${a.type==='driver'?' or the driving record codes':''} held on this account"><svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4z"/></svg>Edit details</button>`;
+
   const actions=(()=>{
-    if(a.status==='blocked')return`<button class="btn btn-approve" onclick="unblockAcc('${a.ref}')"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>Unblock (back to pending)</button>`;
+    if(a.status==='blocked')return`${editBtn}<button class="btn btn-approve" onclick="unblockAcc('${a.ref}')"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>Unblock (back to pending)</button>`;
     const blockBtn=isB?'':`<button class="btn btn-reject" onclick="blockAcc('${a.ref}')" title="Refuse this account all access — including PLNA"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>Block</button>`;
     const emailBtn=(!isB&&!a.email_verified)?`<button class="btn btn-review" onclick="confirmEmail('${a.ref}')" title="Mark this applicant's email address as confirmed"><svg viewBox="0 0 24 24"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>Confirm email</button>`:'';
     if(a.status==='approved'){
@@ -633,9 +652,9 @@ function appDetailHtml(a){
       const rel=a.access_confirmed_at
         ?`<button class="btn btn-gh btn-done" title="Let in by ${a.access_confirmed_by||'the team'} · ${fmtDate(a.access_confirmed_at)} — network on, login details emailed">Access released ✓</button>`
         :`<button class="btn btn-approve" onclick="releaseAccess('${a.ref}')" title="Confirm this person and let them in — HAF KNECT network on, PLNA opened, login details emailed"><svg viewBox="0 0 24 24"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>Confirm &amp; release access</button>`;
-      return`${emailBtn}<button class="btn btn-gh btn-done">Approved ✓</button>${rel}${blockBtn}`;
+      return`${editBtn}${emailBtn}<button class="btn btn-gh btn-done">Approved ✓</button>${rel}${blockBtn}`;
     }
-    if(a.status==='rejected')return`<button class="btn btn-gh btn-done">Rejected</button>${blockBtn}`;
+    if(a.status==='rejected')return`${editBtn}<button class="btn btn-gh btn-done">Rejected</button>${blockBtn}`;
     /* Nothing can be processed until the paperwork is in, so the queue chases it from
        here instead of someone remembering to write the email by hand. */
     const remindBtn=(()=>{
@@ -647,7 +666,7 @@ function appDetailHtml(a){
       return`<button class="btn btn-remind" onclick="openRemind('${a.ref}')" title="Email them about the ${n} thing${n!==1?'s':''} we are still waiting on"><svg viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>Send document reminder</button>`;
     })();
     const rev=(a.status==='pending'||a.status==='enquiry')?`<button class="btn btn-review" onclick="markReviewing('${a.ref}')"><svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>Mark in review</button>`:'';
-    return`${rev}${remindBtn}${emailBtn}<button class="btn btn-approve" onclick="approve('${a.ref}')"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>Approve</button><button class="btn btn-reject" onclick="openReject('${a.ref}')"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>Reject</button>${blockBtn}`;
+    return`${editBtn}${rev}${remindBtn}${emailBtn}<button class="btn btn-approve" onclick="approve('${a.ref}')"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>Approve</button><button class="btn btn-reject" onclick="openReject('${a.ref}')"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>Reject</button>${blockBtn}`;
   })();
 
   return`<div class="detail-sec">${isB?'Enquiry details':'Applicant details'}</div>

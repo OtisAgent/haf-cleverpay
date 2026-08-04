@@ -106,6 +106,39 @@ function readDvla(d, app) {
   return { patch };
 }
 
+/* ── what the team may correct by hand, in the words the record shows ──
+   The label is what goes in the change history, so it reads as a sentence a
+   non-technical reviewer understands months later. Anything not on this list
+   cannot be edited through the portal at all: the username (their login to
+   three systems), the status and release stamps (decisions, made elsewhere,
+   with their own audit), the payment record and every PIN. */
+const EDIT_FIELDS = {
+  fname: 'first name', lname: 'last name', email: 'email address', phone: 'phone number',
+  dob: 'date of birth', vtype: 'vehicle type', vreg: 'vehicle reg',
+  company: 'company name', crn: 'company number', vat: 'VAT number',
+  name: 'contact name', title: 'job title',
+};
+const DVLA_LABELS = {
+  dvla_licence_no: 'driving licence number', dvla_check_code: 'DVLA check code', ni_number: 'National Insurance number',
+};
+
+/* No column exists for an audit trail and the applications table is not mine to
+   alter, so the history lives at the foot of the record notes behind a marker:
+   free notes above it are the team's, everything below is written by the portal.
+   Twenty entries is the ceiling — enough to see a pattern, not enough to bury
+   what somebody actually wrote. */
+const HIST_MARK = '— — record changes — —';
+const freeNotes = n => { const s = St(n || ''); const i = s.indexOf(HIST_MARK); return i === -1 ? s : s.slice(0, i); };
+function recordHistory(freeIn, oldNotes, who, changed) {
+  const s = St(oldNotes || '');
+  const i = s.indexOf(HIST_MARK);
+  const prior = i === -1 ? [] : s.slice(i + HIST_MARK.length).split('\n').map(l => l.trim()).filter(Boolean);
+  const free = St(freeIn === undefined || freeIn === null ? freeNotes(s) : freeIn).replace(/\s+$/, '');
+  const when = nowIso().slice(0, 16).replace('T', ' ');
+  const kept = prior.concat(`${when} · ${who} changed ${changed.join(', ')}`).slice(-20);
+  return (free ? free + '\n\n' : '') + HIST_MARK + '\n' + kept.join('\n');
+}
+
 /* Which required documents are still outstanding on this application.
    Worked out from the config the team saved — the same list the portal shows —
    so a reminder can never ask for a document the settings no longer require.
@@ -352,11 +385,20 @@ export default {
         const r = await patchApp(env, app.ref, patch);
         return r.ok ? J(strip(r.body[0]), 200, cors) : bad('Could not save documents.', 500);
       }
-      /* ── applicant: upload one real file (raw bytes; ref/doc id/pin in the query) ── */
+      /* ── one real file onto a record (raw bytes; ref/doc id/pin in the query) ──
+         Two people use this door. The applicant sends their own paperwork with
+         their PIN, and the page writes the document list itself afterwards. The
+         team sends paperwork that reached us another way — by email, on WhatsApp,
+         handed over on a job (Brent, 4 Aug) — authorised by their session instead,
+         and because they have no PIN to write the list with, the record is updated
+         here. A file the office put on says so: it is not the same evidence as one
+         the driver sent, and the row should never pretend otherwise. */
       if (R('/docs/file', 'POST')) {
         const q = url.searchParams;
         const app = await findApp(env, q.get('ref') || '');
-        if (!app || (app.pin_hash && app.pin_hash !== q.get('k'))) return bad(NOAUTH, 401);
+        /* only pay for the session lookup when a team member is actually asking */
+        const team = req.headers.get('Authorization') ? await teamUser(env, req) : null;
+        if (!app || (!team && app.pin_hash && app.pin_hash !== q.get('k'))) return bad(NOAUTH, 401);
         const id = (q.get('id') || '').replace(/[^a-z0-9_-]/gi, '').slice(0, 40);
         if (!id) return bad('Missing document type.', 400);
         const mime = (req.headers.get('Content-Type') || '').split(';')[0].toLowerCase();
@@ -368,7 +410,15 @@ export default {
         const up = await store(env, path, { method: 'POST', body: bytes,
           headers: { [CT]: mime, 'x-upsert': 'true' } });
         if (!up.ok) return bad('Could not store that file — please try again.', 502);
-        return J({ ok: true, path, size: bytes.byteLength, mime }, 200, cors);
+        if (!team) return J({ ok: true, path, size: bytes.byteLength, mime }, 200, cors);
+        /* one row per document type: a replacement supersedes what was there, and it
+           arrives unticked because nobody has read the new file yet */
+        const docs = (Array.isArray(app.docs) ? app.docs : []).filter(d => d.id !== id);
+        docs.push({ id, filename: St(q.get('filename') || id).slice(0, 120), path, mime,
+          size: bytes.byteLength, added_by: team, added_at: nowIso(), by_team: true });
+        const r = await patchApp(env, app.ref, { docs, updated_at: nowIso() });
+        return r.ok && r.body[0] ? J({ ok: true, app: strip(r.body[0]) }, 200, cors)
+          : bad('The file was stored but the record did not update — please try again.', 500);
       }
 
       if (R('/application', 'GET')) {
@@ -535,6 +585,21 @@ export default {
             'Content-Disposition': `inline; filename="${St(d.filename || id).replace(/["\r\n]/g, '')}"` } });
         }
 
+        /* ── team takes a file back off the record ──
+           A file attached to the wrong person is worse than a missing one, so
+           whoever added it must be able to undo it in the same place. */
+        if (R('/team/doc-remove', 'POST')) {
+          const app = await findApp(env, b.ref || '');
+          if (!app) return bad(NOTFOUND, 404);
+          const id = St(b.id || '').replace(/[^a-z0-9_-]/gi, '');
+          const held = (Array.isArray(app.docs) ? app.docs : []);
+          if (!held.some(d => d.id === id)) return bad('No such document on this application.', 404);
+          const docs = held.filter(d => d.id !== id);
+          const r = await patchApp(env, app.ref, { docs, updated_at: nowIso() });
+          if (!r.ok || !r.body[0]) return bad('Could not remove that document.', 500);
+          return J({ ok: true, app: strip(r.body[0]) }, 200, cors);
+        }
+
         /* ── reviewer ticks a document off — recorded on the application with who and when ── */
         if (R('/team/doc-check', 'POST')) {
           const app = await findApp(env, b.ref || '');
@@ -562,14 +627,62 @@ export default {
           return r.ok && r.body[0] ? J({ ok: true, app: strip(r.body[0]) }, 200, cors) : bad('Could not save that check.', 500);
         }
 
-        /* ── the team can correct what the driver typed (a transposed digit stops the lookup dead) ── */
-        if (R('/team/dvla', 'PUT')) {
+        /* ── team corrects what is held on the record ──
+           Brent, 4 Aug: "allow us to edit information if we need to". A surname
+           typed wrong at sign-up, a dead email, a transposed digit in a licence
+           number — none of that should mean starting the person's application
+           again. Only what a human can legitimately correct is writable here:
+           the status, the approval and release stamps, the payment record and
+           anybody's PIN are all deliberately out of reach, because those are
+           decisions, not details. The username is out of reach too — it is how
+           they sign in to CleverPay, KNECT and PLNA, so changing it would lock
+           them out of all three.
+
+           Two consequences are handled rather than hidden. A new email address
+           has not been confirmed by the person who owns it, so the confirmation
+           is cleared and they must confirm again — otherwise a typo becomes a
+           way past the access door. And a new check code is a new record, so
+           the driving-record tick clears itself (readDvla already does this).
+           Every save writes its own line of history into the record notes: no
+           column exists for an audit trail, and a compliance file that cannot
+           say who changed it is worth less than one nobody touched. */
+        if (R('/team/edit', 'POST')) {
           const app = await findApp(env, b.ref || '');
           if (!app) return bad(NOTFOUND, 404);
-          const v = readDvla(b, app);
-          if (v.error) return bad(v.error, 400);
-          const r = await patchApp(env, app.ref, { ...v.patch, updated_at: nowIso() });
-          return r.ok && r.body[0] ? J({ ok: true, app: strip(r.body[0]) }, 200, cors) : bad('Could not save that.', 500);
+          const f = b.fields && typeof b.fields === 'object' ? b.fields : {};
+          const patch = {}, changed = [];
+          for (const k of Object.keys(EDIT_FIELDS)) {
+            if (f[k] === undefined) continue;
+            let v = St(f[k]).trim();
+            if (k === 'vreg') v = v.toUpperCase();
+            const next = v === '' ? null : v;
+            if ((app[k] == null ? null : app[k]) === next) continue;
+            patch[k] = next; changed.push(EDIT_FIELDS[k]);
+          }
+          if (patch.email !== undefined) {
+            if (patch.email === null) return bad('An account needs an email address — it is how they are told anything.', 400);
+            if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(patch.email)) return bad('That email address doesn’t look right.', 400);
+            /* the new owner of this address has confirmed nothing yet */
+            patch.email_verified = false; patch.email_verified_at = null;
+            patch.email_confirm_token = null; patch.email_confirm_sent_at = null;
+          }
+          if (b.dvla) {
+            const v = readDvla(b.dvla, app);
+            if (v.error) return bad(v.error, 400);
+            for (const [k, val] of Object.entries(v.patch)) {
+              if ((app[k] == null ? null : app[k]) === val) continue;
+              patch[k] = val;
+              if (DVLA_LABELS[k]) changed.push(DVLA_LABELS[k]);
+            }
+          }
+          /* notes carry the history block, so they are compared on their free text alone */
+          if (f.notes !== undefined && St(f.notes).trim() !== freeNotes(app.notes).trim()) changed.push('the notes');
+          if (!changed.length) return J({ ok: true, app: strip(app), changed: [] }, 200, cors);
+          patch.notes = recordHistory(f.notes, app.notes, who, changed);
+          patch.updated_at = nowIso();
+          const r = await patchApp(env, app.ref, patch);
+          if (!r.ok || !r.body[0]) return bad('Could not save those changes — please try again.', 500);
+          return J({ ok: true, app: strip(r.body[0]), changed }, 200, cors);
         }
 
         /* ── chase the documents we are still waiting on ──
