@@ -1,0 +1,18 @@
+/api.js -> 319c6f81de8e18d514d2f1ee6a8cbe6f (2160 bytes)
+/confirm.html -> 8fd86a12ca953ab091a3c80168fb9490 (8722 bytes)
+/docs.css -> 11d7675728b75eff53c0109847396a87 (10935 bytes)
+/docs.html -> a93395a8612f840aa540643f9a7b068e (23346 bytes)
+/index.css -> 1f247619dc5af99f79dce5bb578585ec (12965 bytes)
+/index.html -> df1475c62ee5158d536ff7d0f220c988 (21754 bytes)
+/index.js -> c9c0f99269411e244690b434982d9a08 (12912 bytes)
+/status.css -> c847a7039e0ddae9333fe0ea1dc7f9a1 (12980 bytes)
+/status.html -> 21917042ce5a22ce1e2f7e2f5d97d63d (19536 bytes)
+/team-add.js -> 8bff564e11b96e151a511abe832e860f (10134 bytes)
+/team-config.js -> 69c47c47d7653e466b3b53bbd9372545 (13088 bytes)
+/team-edit.js -> 5804f06a3808d176cca0635ba8092e74 (17610 bytes)
+/team.css -> ac5ac37cee45fde778e40427eb7f8247 (36523 bytes)
+/team.html -> ce156cb96347e806c8d67e345c633ee3 (24581 bytes)
+/team.js -> 1409fd39d273c50d6aeec3efd38f05ad (63445 bytes)
+check-missing: 14 of 15 need upload
+upload ok=True
+upsert-hashes ok=True

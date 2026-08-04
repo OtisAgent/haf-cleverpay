@@ -267,6 +267,35 @@ async function tellTeam(env, text) {
   } catch {}
 }
 
+/* ── the applicant's own copy of what just happened ──
+   Brent, 4 Aug: the buttons have to tell the person. This worker cannot send an
+   email — it holds no mail key, and putting one here would mean two things that
+   send HAF post instead of one — so the message is written down where the mail
+   engine will pick it up on its next pass. Two consequences are deliberate.
+   It is written BEFORE a delete, because a moment later there is no name, no
+   address and no reference left to write to. And someone who has asked not to
+   be emailed, or who is blocked, is not written down at all — an application
+   ending is not a reason to override either. */
+const FAREWELLS = 'cleverpay_farewells';
+async function queueFarewell(env, app, kind, who) {
+  if (!app.email || app.reminder_opt_out || app.blocked_at) return false;
+  try {
+    const r = await sb(env, `/${FAREWELLS}`, {
+      method: 'POST',
+      /* the same notice queued twice is one email too many; the database
+         refuses the duplicate rather than this code trying to remember */
+      headers: { Prefer: 'resolution=ignore-duplicates' },
+      body: S({
+        ref: app.ref, email: app.email,
+        fname: app.fname || app.name || null,
+        account_type: app.type || null,
+        kind, created_by: who,
+      }),
+    });
+    return !!(r && r.ok);
+  } catch { return false; }
+}
+
 export default {
   async fetch(req, bound, ctx) {
     const cors = corsHeaders(req);
@@ -507,14 +536,24 @@ export default {
         const app = await findApp(env, b.ref || '');
         if (!app) return bad(NOTFOUND, 404);
         const want = b.archived !== false;
+        /* Silent unless the office says otherwise. Archiving is filing, not a
+           decision, and "your application has been archived" lands on someone
+           who has done nothing wrong as though it were one. The tick is there
+           for the case where they genuinely should be told — and it is handled
+           before the state check, because telling an already-archived applicant
+           is exactly when the office reaches for it. */
+        const told = want && b.notify === true
+          ? await queueFarewell(env, app, 'on_hold', who) : false;
         if (isArchived(app.notes) === want)
-          return J({ ok: true, app: view(app), changed: false }, 200, cors);
+          return J({ ok: true, app: view(app), changed: false, emailed: told,
+            email: told ? app.email : null }, 200, cors);
         const r = await patchApp(env, app.ref, {
           notes: recordHistory(undefined, app.notes, who, want ? ARCHIVED : RESTORED),
           updated_at: nowIso(),
         });
         if (!r.ok || !r.body[0]) return bad('Could not save that — please try again.', 500);
-        return J({ ok: true, app: view(r.body[0]), changed: true }, 200, cors);
+        return J({ ok: true, app: view(r.body[0]), changed: true,
+          emailed: told, email: told ? app.email : null }, 200, cors);
       }
 
       /* ── clear it and send it back to the applicant ──
@@ -567,12 +606,23 @@ export default {
         if (!app) return bad(NOTFOUND, 404);
         if (St(b.confirm || '').toUpperCase().trim() !== St(app.ref).toUpperCase())
           return bad('Type the reference exactly to confirm you meant to delete it.', 400);
+        /* written first, on purpose: after the DELETE below there is nothing
+           left to address it to. If the row cannot be written the deletion is
+           abandoned rather than done silently — an applicant who is removed
+           without ever being told is the outcome this whole change exists to
+           stop. Someone opted out or blocked returns false and is allowed
+           through: that is a deliberate silence, not a failure. */
+        const mailable = !!(app.email && !app.reminder_opt_out && !app.blocked_at);
+        const told = await queueFarewell(env, app, 'closed', who);
+        if (mailable && !told)
+          return bad('Could not queue the applicant’s email, so nothing has been deleted. Please try again.', 503);
         await dropFiles(env, app);
         const r = await sb(env, `/${APPS}?ref=eq.${E(app.ref)}`, { method: 'DELETE' });
         if (!r.ok) return bad('Could not delete that application — please try again.', 500);
         const name = [app.fname, app.lname].filter(Boolean).join(' ') || app.company || app.username || '';
-        await tellTeam(env, `CleverPay: application ${app.ref} (${name}) was deleted by ${who} on ${nowIso().slice(0, 16).replace('T', ' ')}. Documents removed with it. This cannot be undone.`);
-        return J({ ok: true, ref: app.ref, name }, 200, cors);
+        await tellTeam(env, `CleverPay: application ${app.ref} (${name}) was deleted by ${who} on ${nowIso().slice(0, 16).replace('T', ' ')}. Documents removed with it. ${told ? 'The applicant has been emailed to say it is closed.' : 'The applicant has NOT been emailed.'} This cannot be undone.`);
+        return J({ ok: true, ref: app.ref, name, emailed: told,
+          email: told ? app.email : null }, 200, cors);
       }
 
       /* ── chase the documents we are still waiting on ──

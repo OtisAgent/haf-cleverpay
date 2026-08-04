@@ -35,7 +35,9 @@ const DB = {
   ],
   cleverpay_team_sessions: [],
   cleverpay_api_keys: [],
+  cleverpay_farewells: [],
 };
+let FAIL_TABLE = null;
 const STORE = new Map();
 const TG = [];
 let seq = 1;
@@ -86,6 +88,12 @@ const dbSrv = createServer(async (req, res) => {
   }
 
   const table = u.pathname.replace('/rest/v1/', '').split('?')[0];
+  /* one table can be made to fail on demand, so the tests can ask what the
+     portal does when the database is there but that write will not land */
+  if (table === FAIL_TABLE) {
+    res.writeHead(500, { 'Content-Type': 'application/json', ...CORS });
+    return res.end(JSON.stringify({ message: 'stub: this table is down' }));
+  }
   const rows = DB[table] || [];
   const body = raw.toString('utf8');
   const send = (d, c = 200) => { res.writeHead(c, { 'Content-Type': 'application/json', ...CORS }); res.end(JSON.stringify(d)); };
@@ -402,6 +410,66 @@ else {
   await page2.close();
   await browser.close();
 }
+
+/* ── Brent, 4 Aug: "it needs a trigger building on the buttons for the
+   notification to the users / applicants" ──
+   The portal cannot send an email itself, so what these check is the promise
+   it CAN keep: that the right message, to the right address, is written down
+   where the mail engine will find it — and, for a delete, that it is written
+   down while there is still a record to write it from. */
+console.log('\nThe buttons tell the applicant');
+const FW = () => DB.cleverpay_farewells;
+FW().length = 0;
+
+seed('HAF-CP-NOTE1', { fname: 'Ade', email: 'ade@example.com' });
+const silent = await api('/team/archive', auth({ ref: 'HAF-CP-NOTE1' }));
+ok('archiving on its own emails nobody', silent.status === 200 && silent.body.emailed === false && FW().length === 0, FW());
+
+const telling = await api('/team/archive', auth({ ref: 'HAF-CP-NOTE1', archived: true, notify: true }));
+ok('the on-hold notice can be sent for a record already archived',
+  telling.status === 200 && telling.body.emailed === true && telling.body.email === 'ade@example.com', telling.body);
+ok('and it is queued as on-hold, to them, with their reference',
+  FW().length === 1 && FW()[0].kind === 'on_hold' && FW()[0].email === 'ade@example.com'
+  && FW()[0].ref === 'HAF-CP-NOTE1' && FW()[0].sent_at == null, FW()[0]);
+ok('with the name of whoever pressed it on the row', FW()[0].created_by === 'bf638793', FW()[0]);
+
+seed('HAF-CP-NOTE2', { fname: 'Ola', email: 'ola@example.com', reminder_opt_out: true });
+const optedOut = await api('/team/archive', auth({ ref: 'HAF-CP-NOTE2', notify: true }));
+ok('somebody who asked not to be emailed is not emailed', optedOut.status === 200 && optedOut.body.emailed === false && FW().length === 1, FW());
+
+seed('HAF-CP-NOTE3', { fname: 'Priya', email: 'priya@example.com', blocked_at: '2026-08-01T00:00:00.000Z' });
+const blocked = await api('/team/archive', auth({ ref: 'HAF-CP-NOTE3', notify: true }));
+ok('a blocked applicant is not emailed either', blocked.status === 200 && blocked.body.emailed === false && FW().length === 1, FW());
+
+seed('HAF-CP-NOTE4', { fname: 'Wes', email: 'wes@example.com', docs: withDocs('HAF-CP-NOTE4') });
+const killed = await api('/team/delete', auth({ ref: 'HAF-CP-NOTE4', confirm: 'HAF-CP-NOTE4' }));
+ok('deleting tells the applicant it is closed',
+  killed.status === 200 && killed.body.emailed === true && killed.body.email === 'wes@example.com', killed.body);
+const closed = FW().find(r => r.ref === 'HAF-CP-NOTE4');
+ok('the closure is queued with the address the record held',
+  closed && closed.kind === 'closed' && closed.email === 'wes@example.com', closed);
+ok('and it survives the record it came from', !apps.some(a => a.ref === 'HAF-CP-NOTE4'), apps.map(a => a.ref));
+ok('the compliance group is told the applicant was emailed',
+  /has been emailed to say it is closed/.test(TG[TG.length - 1].text), TG[TG.length - 1].text);
+
+seed('HAF-CP-NOTE5', { fname: 'Ivy', email: 'ivy@example.com', reminder_opt_out: true });
+const quietKill = await api('/team/delete', auth({ ref: 'HAF-CP-NOTE5', confirm: 'HAF-CP-NOTE5' }));
+ok('an opted-out applicant is still deleted, just not emailed',
+  quietKill.status === 200 && quietKill.body.emailed === false
+  && !apps.some(a => a.ref === 'HAF-CP-NOTE5'), quietKill.body);
+ok('and the compliance group is told plainly that nobody was written to',
+  /has NOT been emailed/.test(TG[TG.length - 1].text), TG[TG.length - 1].text);
+
+/* The one that matters most: if the message cannot be written down, the
+   deletion must not happen. Losing the record AND the person's notice is the
+   single outcome this whole change exists to prevent. */
+seed('HAF-CP-NOTE6', { fname: 'Ned', email: 'ned@example.com', docs: withDocs('HAF-CP-NOTE6') });
+FAIL_TABLE = 'cleverpay_farewells';
+let refused;
+try { refused = await api('/team/delete', auth({ ref: 'HAF-CP-NOTE6', confirm: 'HAF-CP-NOTE6' })); }
+finally { FAIL_TABLE = null; }
+ok('a delete is refused outright when the applicant cannot be told', refused.status === 503, refused.body);
+ok('and the record is still there, with its documents', apps.some(a => a.ref === 'HAF-CP-NOTE6') && STORE.has('HAF-CP-NOTE6/licence-front'), apps.map(a => a.ref));
 
 console.log(`\n${pass} passed, ${fail} failed`);
 if (CHROME) console.log('screenshots → worker/_shots/');

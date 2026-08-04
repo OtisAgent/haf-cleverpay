@@ -249,11 +249,25 @@ function manageBar(a){
   const arch=a.archived
     ?`<button class="btn btn-approve" onclick="setArchived('${a.ref}',false)" title="Put this back in the working tabs"><svg viewBox="0 0 24 24"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>Restore to the queue</button>`
     :`<button class="btn btn-gh" onclick="setArchived('${a.ref}',true)" title="Hide this from the working tabs — nothing else changes and you can put it back"><svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="5"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><line x1="10" y1="12" x2="14" y2="12"/></svg>Archive</button>`;
+  /* Archiving stays silent and stays one press — it is filing, not a decision.
+     Telling the applicant is its own deliberate press, offered only once the
+     record is actually archived and only when there is somebody to write to. */
+  const hold=a.archived&&a.email&&!a.reminder_opt_out&&!a.blocked_at
+    ?`<button class="btn btn-gh" onclick="tellOnHold('${a.ref}')" title="Email them to say their application is on hold and someone will be in touch"><svg viewBox="0 0 24 24"><path d="M4 4h16v12H5.17L4 17.17V4z"/><line x1="8" y1="9" x2="16" y2="9"/></svg>Tell them it's on hold</button>`:'';
   const clear=a.type==='business'?''
     :`<button class="btn btn-review" onclick="openClear('${a.ref}')" title="Wipe what they sent and ask them to do it again"><svg viewBox="0 0 24 24"><polyline points="3 2 3 8 9 8"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>Clear &amp; send back</button>`;
   const del=canIntegrate()
     ?`<button class="btn btn-reject" onclick="openDelete('${a.ref}')" title="Remove this application and its documents for good"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>Delete</button>`:'';
-  return`<div class="detail-sec">Manage this record</div><div class="manage-bar">${arch}${clear}${del}</div>`;
+  return`<div class="detail-sec">Manage this record</div><div class="manage-bar">${arch}${hold}${clear}${del}</div>`;
+}
+
+async function tellOnHold(ref){
+  const r=await cpApi('/team/archive',{method:'POST',token:TEAM.token,body:{ref:ref,archived:true,notify:true}});
+  if(r.status===401){showToast('Session expired — please sign in again',true);doSignOut();return}
+  if(!r.ok){showToast((r.body&&r.body.error)||'Could not send that — try again',true);return}
+  showToast(r.body.emailed
+    ?'On its way to '+r.body.email+' — they will be told it is on hold and that someone will be in touch'
+    :'No email was sent: this applicant is opted out, blocked, or has no address on file',!r.body.emailed);
 }
 
 async function setArchived(ref,on){
@@ -300,6 +314,10 @@ function openDelete(ref){
   DELETE_REF=ref;
   document.getElementById('dl-who').textContent=displayName(a);
   document.getElementById('dl-ref').textContent=a.ref;
+  const mailable=a.email&&!a.reminder_opt_out&&!a.blocked_at;
+  document.getElementById('dl-mail').textContent=mailable
+    ?'We will email '+a.email+' to say their application is closed, that someone will be in touch to explain why, and that they can apply again with the details we ask for.'
+    :'No email will be sent — this applicant is opted out, blocked, or has no address on file.';
   const box=document.getElementById('dl-confirm');
   box.value='';
   document.getElementById('dl-go').disabled=true;
@@ -325,7 +343,9 @@ async function confirmDelete(){
   if(i>=0)QUEUE.splice(i,1);
   closeDelete();
   renderQueue();
-  showToast('Deleted — '+r.body.ref+' is gone, and the compliance group has been told');
+  showToast(r.body.emailed
+    ?'Deleted — '+r.body.ref+' is gone. '+r.body.email+' has been told it is closed and that someone will be in touch.'
+    :'Deleted — '+r.body.ref+' is gone. No email was sent: this applicant is opted out, blocked, or had no address on file.',!r.body.emailed);
 }
 ['cl-ov','dl-ov'].forEach(id=>document.getElementById(id).addEventListener('click',function(e){
   if(e.target===this){id==='cl-ov'?closeClear():closeDelete()}
