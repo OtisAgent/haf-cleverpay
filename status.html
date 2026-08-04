@@ -260,7 +260,10 @@ function renderStatus(app){
   offer.classList.toggle('show', fullAccess);
   emailNote.style.display = (status === 'pending' || status === 'reviewing' || (status === 'approved' && !emailOk)) ? '' : 'none';
   if (status === 'approved' && !emailOk) {
-    emailNote.querySelector('span').innerHTML = '<strong>One step left — confirm your email.</strong> Your documents are approved, but access stays locked until the email address on your application is confirmed with the HAF team.';
+    /* This used to say the address is confirmed "with the HAF team", which sent
+       people to a step they could not take — there was no link and no way to
+       ask for one. It is self-serve now: the button is in their welcome email. */
+    emailNote.querySelector('span').innerHTML = '<strong>One step left — confirm your email.</strong> Your documents are approved. Open the email we sent when you applied and press <b>Confirm my email</b>. Can\'t find it? Reply to any email from us and we\'ll send a fresh link.';
   }
 
   if(status === 'pending'){
