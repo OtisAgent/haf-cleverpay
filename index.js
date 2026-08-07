@@ -34,6 +34,33 @@ function selectType(type){
   }, 120);
 }
 
+/* Someone arriving from join.usehaf.co.uk has already said who they are and
+   which plan they want. Asking again is asking twice, and a courier who picked
+   Fleet Pro on the join page must not land on a form that says nothing about it.
+   So: open their form straight away, and say their plan back to them.
+   The plan itself is held on the join record against their email — stamping it
+   onto this application needs a field the worker has no room for yet. */
+const JOIN = (function () {
+  const q = new URLSearchParams(location.search);
+  const type = (q.get('type') || '').replace(/[^a-z]/g, '');
+  const id = (q.get('join') || '').replace(/[^a-z0-9-]/gi, '').slice(0, 40);
+  const name = (q.get('pn') || '').replace(/[^\w £×.,&+-]/g, '').slice(0, 60);
+  return id && ALL_CARDS.includes(type) ? { id, type, name } : null;
+})();
+
+function applyJoinChoice(){
+  if (!JOIN) return;
+  const note = document.getElementById('join-carry');
+  if (note) {
+    note.textContent = JOIN.name
+      ? 'Carried over from Join HAF — you chose ' + JOIN.name + ', so we have not asked again. Just finish your details below.'
+      : 'Carried over from Join HAF — we already have your plan, so just finish your details below.';
+    note.style.display = '';
+  }
+  selectType(JOIN.type);
+}
+document.addEventListener('DOMContentLoaded', applyJoinChoice);
+
 function backToType(){
   document.querySelectorAll('.form-section').forEach(s => s.classList.remove('visible'));
   document.getElementById('view-type').style.display = '';
