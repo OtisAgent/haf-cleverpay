@@ -238,7 +238,7 @@ async function loadPage(){
   document.getElementById('type-val').textContent = app.type === 'driver' ? 'Driver' : 'Freight Forwarder';
 
   if(app.promo_code && app.founders_tier){
-    const MONTHS = { founder:'6 months', builder:'3 months', partner:'1 month', final:'—' };
+    const MONTHS = { founder:'3 months', builder:'3 months', partner:'1 month', final:'—' };
     const STAGE  = { founder:'Founders', builder:'Builder', partner:'Partner', final:'Final stage' };
     const el = document.getElementById('founders-code-banner');
     if(el){
