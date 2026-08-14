@@ -1043,9 +1043,28 @@ function unblockAcc(ref){
    if nothing is outstanding they hear nothing, because "we have your documents"
    has already gone. The toast says which of the two happened rather than
    claiming an email that may not have left. */
+/* This page and the back office are published by two different jobs on two
+   different schedules, so there is always a window where one is newer than the
+   other. If this page lands first the route does not exist yet — so a 404 falls
+   back to the old database function, which still works and still confirms the
+   address. The reviewer's press never fails because of a deploy ordering; the
+   only thing missing in that window is the email, and the next press sends it. */
+const SB_URL='https://jsdwvogsxlnczzbefwgp.supabase.co';
+const SB_ANON='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpzZHd2b2dzeGxuY3p6YmVmd2dwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEzODgyMzYsImV4cCI6MjA5Njk2NDIzNn0.pxqM-Oh4f_3PlqCbKIKvcKZnNRUZ1ASKqqdNg78M_4M';
+async function confirmEmailLegacy(ref){
+  try{
+    const res=await fetch(SB_URL+'/rest/v1/rpc/cleverpay_team_set_email_verified',{
+      method:'POST',
+      headers:{'Content-Type':'application/json',apikey:SB_ANON,Authorization:'Bearer '+SB_ANON},
+      body:JSON.stringify({p_ref:ref,p_token:TEAM.token,p_verified:true})
+    });
+    return res.ok;
+  }catch(e){return false}
+}
 async function confirmEmail(ref,silent){
   if(!TEAM)return false;
-  const r=await cpApi('/team/confirm-email',{method:'POST',token:TEAM.token,body:{ref:ref}});
+  let r=await cpApi('/team/confirm-email',{method:'POST',token:TEAM.token,body:{ref:ref}});
+  if(r.status===404&&await confirmEmailLegacy(ref))r={ok:true,status:200,body:{emailed:false}};
   if(r.status===401){showToast('Session expired — please sign in again',true);doSignOut();return false;}
   if(!r.ok){showToast(silent?'Approved, but the email could not be confirmed — use the Confirm email button on the card to retry':(r.body&&r.body.error)||'Could not confirm the email — try again',true);return false;}
   const i=QUEUE.findIndex(a=>a.ref===ref);
