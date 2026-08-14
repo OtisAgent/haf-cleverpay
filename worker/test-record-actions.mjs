@@ -163,10 +163,25 @@ const SITE = 'http://127.0.0.1:8797';
 
 let pass = 0, fail = 0;
 const ok = (n, c, d) => { if (c) { pass++; console.log('  PASS  ' + n); } else { fail++; console.log('  FAIL  ' + n + (d !== undefined ? '  → ' + JSON.stringify(d) : '')); } };
+/* What the press hands the mail engine on its way out. Since 14 August the
+   applicant's notice is not written into a table for a later sweep to collect:
+   the button names its moment on the response, and the engine in front of this
+   worker sends it there and then. So what is checked below is that name, the
+   address it carries, and — for a delete — the copy of the record that travels
+   with it, because a moment later there is nothing left to read. */
+const moment = (r) => {
+  const ev = r.headers.get('x-cp-event');
+  if (!ev) return null;
+  let snap = null;
+  try { const s = r.headers.get('x-cp-snap'); if (s) snap = JSON.parse(decodeURIComponent(s)); } catch { snap = null; }
+  let item = '';
+  try { item = decodeURIComponent(r.headers.get('x-cp-item') || ''); } catch { item = ''; }
+  return { event: ev, ref: r.headers.get('x-cp-ref'), item, snap };
+};
 const api = async (path, init = {}) => {
   const r = await worker.fetch(new Request('http://127.0.0.1:8797' + path, init), {}, { waitUntil: p => p });
   let b = null; try { b = await r.json(); } catch {}
-  return { status: r.status, body: b };
+  return { status: r.status, body: b, moment: moment(r) };
 };
 const find = ref => apps.find(a => a.ref === ref);
 const HIST = '— — record changes — —';
@@ -412,42 +427,49 @@ else {
 }
 
 /* ── Brent, 4 Aug: "it needs a trigger building on the buttons for the
-   notification to the users / applicants" ──
-   The portal cannot send an email itself, so what these check is the promise
-   it CAN keep: that the right message, to the right address, is written down
-   where the mail engine will find it — and, for a delete, that it is written
-   down while there is still a record to write it from. */
+   notification to the users / applicants", and 14 Aug: "within 10 seconds of
+   the action being completed" ──
+   Until 14 August the portal wrote the applicant's notice into a table and an
+   engine collected it on its next pass. It does not any more: the press names
+   its moment on the way out and the mail engine in front of this worker sends
+   it there and then. So the promise being checked here has moved — from "it is
+   written down where something will find it" to "it is named, addressed, and
+   for a delete it carries a copy of the record, because a moment later there
+   is nothing left to read." The sending itself is proven separately, against a
+   real template and a stubbed Mandrill, in test-instant-send.mjs. */
 console.log('\nThe buttons tell the applicant');
-const FW = () => DB.cleverpay_farewells;
-FW().length = 0;
 
 seed('HAF-CP-NOTE1', { fname: 'Ade', email: 'ade@example.com' });
 const silent = await api('/team/archive', auth({ ref: 'HAF-CP-NOTE1' }));
-ok('archiving on its own emails nobody', silent.status === 200 && silent.body.emailed === false && FW().length === 0, FW());
+ok('archiving on its own emails nobody', silent.status === 200 && silent.body.emailed === false && silent.moment === null, silent.moment);
 
 const telling = await api('/team/archive', auth({ ref: 'HAF-CP-NOTE1', archived: true, notify: true }));
 ok('the on-hold notice can be sent for a record already archived',
   telling.status === 200 && telling.body.emailed === true && telling.body.email === 'ade@example.com', telling.body);
-ok('and it is queued as on-hold, to them, with their reference',
-  FW().length === 1 && FW()[0].kind === 'on_hold' && FW()[0].email === 'ade@example.com'
-  && FW()[0].ref === 'HAF-CP-NOTE1' && FW()[0].sent_at == null, FW()[0]);
-ok('with the name of whoever pressed it on the row', FW()[0].created_by === 'bf638793', FW()[0]);
+ok('and it leaves named as the application-cancelled moment, with their reference',
+  telling.moment && telling.moment.event === 'compliance_application_cancelled'
+  && telling.moment.ref === 'HAF-CP-NOTE1', telling.moment);
+ok('and the press is still recorded against whoever made it',
+  /bf638793/.test(find('HAF-CP-NOTE1').notes), find('HAF-CP-NOTE1').notes.slice(-160));
 
 seed('HAF-CP-NOTE2', { fname: 'Ola', email: 'ola@example.com', reminder_opt_out: true });
 const optedOut = await api('/team/archive', auth({ ref: 'HAF-CP-NOTE2', notify: true }));
-ok('somebody who asked not to be emailed is not emailed', optedOut.status === 200 && optedOut.body.emailed === false && FW().length === 1, FW());
+ok('somebody who asked not to be emailed is not emailed',
+  optedOut.status === 200 && optedOut.body.emailed === false && optedOut.moment === null, optedOut.moment);
 
 seed('HAF-CP-NOTE3', { fname: 'Priya', email: 'priya@example.com', blocked_at: '2026-08-01T00:00:00.000Z' });
 const blocked = await api('/team/archive', auth({ ref: 'HAF-CP-NOTE3', notify: true }));
-ok('a blocked applicant is not emailed either', blocked.status === 200 && blocked.body.emailed === false && FW().length === 1, FW());
+ok('a blocked applicant is not emailed either',
+  blocked.status === 200 && blocked.body.emailed === false && blocked.moment === null, blocked.moment);
 
 seed('HAF-CP-NOTE4', { fname: 'Wes', email: 'wes@example.com', docs: withDocs('HAF-CP-NOTE4') });
 const killed = await api('/team/delete', auth({ ref: 'HAF-CP-NOTE4', confirm: 'HAF-CP-NOTE4' }));
 ok('deleting tells the applicant it is closed',
   killed.status === 200 && killed.body.emailed === true && killed.body.email === 'wes@example.com', killed.body);
-const closed = FW().find(r => r.ref === 'HAF-CP-NOTE4');
-ok('the closure is queued with the address the record held',
-  closed && closed.kind === 'closed' && closed.email === 'wes@example.com', closed);
+const closed = killed.moment;
+ok('the closure leaves named, with the address the record held',
+  closed && closed.event === 'compliance_application_cancelled'
+  && closed.ref === 'HAF-CP-NOTE4' && closed.snap && closed.snap.email === 'wes@example.com', closed);
 ok('and it survives the record it came from', !apps.some(a => a.ref === 'HAF-CP-NOTE4'), apps.map(a => a.ref));
 ok('the compliance group is told the applicant was emailed',
   /has been emailed to say it is closed/.test(TG[TG.length - 1].text), TG[TG.length - 1].text);
@@ -460,16 +482,25 @@ ok('an opted-out applicant is still deleted, just not emailed',
 ok('and the compliance group is told plainly that nobody was written to',
   /has NOT been emailed/.test(TG[TG.length - 1].text), TG[TG.length - 1].text);
 
-/* The one that matters most: if the message cannot be written down, the
-   deletion must not happen. Losing the record AND the person's notice is the
-   single outcome this whole change exists to prevent. */
-seed('HAF-CP-NOTE6', { fname: 'Ned', email: 'ned@example.com', docs: withDocs('HAF-CP-NOTE6') });
-FAIL_TABLE = 'cleverpay_farewells';
-let refused;
-try { refused = await api('/team/delete', auth({ ref: 'HAF-CP-NOTE6', confirm: 'HAF-CP-NOTE6' })); }
-finally { FAIL_TABLE = null; }
-ok('a delete is refused outright when the applicant cannot be told', refused.status === 503, refused.body);
-ok('and the record is still there, with its documents', apps.some(a => a.ref === 'HAF-CP-NOTE6') && STORE.has('HAF-CP-NOTE6/licence-front'), apps.map(a => a.ref));
+/* The one that matters most: losing the record AND the person's notice is the
+   single outcome this whole change exists to prevent. It used to be prevented
+   by refusing the delete unless the notice could be written down first. The
+   notice is no longer written down, so it is prevented a different way: the
+   copy that the email is built from is taken BEFORE the row goes, and travels
+   with the moment — so the message can still be composed in full when there is
+   nothing left in the database to look up. */
+seed('HAF-CP-NOTE6', { fname: 'Ned', lname: 'Okafor', email: 'ned@example.com',
+  journey: 'v2', docs: withDocs('HAF-CP-NOTE6') });
+const gone = await api('/team/delete', auth({ ref: 'HAF-CP-NOTE6', confirm: 'HAF-CP-NOTE6' }));
+ok('the record and its documents really are gone',
+  gone.status === 200 && !apps.some(a => a.ref === 'HAF-CP-NOTE6')
+  && !STORE.has('HAF-CP-NOTE6/licence-front'), apps.map(a => a.ref));
+const carried = gone.moment && gone.moment.snap;
+ok('yet the notice still carries everything it needs to be written',
+  !!carried && carried.email === 'ned@example.com' && carried.ref === 'HAF-CP-NOTE6'
+  && /Ned/.test(String(carried.name || carried.fname || '')), carried);
+ok('and it is stamped as having come through the new front door, or it would not send',
+  carried && carried.journey === 'v2', carried && carried.journey);
 
 console.log(`\n${pass} passed, ${fail} failed`);
 if (CHROME) console.log('screenshots → worker/_shots/');
