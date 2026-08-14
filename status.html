@@ -257,17 +257,24 @@ function loadPage(){
    HAF KNECT is deliberately not gated on any of this: an approved account can
    post jobs and read its dashboards from the moment it is approved. Driving on
    the network is the part that needs the paperwork. */
+/* Returns null when the requirement set is not in hand yet, and a count when it
+   is. null is NOT zero, and the difference is the whole point: the settings are
+   fetched after the first paint, so for the first moment of every visit this
+   page does not yet know what the paperwork should be.
+
+   An earlier version of this fix returned 0 in that moment — "nothing missing"
+   — which unlocked the tile on the compliance stamp alone. That is precisely
+   the hole being closed here, rebuilt inside its own repair. Not knowing is a
+   reason to keep the door shut, never a reason to open it. */
 function requiredMissing(app){
   const set = app.type === 'freight' ? (CFG && CFG.freight) : (CFG && CFG.driver);
-  const defs = (set && Array.isArray(set.docs) ? set.docs : []).filter(d => d.status === 'required');
-  /* No settings in hand yet. Fall back to the compliance press alone rather
-     than inventing a lock — that stamp is still something no applicant can
-     give themselves, so the hole stays shut either way. */
-  if(!defs.length) return 0;
+  if(!set || !Array.isArray(set.docs)) return null;
+  const defs = set.docs.filter(d => d.status === 'required');
   const have = (Array.isArray(app.docs) ? app.docs : []).map(d => d.id);
   return defs.filter(d => !have.includes(d.id)).length;
 }
 
+/* Both halves, both proven. A missing answer fails closed. */
 function cleverChecked(app){
   return !!app.access_confirmed_at && requiredMissing(app) === 0;
 }
@@ -313,11 +320,13 @@ function renderStatus(app, live){
   const docCount = (app.docs || []).length;
   document.getElementById('tl-docs-count').textContent =
     docCount + ' document' + (docCount !== 1 ? 's' : '') + ' uploaded';
-  const docsShort = requiredMissing(app);
+  /* Ticked only on a proven zero — an unknown requirement set (null) leaves the
+     step open, the same way it leaves the PLNA tile locked. */
+  const docsOk = requiredMissing(app) === 0;
   const stepDocs = document.getElementById('step-2');
-  stepDocs.className = docsShort ? 'step active' : 'step done';
-  stepDocs.querySelector('.step-n').textContent = docsShort ? '2' : '✓';
-  document.getElementById('sep-2').className = docsShort ? 'step-sep' : 'step-sep done';
+  stepDocs.className = docsOk ? 'step done' : 'step active';
+  stepDocs.querySelector('.step-n').textContent = docsOk ? '✓' : '2';
+  document.getElementById('sep-2').className = docsOk ? 'step-sep done' : 'step-sep';
 
   /* Access needs BOTH: team approval AND a confirmed email address. */
   const emailOk = !!app.email_verified;
@@ -435,7 +444,20 @@ async function refreshFromApi(){
 }
 
 loadPage();
-cpApi('/config').then(r => { if(r.ok) CFG = r.body; refreshFromApi(); });
+/* The first paint happens before the requirement set arrives, and until it does
+   the PLNA tile is locked because nothing has proved the paperwork yet. So the
+   moment the settings land, redraw from the record already in hand — otherwise
+   a person whose documents ARE complete sits looking at a locked tile whenever
+   the follow-up read is slow or fails. The live refresh is a separate thing and
+   must not be what unlocks the page. */
+cpApi('/config').then(r => {
+  if(r.ok) CFG = r.body;
+  try {
+    const raw = localStorage.getItem('cp_application');
+    if(raw) renderStatus(JSON.parse(raw));
+  } catch(e){}
+  refreshFromApi();
+});
 
 /* Poll every 8s so team approvals/rejections reflect here without a reload */
 setInterval(refreshFromApi, 8000);

@@ -459,7 +459,37 @@ export default {
            stamps who and when, switches the HAF KNECT network on, and is the
            only thing the email engine will accept as permission to send
            somebody their login details. */
+        /* ── the paperwork has to exist before the press can open anything ──
+           Brent, 14 Aug: a freight account with an empty document list was
+           released and PLNA let it straight in. Nothing here ever looked at
+           the documents — Confirm & release stamped the record, the mail job
+           copied the username into PLNA's cleared list, and the door opened
+           for somebody who had uploaded nothing.
+
+           So the press now reads the same requirement set the applicant is
+           shown, and refuses while anything marked required is missing. It
+           names the missing documents rather than saying no, because the
+           reviewer's next move is to go and get them — and documents that
+           arrived by email are added on this same record, which clears the
+           block honestly. Approve and reject are untouched; only the press
+           that OPENS a door is gated on the paperwork behind it. */
         if (b.confirm_access) {
+          const cfgr = await sb(env, '/cleverpay_portal_config?id=eq.1&limit=1');
+          const cfg = cfgr.ok && cfgr.body && cfgr.body[0] ? cfgr.body[0].config : null;
+          const cur = await findApp(env, m[1]);
+          if (!cur) return bad(NOTFOUND, 404);
+          const set = cur.type === 'freight' ? (cfg && cfg.freight) : (cfg && cfg.driver);
+          const need = (set && Array.isArray(set.docs) ? set.docs : []).filter(d => d.status === 'required');
+          /* b.docs is whatever this same press is saving; fall back to what is
+             already on the record so a plain press is judged on the real file. */
+          const held = (Array.isArray(b.docs) ? b.docs : (Array.isArray(cur.docs) ? cur.docs : [])).map(d => d.id);
+          const missing = need.filter(d => !held.includes(d.id));
+          if (missing.length) {
+            return bad('Cannot release access — this account is missing ' + missing.length
+              + ' required document' + (missing.length !== 1 ? 's' : '') + ': '
+              + missing.map(d => d.name || d.id).join(', ')
+              + '. Add them to the record first, then release.', 409);
+          }
           patch.status = 'approved';
           patch.approved_at = patch.approved_at || nowIso();
           patch.approved_by = patch.approved_by || who;
