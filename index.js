@@ -45,12 +45,40 @@ const JOIN = (function () {
   const type = (q.get('type') || '').replace(/[^a-z]/g, '');
   const id = (q.get('join') || '').replace(/[^a-z0-9-]/gi, '').slice(0, 40);
   const name = (q.get('pn') || '').replace(/[^\w £×.,&+-]/g, '').slice(0, 60);
-  return id && ALL_CARDS.includes(type) ? { id, type, name } : null;
+  /* Their HAF username, if Join HAF already opened their account. */
+  const user = (q.get('u') || '').replace(/[^a-z0-9]/gi, '').slice(0, 24).toUpperCase();
+  return id && ALL_CARDS.includes(type) ? { id, type, name, user } : null;
 })();
 
 function applyJoinChoice(){
   if (!JOIN) return;
   const note = document.getElementById('join-carry');
+  /* Two different people arrive here holding a join id, and they need opposite
+     things.
+
+     WITH a username, Join HAF has already opened their HAF account — name, PIN
+     and all. The only thing left for them is their documents. Sending them into
+     the sign-up form would ask them to choose a username that already exists,
+     and the moment they pressed the button they would be turned away as a
+     duplicate: a front door that stops the very people who came through it.
+     So they get the sign-in box, with their username already in it. The PIN
+     they chose on Join HAF is still the key and only they have it.
+
+     WITHOUT one, they came through the older join page, which records the
+     membership but makes no login at all — so the sign-up form is genuinely
+     their next step, and it stays exactly as it was. */
+  if (JOIN.user) {
+    if (note) {
+      note.textContent = 'Your HAF account is open — you are ' + JOIN.user
+        + '. Sign in with the PIN you chose on Join HAF and we will show you the documents we need.';
+      note.style.display = '';
+    }
+    const idBox = document.getElementById('login-id');
+    const pinBox = document.getElementById('login-pin');
+    if (idBox) idBox.value = JOIN.user;
+    if (pinBox) pinBox.focus();
+    return;
+  }
   if (note) {
     note.textContent = JOIN.name
       ? 'Carried over from Join HAF — you chose ' + JOIN.name + ', so we have not asked again. Just finish your details below.'

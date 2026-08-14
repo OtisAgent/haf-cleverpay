@@ -107,7 +107,7 @@ function refreshQueue(){loadQueue();showToast('Queue refreshed')}
 /* ── TABS ── */
 function setTab(t){
   currentTab=t;
-  ['pending','reviewing','approved','rejected','all','archived','settings','integration'].forEach(x=>{
+  ['signedup','pending','reviewing','approved','rejected','all','archived','settings','integration'].forEach(x=>{
     document.getElementById('tab-'+x)?.classList.toggle('active',x===t);
   });
   renderView();
@@ -130,6 +130,11 @@ function updateKPIs(all){
   const n=(s)=>q.filter(a=>a.status===s).length;
   const tcA=document.getElementById('tc-archived');
   if(tcA)tcA.textContent=all.length-q.length;
+  /* "Signed up and in" is everybody who has come through the front door and not
+     been filed away — the count is the size of that list and nothing cleverer,
+     so the number and the rows underneath it can never disagree. */
+  const tcS=document.getElementById('tc-signedup');
+  if(tcS)tcS.textContent=q.length;
   /* business enquiries arrive as status 'enquiry' — they queue with pending */
   const nPending=n('pending')+n('enquiry');
   document.getElementById('kpi-pending').textContent=nPending;
@@ -147,14 +152,28 @@ function updateKPIs(all){
    Approved and All are the tabs that keep growing, so they default to the list
    view: one row per account, the way a CRM reads. The card view is still a click
    away on every tab. */
-const LIST_TABS=['pending','approved','all'];
+const LIST_TABS=['signedup','pending','approved','all'];
 /* New Applications is the tab the team WORKS in, so it keeps its cards by default
    and remembers its own preference — the reference tabs default to the list. */
 const SECTION_TAB='pending';
-const viewKey=t=>t===SECTION_TAB?'cp_view_pending':'cp_view';
+/* ── SIGNED UP AND IN ──
+   Brent, 14 Aug: "whenever anyone signs up … we should get a list called 'signed
+   up and into' section — then the drivers go through the full process, everyone
+   else remains being able to enter; we can block & update from there and approve
+   any documents."
+   It is an arrivals board, not a fifth queue: every account that has come through
+   the front door, newest first, split by which road it is on. Every action on a
+   row is the same button the record already carries — nothing here is a second
+   way to do anything, and nothing here lets anybody in. */
+const SIGNUP_TAB='signedup';
+const viewKey=t=>t===SECTION_TAB?'cp_view_pending':t===SIGNUP_TAB?'cp_view_signup':'cp_view';
 function getView(t){return localStorage.getItem(viewKey(t))||(t===SECTION_TAB?'cards':'list')}
 let crmSearch='';
 let crmSort={key:'submitted',dir:-1};
+/* the arrivals board keeps its own sort so it always opens newest first, whatever
+   somebody last sorted the CRM tabs by */
+let signupSort={key:'submitted',dir:-1};
+const curSort=()=>currentTab===SIGNUP_TAB?signupSort:crmSort;
 let crmOpen=null;
 
 function setView(v){
@@ -168,8 +187,9 @@ function setCrmSearch(v){
   if(box){box.focus();box.setSelectionRange(box.value.length,box.value.length);}
 }
 function setCrmSort(k){
-  if(crmSort.key===k)crmSort.dir=-crmSort.dir;
-  else crmSort={key:k,dir:k==='submitted'?-1:1};
+  const s=curSort();
+  if(s.key===k)s.dir=-s.dir;
+  else{s.key=k;s.dir=k==='submitted'?-1:1}
   renderQueue();
 }
 
@@ -193,13 +213,59 @@ function pendingSections(list){
   ];
 }
 
+/* ── WHERE THEY ARE UP TO ──
+   Every line of this reads off the record. The one thing it may never do is blur
+   approved with let-in: a record can be approved for days without a soul having
+   pressed Confirm & release, and only `access_confirmed_at` — the stamp that
+   press leaves — is allowed to say somebody is in the network. */
+const SG_ORDER=['sg-block','sg-no','sg-wait','sg-go','sg-hold','sg-in'];
+function signupStage(a){
+  if(a.status==='blocked')
+    return{t:'Blocked',c:'sg-block',ti:'Refused all access. Open the record and press Unblock to put them back on the list.'};
+  if(a.status==='rejected')
+    return{t:'Not approved',c:'sg-no',ti:a.reject_reason||a.rejectReason||'Not approved'};
+  if(a.access_confirmed_at)
+    return{t:'In the network',c:'sg-in',ti:'Let in by '+(a.access_confirmed_by||'the team')+' · '+fmtDate(a.access_confirmed_at)};
+  if(a.status==='approved')
+    return{t:'Approved — not let in',c:'sg-hold',
+      ti:'Approved'+(a.approved_by?' by '+a.approved_by:'')+(a.approved_at?' · '+fmtDate(a.approved_at):'')
+        +'. Nobody has pressed Confirm & release yet, so they are not in.'};
+  const{missingAll}=appCompliance(a);
+  if(missingAll.length)
+    return{t:missingAll.length+' outstanding',c:'sg-wait',ti:'Still waiting on: '+missingAll.map(d=>d.name).join(', ')};
+  if(a.status==='reviewing')
+    return{t:'Being checked',c:'sg-go',ti:'Somebody here is working through it'};
+  if(!docSetFor(a).length)
+    return{t:'Nothing to pass',c:'sg-go',ti:'This account type is never asked for documents'};
+  return{t:'All in — needs a check',c:'sg-go',ti:'Everything asked for is on the record; it is waiting on a reviewer'};
+}
+
+/* Two roads out of the front door, and which one an account is on is decided by
+   what it IS, never by how far along it has got. */
+function signupSections(list){
+  return[
+    {t:'In the document process',
+     n:'Owner drivers and courier companies. Approve their documents on the record — and only a named Confirm &amp; release press lets anybody in.',
+     rows:list.filter(inDocProcess),
+     e:'No drivers or courier companies have signed up yet.'},
+    {t:'Straight into the network',
+     n:'Freight forwarders and business accounts. They are never asked for driver documents — block one, or correct its details, from the record below.',
+     rows:list.filter(a=>!inDocProcess(a)),
+     e:'No freight forwarders or business accounts have signed up yet.'},
+  ];
+}
+
 function renderQueue(){
   const q=QUEUE;
   updateKPIs(q);
   /* Archived records live in one tab of their own and nowhere else — that is the
      whole point of archiving one. Everything else shows the working queue. */
   const live=currentTab==='archived'?q.filter(a=>a.archived):q.filter(a=>!a.archived);
-  const filtered=currentTab==='all'||currentTab==='archived'?live
+  /* The arrivals board is not a status: it is EVERY account that has come through
+     the front door and not been filed away. Filtering it by `status==='signedup'`
+     would match no record ever written and quietly show an empty board while
+     people were signing up — which is the one thing this tab exists to stop. */
+  const filtered=currentTab==='all'||currentTab==='archived'||currentTab===SIGNUP_TAB?live
     :live.filter(a=>a.status===currentTab||(currentTab==='pending'&&a.status==='enquiry'));
   const el=document.getElementById('main-content');
   const mode=getView(currentTab);
@@ -214,6 +280,24 @@ function renderQueue(){
     el.innerHTML=viewSwitchHtml()+listToolsHtml(rows.length,filtered.length)+secs.map(s=>
       `<div class="qsec">
         <div class="sec-head"><span class="sec-t">${s.t}</span><span class="sec-n">${s.rows.length}</span></div>
+        ${s.rows.length?(mode==='list'?crmTableHtml(s.rows):`<div class="app-list">${s.rows.map(a=>appCardHtml(a)).join('')}</div>`)
+          :`<div class="sec-empty">${s.e}</div>`}
+      </div>`).join('');
+    if(mode!=='list')rows.forEach(a=>{
+      document.getElementById('head-'+a.ref)?.addEventListener('click',()=>toggleCard(a.ref));
+    });
+    return;
+  }
+  /* the arrivals board: everyone who has come through the front door, split by
+     which road they are on — the split is by account TYPE, so a driver never
+     drifts across into the straight-in half by getting approved */
+  if(currentTab===SIGNUP_TAB){
+    const rows=filtered.filter(a=>crmMatch(a,crmSearch));
+    const secs=signupSections(rows);
+    el.innerHTML=viewSwitchHtml()+listToolsHtml(rows.length,filtered.length)+secs.map(s=>
+      `<div class="qsec">
+        <div class="sec-head"><span class="sec-t">${s.t}</span><span class="sec-n">${s.rows.length}</span></div>
+        <div class="sec-note">${s.n}</div>
         ${s.rows.length?(mode==='list'?crmTableHtml(s.rows):`<div class="app-list">${s.rows.map(a=>appCardHtml(a)).join('')}</div>`)
           :`<div class="sec-empty">${s.e}</div>`}
       </div>`).join('');
@@ -264,10 +348,13 @@ const CRM_COLS=[
   {k:'username',t:'Username',on:1,s:a=>a.username||'',v:a=>`<span class="c-user">${a.username||'—'}</span>`},
   {k:'ref',t:'Reference',on:1,s:a=>a.ref||'',v:a=>`<span class="c-ref">${a.ref}</span>`},
   {k:'name',t:'Name',on:1,s:a=>displayName(a).toLowerCase(),v:a=>`<span class="c-name">${displayName(a)}</span>`},
-  {k:'type',t:'Account',on:1,sm:1,s:a=>a.type||'',v:a=>{
-    const isB=a.type==='business',isF=a.type==='freight';
-    return`<span class="chip ${isB?'chip-business':isF?'chip-freight':'chip-driver'}">${isB?'Business':isF?'Freight':'Driver'}</span>`;}},
+  {k:'type',t:'Account',on:1,sm:1,s:a=>a.type||'',v:a=>typeChip(a)},
   {k:'status',t:'Status',on:1,s:a=>a.status||'',v:a=>statusChip(a.status)},
+  /* Where somebody is up to, in one pill, read straight off the record. Off by
+     default in the CRM tabs (they have Status and Clever Checked already) and
+     always on in Signed up and in, which is the whole reason it exists. */
+  {k:'stage',t:'Where they are up to',sm:1,s:a=>SG_ORDER.indexOf(signupStage(a).c),
+    v:a=>{const g=signupStage(a);return`<span class="sgp ${g.c}" title="${String(g.ti).replace(/"/g,'&quot;')}">${g.t}</span>`}},
   {k:'checked',t:'Clever Checked',on:1,sm:1,s:a=>a.status==='approved'?(new Date(a.approved_at||0).getTime()||1):0,v:a=>{
     if(a.status==='approved')return`<span class="cc-on" title="Passed the CleverPay compliance check${a.approved_at?' on '+fmtDate(a.approved_at):''}"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>${a.approved_at?fmtDay(a.approved_at):'Checked'}</span>`;
     if(a.status==='reviewing')return'<span class="c-no">Being checked</span>';
@@ -321,7 +408,14 @@ const CRM_COLS=[
    the `on` set means a new column added later just appears for everyone. */
 let crmCols=(()=>{try{const s=JSON.parse(localStorage.getItem('cp_cols')||'null');return Array.isArray(s)&&s.length?s:null}catch(e){return null}})();
 let colMenuOpen=false;
-function activeCols(){return crmCols?CRM_COLS.filter(c=>crmCols.includes(c.k)):CRM_COLS.filter(c=>c.on)}
+/* "Where they are up to" is the reason the arrivals board exists, so it is always
+   on there whatever somebody has switched off in the CRM tabs — and it is theirs
+   to switch off everywhere else. */
+function activeCols(){
+  const base=crmCols?CRM_COLS.filter(c=>crmCols.includes(c.k)):CRM_COLS.filter(c=>c.on);
+  if(currentTab!==SIGNUP_TAB||base.some(c=>c.k==='stage'))return base;
+  return CRM_COLS.filter(c=>c.k==='stage'||base.includes(c));
+}
 function toggleCol(k){
   const cur=activeCols().map(c=>c.k);
   const next=cur.includes(k)?cur.filter(x=>x!==k):CRM_COLS.filter(c=>cur.includes(c.k)||c.k===k).map(c=>c.k);
@@ -369,13 +463,14 @@ function listToolsHtml(shown,total){
 function crmTableHtml(list){
   const cols=activeCols();
   const rows=list.slice();
-  const col=cols.find(c=>c.k===crmSort.key)||CRM_COLS.find(c=>c.k===crmSort.key)||cols[cols.length-1];
+  const srt=curSort();
+  const col=cols.find(c=>c.k===srt.key)||CRM_COLS.find(c=>c.k===srt.key)||cols[cols.length-1];
   rows.sort((x,y)=>{
     const a=col.s(x),b=col.s(y);
-    return(a<b?-1:a>b?1:0)*crmSort.dir;
+    return(a<b?-1:a>b?1:0)*srt.dir;
   });
 
-  const arrow=k=>crmSort.key===k?`<span class="th-ar">${crmSort.dir===1?'▲':'▼'}</span>`:'';
+  const arrow=k=>srt.key===k?`<span class="th-ar">${srt.dir===1?'▲':'▼'}</span>`:'';
   const head=cols.map((c,i)=>`<th class="${c.sm?'sm-hide ':''}${i===0?'stick1 ':''}th-${c.k}" onclick="setCrmSort('${c.k}')" title="Sort by ${c.t}">${c.t}${arrow(c.k)}</th>`).join('');
   const span=cols.length+2;
 
@@ -437,8 +532,39 @@ async function markSeen(ref){
   }catch(e){a.viewed_at=null;a.viewed_by=null;}
 }
 
+/* ── THE FOUR ACCOUNT TYPES ──
+   Two of them put a vehicle on the road in HAF's name and go through the whole
+   document process; two of them do not. That line is not a portal opinion — it is
+   the same one the journey engine draws (scripts/haf_journey.py:
+   `needs_checks = role in ("driver","fleet")`) and the same one the nightly sweep
+   draws when it decides which paperwork to ask an account for
+   (scripts/haf_status_sweep.py: driver documents ONLY for a driver).
+   Until today the portal had no idea what a fleet was: a courier company fell
+   through to the driver branch and was shown a driver's document list and a
+   driver's details panel with nobody's name in it. */
+const TYPE_NAME={driver:'Driver',fleet:'Fleet',freight:'Freight',business:'Business'};
+const TYPE_CLS={driver:'chip-driver',fleet:'chip-fleet',freight:'chip-freight',business:'chip-business'};
+/* an owner driver or a courier company — documents first, and only a named
+   Confirm & release press ever lets them in */
+const inDocProcess=a=>a.type==='driver'||a.type==='fleet';
+/* a company, so the record holds a company name and company paperwork rather
+   than a photocard and a van */
+const isCompanyAcc=a=>a.type==='freight'||a.type==='fleet';
+function typeChip(a){
+  const t=a.type||'driver';
+  return`<span class="chip ${TYPE_CLS[t]||'chip-driver'}">${TYPE_NAME[t]||t}</span>`;
+}
+/* One place decides what an account is measured against, so the card, the list,
+   the document viewer and the edit panel can never disagree about it. A business
+   enquiry is measured against nothing — it is never shown a document requirement. */
+function docSetFor(a){
+  const cfg=getConfig();
+  if(a.type==='business')return[];
+  return isCompanyAcc(a)?cfg.freight.docs:cfg.driver.docs;
+}
+
 function ini(a){
-  if(a.type==='freight'||a.type==='business'){
+  if(a.type!=='driver'){
     const w=(a.company||'').split(' ').filter(x=>!['ltd','limited','uk','plc','llp'].includes(x.toLowerCase()));
     return w.slice(0,2).map(x=>x[0]?.toUpperCase()||'').join('');
   }
@@ -457,11 +583,13 @@ function statusChip(s){
 /* Compliance rows and the detail panel are shared by the card view and the list
    view, so they live in their own functions rather than inside the card. */
 function appCompliance(a){
-  const isF=a.type==='freight';
+  /* isCo means "this record is a company" — it chooses the company paperwork and
+     the company details panel. It is NOT the same question as whether the account
+     goes through the driver process (a fleet is a company AND goes through it). */
+  const isCo=isCompanyAcc(a);
   const isB=a.type==='business';
-  const cfg=getConfig();
   /* business enquiries carry no compliance docs — never flag them as missing */
-  const docDefs=isB?[]:(isF?cfg.freight.docs:cfg.driver.docs);
+  const docDefs=docSetFor(a);
 
   const uploaded=Array.isArray(a.docs)?a.docs:[];
   const uploadedIds=uploaded.map(d=>d.id);
@@ -507,7 +635,7 @@ function appCompliance(a){
   const missingRec=recordGaps(a);
   const missingAll=[...missingReq,...missingRec];
 
-  return{isF,isB,docDefs,uploaded,reqDefs,missingReq,missingRec,missingAll,allDocRows};
+  return{isCo,isB,docDefs,uploaded,reqDefs,missingReq,missingRec,missingAll,allDocRows};
 }
 
 /* ── DRIVING RECORD CHECK ──
@@ -608,7 +736,7 @@ async function tickDvla(ref){
 }
 
 function appDetailHtml(a){
-  const{isF,isB,allDocRows,missingAll}=appCompliance(a);
+  const{isCo,isB,allDocRows,missingAll}=appCompliance(a);
 
   const driverRows=`
     <div class="dg"><div class="dl">Name</div><div class="dv">${a.fname||''} ${a.lname||''}</div></div>
@@ -620,7 +748,9 @@ function appDetailHtml(a){
     <div class="dg"><div class="dl">Vehicle reg</div><div class="dv mono">${a.vreg||'—'}</div></div>
     <div class="dg"><div class="dl">Submitted</div><div class="dv">${fmtDate(a.submitted)}</div></div>
   `;
-  const freightRows=`
+  /* every company account — a freight forwarder or a courier company — is the
+     same shape on the record: a company, a named human, and its registrations */
+  const companyRows=`
     <div class="dg"><div class="dl">Company</div><div class="dv">${a.company||'—'}</div></div>
     <div class="dg"><div class="dl">HAF Username</div><div class="dv mono">${a.username||'—'}</div></div>
     <div class="dg"><div class="dl">Contact name</div><div class="dv">${a.name||'—'}</div></div>
@@ -639,7 +769,10 @@ function appDetailHtml(a){
     <div class="dg" style="grid-column:1/-1"><div class="dl">What they need to move</div><div class="dv">${a.notes||'—'}</div></div>
     <div class="dg"><div class="dl">Submitted</div><div class="dv">${fmtDate(a.submitted)}</div></div>
   `;
-  const freightExtras=isF?`
+  /* Deliberately still asks for the exact type, not isCo: "pay upfront, no credit"
+     is a fact about a freight forwarder's terms, and asserting it about a courier
+     company nobody has agreed terms with would be inventing one. */
+  const freightExtras=a.type==='freight'?`
     <div class="info-row"><span class="ir-label">KNECT member</span><span class="ir-val">${a.knect?'Yes':'No'}</span></div>
     <div class="info-row"><span class="ir-label">Payment model</span><span class="ir-val">Pay upfront — no credit</span></div>
   `:'';
@@ -650,8 +783,14 @@ function appDetailHtml(a){
   const editBtn=`<button class="btn btn-gh" onclick="openEdit('${a.ref}')" title="Correct the details${a.type==='driver'?' or the driving record codes':''} held on this account"><svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4z"/></svg>Edit details</button>`;
 
   const actions=(()=>{
-    if(a.status==='blocked')return`${editBtn}<button class="btn btn-approve" onclick="unblockAcc('${a.ref}')"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>Unblock (back to pending)</button>`;
-    const blockBtn=isB?'':`<button class="btn btn-reject" onclick="blockAcc('${a.ref}')" title="Refuse this account all access — including PLNA"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>Block</button>`;
+    if(a.status==='blocked')return`${editBtn}<button class="btn btn-approve" onclick="unblockAcc('${a.ref}')"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>Unblock (back to ${isB?'the enquiry list':'pending'})</button>`;
+    /* Brent, 14 Aug: freight forwarders and business accounts walk straight into
+       the network, so the team must be able to stop one from the list. Block was
+       already how this portal suspends somebody (status 'blocked' — read by the
+       network pill, the status chip and the mail engine's blocked check); the only
+       thing missing was that a business account was never offered the button. No
+       new column, no new route, no second way of switching anybody off. */
+    const blockBtn=`<button class="btn btn-reject" onclick="blockAcc('${a.ref}')" title="${isB?'Refuse this account all access':'Refuse this account all access — including PLNA'}"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>Block</button>`;
     const emailBtn=(!isB&&!a.email_verified)?`<button class="btn btn-review" onclick="confirmEmail('${a.ref}')" title="Mark this applicant's email address as confirmed"><svg viewBox="0 0 24 24"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>Confirm email</button>`:'';
     if(a.status==='approved'){
       /* Approving settles the compliance check. Letting the person IN is a second,
@@ -680,7 +819,7 @@ function appDetailHtml(a){
   })();
 
   return`<div class="detail-sec">${isB?'Enquiry details':'Applicant details'}</div>
-    <div class="detail-grid">${isB?businessRows:isF?freightRows:driverRows}</div>
+    <div class="detail-grid">${isB?businessRows:isCo?companyRows:driverRows}</div>
     ${freightExtras}
     ${isB?'':`<div class="detail-sec">Compliance documents</div>
     <div class="doc-rows">${allDocRows.join('')||'<div style="font-size:.74rem;color:var(--mu);padding:.2rem 0">No documents submitted yet.</div>'}</div>`}
@@ -691,7 +830,7 @@ function appDetailHtml(a){
 }
 
 function appCardHtml(a){
-  const{isF,isB,missingAll}=appCompliance(a);
+  const{isB,missingAll}=appCompliance(a);
   return`<div class="app-card" id="card-${a.ref}">
     <div class="app-head" id="head-${a.ref}">
       <div class="app-avatar">${ini(a)}</div>
@@ -700,7 +839,7 @@ function appCardHtml(a){
         <div class="app-meta">${a.ref} · ${fmtDate(a.submitted)}</div>
       </div>
       <div class="app-right">
-        <span class="chip ${isB?'chip-business':isF?'chip-freight':'chip-driver'}">${isB?'Business':isF?'Freight':'Driver'}</span>
+        ${typeChip(a)}
         ${statusChip(a.status)}
         ${isB?'':(a.email_verified?`<span class="chip chip-approved" title="Email address confirmed">Email ✓</span>`:`<span class="chip chip-pending" title="Access stays locked until the email is confirmed">Email unconfirmed</span>`)}
         ${(()=>{const n=netState(a);return n.t==='—'?'':`<span class="npill ${n.c}" title="${n.ti}">${n.t}</span>`})()}
@@ -733,8 +872,7 @@ function fmtSize(n){if(!n)return'';return n<1048576?Math.max(1,Math.round(n/1024
 function heldDocs(ref){
   const a=QUEUE.find(x=>x.ref===ref);
   if(!a)return[];
-  const cfg=getConfig();
-  const defs=a.type==='freight'?cfg.freight.docs:cfg.driver.docs;
+  const defs=docSetFor(a);
   return(Array.isArray(a.docs)?a.docs:[]).filter(d=>d.path)
     .map(d=>({...d,name:(defs.find(x=>x.id===d.id)||{}).name||d.id}));
 }
@@ -872,8 +1010,27 @@ function approveOnly(){
   const ref=approveTarget;closeApproveEmail();if(!ref)return;
   update(ref,{status:'approved'},'Approved — access stays locked until their email is confirmed');
 }
-function blockAcc(ref){update(ref,{status:'blocked'},'Account blocked — all access refused')}
-function unblockAcc(ref){update(ref,{status:'pending'},'Unblocked — returned to pending for re-review')}
+/* ── BLOCKING SOMEBODY ──
+   One press away in a list is the right place for it, and exactly why it has to
+   say what it costs first: unblocking puts the record back on the list to be
+   looked at again, it does not hand back an access that was already released.
+   Whoever presses it should know that before they press it, not afterwards. */
+function blockAcc(ref){
+  const a=QUEUE.find(x=>x.ref===ref);
+  const who=a?displayName(a):ref;
+  const cost=a&&a.access_confirmed_at
+    ?'\n\nThey are in the network right now. Unblocking puts them back on the list to be looked at again — it does not give the access back, so someone would have to approve and release them once more.'
+    :'';
+  if(!confirm(`Block ${who}?\n\nThey are refused all access for as long as they are blocked.${cost}`))return;
+  update(ref,{status:'blocked'},'Account blocked — all access refused');
+}
+function unblockAcc(ref){
+  const a=QUEUE.find(x=>x.ref===ref);
+  /* a business account arrived as an enquiry and was never in the pending queue —
+     put it back where it actually came from */
+  const back=a&&a.type==='business'?'enquiry':'pending';
+  update(ref,{status:back},back==='enquiry'?'Unblocked — back on the enquiry list':'Unblocked — returned to pending for re-review');
+}
 
 /* Email confirmation goes through a database function that checks the team
    session token server-side — the public key alone cannot flip this flag. */

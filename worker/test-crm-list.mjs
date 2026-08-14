@@ -271,7 +271,9 @@ console.log('\n── choosing columns ──');
 await page.click('.col-pick .vs-btn');
 await page.waitForTimeout(200);
 ok('the Columns menu opens', await page.locator('.col-menu').isVisible());
-ok('it lists every column there is', await page.locator('.col-opt').count() === 21);
+/* 22 since 14 Aug: "Where they are up to" joined them, which is the column the
+   Signed up and in tab is built around. */
+ok('it lists every column there is', await page.locator('.col-opt').count() === 22);
 await page.locator('.col-opt:has-text("Membership")').click();
 await page.waitForTimeout(250);
 ok('ticking Membership adds the column', await page.locator('.crm th.th-membership').count() === 1);
@@ -491,6 +493,33 @@ await page.waitForTimeout(200);
 const lbg = await page.locator('.crm tr.r').evaluateAll(rs => rs.slice(0, 2).map(r => getComputedStyle(r).backgroundColor));
 ok('the stripe still reads in the light theme', lbg[0] !== lbg[1], lbg);
 await page.screenshot({ path: new URL('crm-approved-light-1280.png', SHOTS).pathname, fullPage: true });
+await ctx.close();
+
+/* ── 10. Signed up and in ──
+   Brent's arrivals board, 14 Aug. Two things have to be true of it and they are
+   the only two worth a browser: the count on the tab is the size of the list
+   underneath it, and the two roads never mix. Everything else on this tab is
+   the CRM machinery the eight sections above already prove. */
+console.log('\n── signed up and in ──');
+ctx = await browser.newContext({ viewport: { width: 1280, height: 1200 } });
+page = await ctx.newPage();
+await login(page, 'cleverg');
+await page.click('#tab-signedup');
+await page.waitForSelector('table.crm', { timeout: 5000 });
+const sg = await page.evaluate(() => {
+  const heads = [...document.querySelectorAll('.sec-h h3, .sec-h .sec-t, .sec-t')].map(h => h.textContent.trim());
+  return {
+    count: Number(document.getElementById('tc-signedup').textContent),
+    rows: document.querySelectorAll('.crm tr.r').length,
+    heads: heads.join(' | '),
+    stage: !!document.querySelector('.crm th, .crm td'),
+  };
+});
+ok('the tab count is the size of the list under it', sg.count === sg.rows, sg);
+ok('the document road is named', /document process/i.test(sg.heads), sg.heads);
+ok('and the straight-in road is named', /straight into the network/i.test(sg.heads), sg.heads);
+ok('where each person is up to is on the row', sg.stage);
+await page.screenshot({ path: new URL('signedup-1280.png', SHOTS).pathname, fullPage: true });
 await ctx.close();
 
 await browser.close();

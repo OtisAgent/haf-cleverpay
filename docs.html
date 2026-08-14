@@ -166,13 +166,28 @@ const DEFAULT_FREIGHT_DOCS = [
   {id:'id-utility',   name:"Utility bill — proof of person",   hint:"Gas, electricity, water, broadband or council tax bill dated within 3 months, in that person's own name at their home address.",    req:false},
 ];
 
+/* Which set of documents an account is asked for.
+   There are two sets saved by the team — driver and freight — and four account
+   types. A fleet or courier company hands over the same paperwork as an owner
+   driver, and that is already the rule the API works to (missingRequired in
+   cleverpay-api.js). This page used to key straight off the account type, so a
+   fleet arriving from Join HAF fell through to the freight list and was asked
+   for a certificate of incorporation and a BIFA membership instead of a licence,
+   insurance and an MOT — a different list from the one the team was chasing. */
+function docSetFor(type){ return type === 'freight' ? 'freight' : 'driver'; }
+const TYPE_LABELS = {
+  driver: 'Driver', fleet: 'Fleet / Courier Company',
+  freight: 'Freight Forwarder', business: 'Business',
+};
+
 async function getDocList(type){
-  const fallback = type==='driver'?DEFAULT_DRIVER_DOCS:DEFAULT_FREIGHT_DOCS;
+  const set = docSetFor(type);
+  const fallback = set==='driver'?DEFAULT_DRIVER_DOCS:DEFAULT_FREIGHT_DOCS;
   const r = await cpApi('/config');
   const cfg = r.ok ? r.body : null;
-  if(cfg&&cfg[type]&&Array.isArray(cfg[type].docs)){
+  if(cfg&&cfg[set]&&Array.isArray(cfg[set].docs)){
     /* the team's saved choices win; anything added to the built-in set since is appended */
-    const merged = cpMergeDocList(cfg[type].docs, fallback.map(d=>({id:d.id,name:d.name,hint:d.hint,status:d.req?'required':'optional'})));
+    const merged = cpMergeDocList(cfg[set].docs, fallback.map(d=>({id:d.id,name:d.name,hint:d.hint,status:d.req?'required':'optional'})));
     return merged.filter(d=>d.status!=='hidden').map(d=>({id:d.id,name:d.name,hint:d.hint,req:d.status==='required'}));
   }
   return fallback;
@@ -235,7 +250,7 @@ async function loadPage(){
   app = JSON.parse(raw);
 
   document.getElementById('ref-val').textContent = app.ref;
-  document.getElementById('type-val').textContent = app.type === 'driver' ? 'Driver' : 'Freight Forwarder';
+  document.getElementById('type-val').textContent = TYPE_LABELS[app.type] || 'Driver';
 
   if(app.promo_code && app.founders_tier){
     const MONTHS = { founder:'3 months', builder:'3 months', partner:'1 month', final:'—' };
@@ -249,13 +264,17 @@ async function loadPage(){
     }
   }
 
-  const isD = app.type === 'driver';
-  document.getElementById('page-kicker').textContent = isD ? 'Driver Account' : 'Freight Forwarder Account';
+  const isD = docSetFor(app.type) === 'driver';
+  document.getElementById('page-kicker').textContent = (TYPE_LABELS[app.type] || 'Driver') + ' Account';
   document.getElementById('page-sub').textContent = isD
     ? 'We need these to verify your eligibility as an HAF driver. All files are held securely.'
     : 'A few documents to confirm your business before we activate your freight account.';
 
-  if(isD) wireRecordCheck();
+  /* The driving-record check is about one person's own licence, so it belongs to
+     an owner driver and nobody else — the same line the API draws when it works
+     out what is still missing. A fleet gives us the driver paperwork, not a
+     check code against the company. */
+  if(app.type === 'driver') wireRecordCheck();
 
   const docs = await getDocList(app.type);
   totalReq = docs.filter(d => d.req).length;

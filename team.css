@@ -157,6 +157,22 @@ a{color:var(--or);text-decoration:none}
 .sec-n{font-size:.62rem;font-weight:800;color:var(--or);background:var(--or-d);border:1px solid var(--or-g);border-radius:var(--pill);padding:.1rem .45rem;min-width:20px;text-align:center}
 .sec-head::after{content:'';flex:1;height:1px;background:var(--ln)}
 .sec-empty{font-size:.72rem;color:var(--su);padding:.15rem 0 .1rem}
+/* Signed up and in: one line under each heading saying what that road IS, so a
+   reviewer never has to remember which half of the board they are looking at. */
+.sec-note{font-size:.7rem;line-height:1.45;color:var(--mu);margin:-.3rem 0 .55rem;max-width:78ch}
+
+/* Where somebody is up to, in one pill. Amber means somebody here still has to
+   act; grey-blue means we are waiting on them; green means they are actually in
+   the network — never merely approved, which is the distinction the whole
+   Confirm & release rule rests on. */
+.sgp{display:inline-flex;align-items:center;gap:.28rem;padding:.16rem .55rem;border-radius:var(--pill);font-size:.64rem;font-weight:800;letter-spacing:.04em;white-space:nowrap;cursor:help}
+.sgp::before{content:'';width:5px;height:5px;border-radius:50%;flex-shrink:0}
+.sg-in{background:var(--gn-d);color:var(--gn);border:1px solid rgba(45,171,96,.3)}.sg-in::before{background:var(--gn);box-shadow:0 0 0 3px rgba(45,171,96,.18)}
+.sg-hold{background:var(--am-d);color:var(--am);border:1px solid rgba(217,146,11,.25)}.sg-hold::before{background:var(--am);animation:pulse 1.6s ease infinite}
+.sg-go{background:var(--or-d);color:var(--or);border:1px solid var(--or-g)}.sg-go::before{background:var(--or)}
+.sg-wait{background:rgba(240,237,234,.05);color:var(--mu);border:1px solid var(--ln)}.sg-wait::before{background:var(--su)}
+.sg-no{background:var(--rd-d);color:var(--rd);border:1px solid rgba(208,64,64,.25)}.sg-no::before{background:var(--rd)}
+.sg-block{background:var(--rd-d);color:var(--rd);border:1px solid rgba(208,64,64,.45)}.sg-block::before{background:var(--rd);box-shadow:0 0 0 3px rgba(208,64,64,.18)}
 
 .content.wide{max-width:1500px}
 .crm-wrap{background:var(--p);border:1.5px solid var(--lns);border-radius:var(--rs);overflow-x:auto}

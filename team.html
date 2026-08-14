@@ -81,6 +81,10 @@
   </div>
 
   <div class="tab-bar">
+    <!-- Brent, 14 Aug: everyone who has come through the front door, newest first,
+         and where each of them is up to. Drivers and courier companies sit in the
+         document process; freight and business are straight in. -->
+    <div class="tab" id="tab-signedup" onclick="setTab('signedup')">Signed up and in <span class="tab-count" id="tc-signedup">0</span></div>
     <div class="tab active" id="tab-pending" onclick="setTab('pending')">Pending <span class="tab-count" id="tc-pending">0</span></div>
     <div class="tab" id="tab-reviewing" onclick="setTab('reviewing')">In Review <span class="tab-count" id="tc-reviewing">0</span></div>
     <div class="tab" id="tab-approved" onclick="setTab('approved')">Approved <span class="tab-count" id="tc-approved">0</span></div>

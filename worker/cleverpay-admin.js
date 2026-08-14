@@ -38,6 +38,40 @@ function corsHeaders(req) {
 const J = (data, status, cors) =>
   new Response(S(data), { status, headers: { [CT]: AJ, ...cors } });
 
+/* ── name the press, so the email leaves with it ──
+   Brent, 14 Aug: an email must arrive within ten seconds of the button, not on
+   the next sweep. The press happens in here; the sending key lives in the front
+   worker, in one place and one place only. So this worker does not send - it
+   writes the name of the moment onto its own reply, and the front worker reads
+   it and sends on the same request. A reply with no name attached sends
+   nothing, which is what every other button in this back office does.
+   Anything a reviewer typed is URL-encoded: a header carries plain Latin
+   characters only, and one accented name would otherwise take the whole
+   response down with it. */
+function named(res, ev, ref, item, snap) {
+  const h = new Headers(res.headers);
+  h.set('x-cp-event', ev);
+  h.set('x-cp-ref', St(ref));
+  if (item) h.set('x-cp-item', encodeURIComponent(St(item).slice(0, 300)));
+  /* Deleting is the one press that destroys the thing the email is about. The
+     front worker would find nothing to read, so the parts it needs travel with
+     the reply instead - taken before the row went, never afterwards. */
+  if (snap) h.set('x-cp-snap', encodeURIComponent(S(snap)));
+  return new Response(res.body, { status: res.status, headers: h });
+}
+
+/* Only what an email actually needs: who they are, what they signed up as,
+   which journey they are on. No documents, no licence number, no notes - a
+   header is the wrong place for any of it and none of it is used. */
+function snapshot(app) {
+  return {
+    ref: app.ref, email: app.email, type: app.type, journey: app.journey,
+    fname: app.fname, name: app.name, company: app.company,
+    plan: app.plan, tier: app.tier, username: app.username,
+    may_reapply: app.may_reapply === true,
+  };
+}
+
 async function sb(env, path, init = {}) {
   const r = await fetch(SB + path, {
     ...init,
@@ -267,34 +301,13 @@ async function tellTeam(env, text) {
   } catch {}
 }
 
-/* ── the applicant's own copy of what just happened ──
-   Brent, 4 Aug: the buttons have to tell the person. This worker cannot send an
-   email — it holds no mail key, and putting one here would mean two things that
-   send HAF post instead of one — so the message is written down where the mail
-   engine will pick it up on its next pass. Two consequences are deliberate.
-   It is written BEFORE a delete, because a moment later there is no name, no
-   address and no reference left to write to. And someone who has asked not to
-   be emailed, or who is blocked, is not written down at all — an application
-   ending is not a reason to override either. */
-const FAREWELLS = 'cleverpay_farewells';
-async function queueFarewell(env, app, kind, who) {
-  if (!app.email || app.reminder_opt_out || app.blocked_at) return false;
-  try {
-    const r = await sb(env, `/${FAREWELLS}`, {
-      method: 'POST',
-      /* the same notice queued twice is one email too many; the database
-         refuses the duplicate rather than this code trying to remember */
-      headers: { Prefer: 'resolution=ignore-duplicates' },
-      body: S({
-        ref: app.ref, email: app.email,
-        fname: app.fname || app.name || null,
-        account_type: app.type || null,
-        kind, created_by: who,
-      }),
-    });
-    return !!(r && r.ok);
-  } catch { return false; }
-}
+/* The farewell queue that used to live here is gone. It wrote the applicant's
+   notice into a table for an engine to collect on its next pass — and Brent's
+   14 August instruction is that these arrive within ten seconds of the button,
+   not on a sweep. Every one of its three buttons now names its moment on the
+   way out instead, which is the same road every other press already takes.
+   Nothing reads cleverpay_farewells any more; the table is left alone because
+   what it holds is a record of what was sent. */
 
 export default {
   async fetch(req, bound, ctx) {
@@ -369,6 +382,39 @@ export default {
         return J((r.body || []).map(view), 200, cors);
       }
 
+      /* ── the sign-up email switchboard ──
+         The switch that starts customer emails going is never reachable with
+         a public key from a browser, so the console asks for it here instead
+         and this worker reads it with the service role. Every flip records
+         who made it, because "the emails came back on" must always have a
+         name against it. */
+      if (R('/team/journey', 'GET')) {
+        const [sw, log] = await Promise.all([
+          sb(env, '/journey_switch?select=key,on,updated_at,updated_by'),
+          sb(env, '/haf_mail_log?select=event,email,status,created_at'
+                + '&order=created_at.desc&limit=50')
+        ]);
+        if (!sw.ok) return bad('Cannot reach the switchboard right now.', 502);
+        return J({ switches: sw.body || [], recent: log.ok ? (log.body || []) : [] },
+          200, cors);
+      }
+
+      if (R('/team/journey', 'PATCH')) {
+        /* The switchboard itself is the list of switches. This used to carry its
+           own copy of the ten names, which is two lists that have to agree - and
+           the one that quietly stops agreeing is the one nobody reads. A key
+           that is not in the table updates no rows and is refused here. */
+        const key = St(b.key || '').trim();
+        const on = b.on === true;
+        const r = await sb(env, `/journey_switch?key=eq.${E(key)}`, {
+          method: 'PATCH',
+          body: S({ on, updated_at: nowIso(), updated_by: who })
+        });
+        if (!r.ok) return bad('Could not save that — please try again.', 500);
+        if (!(r.body || []).length) return bad('That is not a switch.', 404);
+        return J({ ok: true, key, on, updated_by: who }, 200, cors);
+      }
+
       /* manual add by team (drivers or freight) */
       if (R('/team/applications', 'POST')) {
         if (!b.type || !b.username) return bad('Missing required fields.', 400);
@@ -389,7 +435,19 @@ export default {
         if (b.status) {
           patch.status = b.status;
           if (b.status === 'approved') { patch.approved_at = nowIso(); patch.approved_by = who; }
-          if (b.status === 'rejected') { patch.rejected_at = nowIso(); patch.reject_reason = b.rejectReason || null; }
+          if (b.status === 'rejected') {
+            patch.rejected_at = nowIso();
+            patch.reject_reason = b.rejectReason || null;
+            /* Brent's standing rule: a declined applicant is not re-onboarded
+               without his written yes. The way back in is therefore something a
+               reviewer has to choose, one decline at a time - 'fix' (correct
+               this one and resend) or 'new' (start a fresh application).
+               Anything else, and anything not chosen at all, closes it with no
+               way back, which is the version of the email the set calls closed
+               and the version this sends unless somebody deliberately says
+               otherwise. */
+            patch.route_back = ['fix', 'new'].includes(b.routeBack) ? b.routeBack : 'none';
+          }
         }
         if (b.docs !== undefined) patch.docs = b.docs;
         /* ── Confirm & release access ──
@@ -410,7 +468,14 @@ export default {
           patch.knect = true;
         }
         const r = await patchApp(env, m[1], patch);
-        return r.ok && r.body[0] ? J(view(r.body[0]), 200, cors) : bad('Update failed.', 500);
+        if (!(r.ok && r.body[0])) return bad('Update failed.', 500);
+        const out = J(view(r.body[0]), 200, cors);
+        /* Confirm & release is the only press that may tell somebody they are in.
+           Approve on its own still says nothing to anybody, exactly as it has
+           since 3 August - it names no moment here, so no email exists to send. */
+        const ev = b.confirm_access ? 'compliance_approved'
+          : b.status === 'rejected' ? 'compliance_rejected' : null;
+        return ev ? named(out, ev, r.body[0].ref) : out;
       }
 
       /* ── reviewer opens the actual file — bytes proxied through this session, never a public link ── */
@@ -542,18 +607,21 @@ export default {
            for the case where they genuinely should be told — and it is handled
            before the state check, because telling an already-archived applicant
            is exactly when the office reaches for it. */
-        const told = want && b.notify === true
-          ? await queueFarewell(env, app, 'on_hold', who) : false;
-        if (isArchived(app.notes) === want)
-          return J({ ok: true, app: view(app), changed: false, emailed: told,
+        const told = !!(want && b.notify === true && app.email
+          && !app.reminder_opt_out && !app.blocked_at);
+        if (isArchived(app.notes) === want) {
+          const same = J({ ok: true, app: view(app), changed: false, emailed: told,
             email: told ? app.email : null }, 200, cors);
+          return told ? named(same, 'compliance_application_cancelled', app.ref) : same;
+        }
         const r = await patchApp(env, app.ref, {
           notes: recordHistory(undefined, app.notes, who, want ? ARCHIVED : RESTORED),
           updated_at: nowIso(),
         });
         if (!r.ok || !r.body[0]) return bad('Could not save that — please try again.', 500);
-        return J({ ok: true, app: view(r.body[0]), changed: true,
+        const done = J({ ok: true, app: view(r.body[0]), changed: true,
           emailed: told, email: told ? app.email : null }, 200, cors);
+        return told ? named(done, 'compliance_application_cancelled', app.ref) : done;
       }
 
       /* ── clear it and send it back to the applicant ──
@@ -590,8 +658,14 @@ export default {
         }
         const r = await patchApp(env, app.ref, patch);
         if (!r.ok || !r.body[0]) return bad('Could not clear that application — please try again.', 500);
-        return J({ ok: true, app: view(r.body[0]), emailed: mailable, email: app.email,
+        /* Clearing takes an applicant's documents away. They are owed the
+           reason on the same press, not on a sweep: this is the one moment
+           where silence looks exactly like the office losing their paperwork. */
+        const cleared = J({ ok: true, app: view(r.body[0]), emailed: mailable, email: app.email,
           missing: missing.map(x => x.name) }, 200, cors);
+        return mailable
+          ? named(cleared, 'compliance_action_required', app.ref, missing.map(x => x.name).join(', '))
+          : cleared;
       }
 
       /* ── delete, and it is gone ──
@@ -606,23 +680,21 @@ export default {
         if (!app) return bad(NOTFOUND, 404);
         if (St(b.confirm || '').toUpperCase().trim() !== St(app.ref).toUpperCase())
           return bad('Type the reference exactly to confirm you meant to delete it.', 400);
-        /* written first, on purpose: after the DELETE below there is nothing
-           left to address it to. If the row cannot be written the deletion is
-           abandoned rather than done silently — an applicant who is removed
-           without ever being told is the outcome this whole change exists to
-           stop. Someone opted out or blocked returns false and is allowed
-           through: that is a deliberate silence, not a failure. */
+        /* taken first, on purpose: a moment after the DELETE below there is no
+           name, no address and no reference left to write to. Someone who has
+           asked not to be emailed, or who is blocked, is not told — an
+           application ending is not a reason to override either, and that is a
+           deliberate silence rather than a failure. */
         const mailable = !!(app.email && !app.reminder_opt_out && !app.blocked_at);
-        const told = await queueFarewell(env, app, 'closed', who);
-        if (mailable && !told)
-          return bad('Could not queue the applicant’s email, so nothing has been deleted. Please try again.', 503);
+        const snap = mailable ? snapshot(app) : null;
         await dropFiles(env, app);
         const r = await sb(env, `/${APPS}?ref=eq.${E(app.ref)}`, { method: 'DELETE' });
         if (!r.ok) return bad('Could not delete that application — please try again.', 500);
         const name = [app.fname, app.lname].filter(Boolean).join(' ') || app.company || app.username || '';
-        await tellTeam(env, `CleverPay: application ${app.ref} (${name}) was deleted by ${who} on ${nowIso().slice(0, 16).replace('T', ' ')}. Documents removed with it. ${told ? 'The applicant has been emailed to say it is closed.' : 'The applicant has NOT been emailed.'} This cannot be undone.`);
-        return J({ ok: true, ref: app.ref, name, emailed: told,
-          email: told ? app.email : null }, 200, cors);
+        await tellTeam(env, `CleverPay: application ${app.ref} (${name}) was deleted by ${who} on ${nowIso().slice(0, 16).replace('T', ' ')}. Documents removed with it. ${snap ? 'The applicant has been emailed to say it is closed.' : 'The applicant has NOT been emailed.'} This cannot be undone.`);
+        const gone = J({ ok: true, ref: app.ref, name, emailed: !!snap,
+          email: snap ? app.email : null }, 200, cors);
+        return snap ? named(gone, 'compliance_application_cancelled', app.ref, '', snap) : gone;
       }
 
       /* ── chase the documents we are still waiting on ──
@@ -652,8 +724,14 @@ export default {
             reminder_count: (app.reminder_count || 0) + 1, updated_at: now,
           }),
         });
-        if (!r.ok || !r.body || !r.body[0]) return bad('Could not queue that reminder — please try again.', 500);
-        return J({ ok: true, email: app.email, missing: missing.map(x => x.name), app: view(r.body[0]) }, 200, cors);
+        if (!r.ok || !r.body || !r.body[0]) return bad('Could not send that reminder — please try again.', 500);
+        /* This used to write "please chase them" onto the record and wait for a
+           job to notice. It goes now, naming the documents the reviewer is
+           actually waiting on, so the applicant reads the same list the office
+           is looking at. */
+        return named(
+          J({ ok: true, email: app.email, missing: missing.map(x => x.name), app: view(r.body[0]) }, 200, cors),
+          'compliance_action_required', app.ref, missing.map(x => x.name).join(', '));
       }
 
       /* ── the integration panel — Brent and Gemma only ──
