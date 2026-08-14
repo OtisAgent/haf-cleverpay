@@ -7,10 +7,13 @@
    comes back is the name of the email moment that press hands to the sending
    worker. No name on the reply means nothing is sent to that person, ever.
 
-   A silence is not automatically a fault. Three presses are deliberately silent
+   A silence is not automatically a fault. Five presses are deliberately silent
    and each is asserted as silent ON PURPOSE, so that if somebody later wires one
-   up by accident this test says so. The ones with no verdict yet are printed at
-   the end as OPEN, not quietly passed.
+   up by accident this test says so.
+
+   Nothing is open any more. Block and Unblock were the last two without a verdict
+   and Brent settled them on 14 August: a blocked account is told, in the
+   reviewer's own words, and invited to sign in and put things right.
 
    Run: node worker/test-every-button-emails.mjs */
 import { createServer } from 'node:http';
@@ -208,13 +211,83 @@ console.log('\n── Reject ──');
   record('Reject', r.event, 'tells them it was declined, with the reviewer\'s reason');
 }
 
-console.log('\n── Block ──');
+/* Brent, 14 August: "they get an email with the notes we add to the block and
+   reason — they get the notes and the opportunity to go into the
+   clever.usehaf.co.uk — sign in and fix any problems". The notes ARE the email,
+   so the press is refused without them rather than sent with an empty reason. */
+console.log('\n── Block with no reason typed ──');
 {
   const a = makeApp('driver', files(REQ('driver')));
   const r = await patch(a.ref, { status: 'blocked' });
+  ok('the press is refused', r.status === 400, r.status);
+  ok('the record is untouched', a.status === 'pending', a.status);
+  ok('and nothing is sent', !r.event, r.event);
+}
+
+console.log('\n── Block ──');
+{
+  const a = makeApp('driver', files(REQ('driver')));
+  const WHY = 'The insurance certificate is in a different name to your licence.';
+  const r = await patch(a.ref, { status: 'blocked', blockReason: WHY });
   ok('the block saves', r.status === 200 && a.status === 'blocked', a.status);
-  ok('SILENT — and this one is Brent\'s call, not mine', !r.event, r.event);
-  record('Block', r.event, 'SILENT — open question for Brent (see OPEN below)');
+  ok('it names the "we have paused your account" email', r.event === 'account_paused', r.event);
+  ok('the reviewer\'s words are on the record', a.block_reason === WHY, a.block_reason);
+  ok('it is stamped with who pressed it', a.blocked_by === 'cleverg', a.blocked_by);
+  ok('and when', !!a.blocked_at, a.blocked_at);
+  record('Block', r.event, 'tells them WHY, in your words, and where to go and fix it');
+}
+
+/* A freight forwarder hands over no documents, so every other compliance email
+   is deliberately withheld from them — but anyone can be blocked, and anyone
+   blocked must be told what to put right. */
+console.log('\n── Block a freight account ──');
+{
+  const a = makeApp('freight', []);
+  const r = await patch(a.ref, { status: 'blocked', blockReason: 'Company number does not match Companies House.' });
+  ok('the block saves', r.status === 200 && a.status === 'blocked', a.status);
+  ok('it names the same email — a pause is not a document conversation', r.event === 'account_paused', r.event);
+}
+
+/* The pause email says "sign in and put this right". If the door it points at
+   is shut, the email is a locked door with a knock on it — the exact failure
+   that cost twenty-four days in August. So the door is pressed, not assumed. */
+console.log('\n── A paused account can still get in and fix it ──');
+{
+  const a = makeApp('driver', []);
+  await patch(a.ref, { status: 'blocked', blockReason: 'Insurance certificate has expired.' });
+  const login = await api('/login', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id: a.ref }) });
+  ok('they can still sign in', login.status === 200, login.status);
+  ok('and the page can read the reason they were paused',
+    login.body.block_reason === 'Insurance certificate has expired.', login.body.block_reason);
+  const up = await api('/docs', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ref: a.ref, docs: files(REQ('driver')) }) });
+  ok('they can upload the corrected paperwork', up.status === 200, up.status);
+  ok('and it lands on the record', (a.docs || []).length === REQ('driver').length, (a.docs || []).length);
+  ok('the pause is untouched until a reviewer lifts it', a.status === 'blocked', a.status);
+}
+
+console.log('\n── Unblock ──');
+{
+  const a = makeApp('driver', files(REQ('driver')));
+  await patch(a.ref, { status: 'blocked', blockReason: 'Licence photo is unreadable.' });
+  const r = await patch(a.ref, { status: 'pending' });
+  ok('the unblock saves', r.status === 200 && a.status === 'pending', a.status);
+  ok('it names the "active again" email', r.event === 'account_restored', r.event);
+  ok('the hold on their email comes off', a.blocked_at === null, a.blocked_at);
+  ok('and it is stamped with who lifted it', a.unblocked_by === 'cleverg', a.unblocked_by);
+  record('Unblock', r.event, 'tells them the pause is lifted — and promises no access');
+}
+
+/* The unblock email is read off the record, never off the button: a press on
+   somebody who was never blocked is an ordinary status change and says nothing. */
+console.log('\n── A status change on an account that was never blocked ──');
+{
+  const a = makeApp('driver', files(REQ('driver')));
+  const r = await patch(a.ref, { status: 'reviewing' });
+  ok('it saves', r.status === 200 && a.status === 'reviewing', a.status);
+  ok('and does NOT count as an unblock', !r.event, r.event);
+  ok('nothing is stamped', a.unblocked_at == null, a.unblocked_at);
 }
 
 console.log('\n── Confirm & release access ──');
@@ -300,20 +373,22 @@ const NAMES = {
   compliance_rejected: 'Not approved, with the reason',
   compliance_action_required: 'Something is missing',
   compliance_application_cancelled: 'Your application is closed',
+  account_paused: 'Paused — your notes, and how to fix it',
+  account_restored: 'Your account is active again',
 };
 const wide = Math.max(...rows.map(r => r.button.length));
 for (const r of rows) {
   const label = r.event ? NAMES[r.event] : '— no email —';
-  console.log('  ' + r.button.padEnd(wide) + '   ' + label.padEnd(38) + r.intent);
+  console.log('  ' + r.button.padEnd(wide) + '   ' + label.padEnd(40) + r.intent);
 }
 
-console.log('\n══ OPEN — needs Brent, not a code change ══');
-console.log('  Block     a blocked account is refused everything and is never told. Silent is');
-console.log('            the safe default for a suspected bad actor, and Brent\'s screening rule');
-console.log('            says once declined nobody is re-onboarded without his written yes — so');
-console.log('            an email here would offer a way back he has not agreed to. His call.');
-console.log('  Unblock   puts somebody back on the list and says nothing to them. If Block was');
-console.log('            a mistake, this is the press that should apologise for it.');
+/* Nothing is OPEN any more. Brent settled the last two on 14 August: a blocked
+   account is told, in the reviewer's own words, and invited to sign in and put
+   things right — so Block and Unblock are tested above like every other press. */
+console.log('\n══ SILENT ON PURPOSE ══');
+console.log('  Five presses tell the applicant nothing, and each is asserted silent above.');
+console.log('  Approve is the one that matters: it moves a record along and opens no door,');
+console.log('  so only Confirm & release may ever tell somebody they are in.');
 
 console.log('\n' + (fail ? fail + ' CHECK(S) FAILED' : 'ALL ' + pass + ' CHECKS PASS'));
 dbSrv.close();

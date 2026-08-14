@@ -156,6 +156,19 @@
     <div class="rbt-row"><span class="rbt-label">Credit limit</span><span class="rbt-val">None — upfront only</span></div>
   </div>
 
+  <!-- PAUSED PANEL — Brent, 14 Aug: the email tells them to come here and put
+       things right, so this is the page that has to say what "right" is. The
+       reviewer's own words, then the door to fix it. A pause with no reason on
+       the page is the same locked door the email was built to unlock. -->
+  <div class="reject-panel" id="paused-panel">
+    <div class="rp-head">Your account is paused</div>
+    <div class="rp-reason" id="paused-reason">The HAF team will contact you with further details.</div>
+    <a class="btn-restart" href="docs.html">
+      <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      Upload what we have asked for
+    </a>
+  </div>
+
   <!-- REJECTION PANEL -->
   <div class="reject-panel" id="reject-panel">
     <div class="rp-head">Application not approved</div>
@@ -414,9 +427,16 @@ function renderStatus(app, live){
     icon.className = 'status-icon rejected';
     title.className = 'status-title rejected';
     icon.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>';
-    title.textContent = 'Account Blocked';
-    body.textContent = 'This account has been blocked by the HAF team and cannot access the network. If you believe this is a mistake, contact the team quoting your reference above.';
+    title.textContent = 'Account Paused';
+    body.textContent = 'Your account is paused, so you cannot take work on the HAF network at the moment. Below is what we need you to put right — you can fix it here and we will look again.';
     document.getElementById('access-panel').classList.remove('show');
+    /* The words the reviewer typed are the whole point of the pause. If there
+       are none — an older block from before this existed — the panel keeps its
+       written fallback rather than showing an empty box. */
+    document.getElementById('paused-panel').classList.add('show');
+    if(app.blockReason){
+      document.getElementById('paused-reason').textContent = app.blockReason;
+    }
 
   } else if(status === 'rejected'){
     icon.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>';
@@ -437,7 +457,7 @@ async function refreshFromApi(){
   const local = JSON.parse(raw);
   const r = await cpApi('/application?ref=' + encodeURIComponent(local.ref) + '&k=' + encodeURIComponent(local.pinHash || ''));
   if(r.ok && r.body){
-    const fresh = {...r.body, pinHash: local.pinHash, rejectReason: r.body.reject_reason};
+    const fresh = {...r.body, pinHash: local.pinHash, rejectReason: r.body.reject_reason, blockReason: r.body.block_reason};
     localStorage.setItem('cp_application', JSON.stringify(fresh));
     renderStatus(fresh);
   }

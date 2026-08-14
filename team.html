@@ -110,6 +110,22 @@
   </div>
 </div>
 
+<!-- Block modal — Brent, 14 Aug: a blocked account is told, in the reviewer's own
+     words, and pointed at the door it can put things right through. The notes ARE
+     the email, so they are written here and the press cannot go without them. -->
+<div class="modal-ov" id="bk-ov">
+  <div class="modal">
+    <h2>Block <span id="bk-who"></span></h2>
+    <p>They are refused all access while blocked. <strong>What you write below is sent to them</strong> at <strong id="bk-email"></strong>, with an invitation to sign in and put it right.</p>
+    <textarea id="bk-reason-text" placeholder="e.g. The insurance certificate on file is in a different name to your licence. Please upload one in your own name."></textarea>
+    <p class="modal-note" id="bk-cost"></p>
+    <div class="modal-btns">
+      <button class="mbt mbt-gh" onclick="closeBlock()">Cancel</button>
+      <button class="mbt mbt-red" id="bk-go" onclick="confirmBlock()">Block and send this</button>
+    </div>
+  </div>
+</div>
+
 <!-- Approve modal — shown only when the email is still unconfirmed, so approval and
      the email decision are made together and nobody is left approved-but-locked-out -->
 <div class="modal-ov" id="ae-ov">

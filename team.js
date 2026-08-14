@@ -1015,21 +1015,50 @@ function approveOnly(){
    say what it costs first: unblocking puts the record back on the list to be
    looked at again, it does not hand back an access that was already released.
    Whoever presses it should know that before they press it, not afterwards. */
+/* Brent, 14 Aug: "they get an email with the notes we add to the block and reason
+   — they get the notes and the opportunity to go into the clever.usehaf.co.uk —
+   sign in and fix any problems". So the confirm() box is gone: a reason cannot be
+   typed into one, and a block with no reason on it is a locked door with no sign.
+   What the reviewer writes here IS the email, which is why the box says so. */
+let blockTarget=null;
 function blockAcc(ref){
   const a=QUEUE.find(x=>x.ref===ref);
-  const who=a?displayName(a):ref;
-  const cost=a&&a.access_confirmed_at
-    ?'\n\nThey are in the network right now. Unblocking puts them back on the list to be looked at again — it does not give the access back, so someone would have to approve and release them once more.'
+  blockTarget=ref;
+  document.getElementById('bk-who').textContent=a?displayName(a):ref;
+  document.getElementById('bk-email').textContent=(a&&a.email)||'no email on file';
+  document.getElementById('bk-reason-text').value='';
+  document.getElementById('bk-cost').textContent=a&&a.access_confirmed_at
+    ?'They are in the network right now. Unblocking puts them back on the list to be looked at again — it does not give the access back, so someone would have to release them once more.'
     :'';
-  if(!confirm(`Block ${who}?\n\nThey are refused all access for as long as they are blocked.${cost}`))return;
-  update(ref,{status:'blocked'},'Account blocked — all access refused');
+  document.getElementById('bk-go').disabled=false;
+  document.getElementById('bk-ov').classList.add('open');
 }
+function closeBlock(){document.getElementById('bk-ov').classList.remove('open');blockTarget=null}
+async function confirmBlock(){
+  const ref=blockTarget;if(!ref)return;
+  const reason=document.getElementById('bk-reason-text').value.trim();
+  /* the back office refuses an empty one too — this is only so the reviewer is
+     told here, rather than by a failed save after the dialog has closed */
+  if(reason.length<4){showToast('Say why — what you write is what they are sent',true);return}
+  const go=document.getElementById('bk-go');
+  go.disabled=true;go.textContent='Blocking…';
+  const done=await update(ref,{status:'blocked',blockReason:reason},'Blocked — they have been told why, and how to put it right');
+  go.textContent='Block and send this';
+  if(!done){go.disabled=false;return}
+  closeBlock();
+}
+document.getElementById('bk-ov').addEventListener('click',function(e){if(e.target===this)closeBlock()});
 function unblockAcc(ref){
   const a=QUEUE.find(x=>x.ref===ref);
   /* a business account arrived as an enquiry and was never in the pending queue —
      put it back where it actually came from */
   const back=a&&a.type==='business'?'enquiry':'pending';
-  update(ref,{status:back},back==='enquiry'?'Unblocked — back on the enquiry list':'Unblocked — returned to pending for re-review');
+  /* the person was told they were paused and asked to go and fix something, so
+     silence when it is lifted is the one thing that cannot follow. The email is
+     careful to promise nothing: the pause is off, the application is back with
+     the team, and driving still needs the Clever check and the release press. */
+  if(!confirm(`Unblock ${a?displayName(a):ref}?\n\nThey are told the pause has been lifted and their application is back with the team. It does not give network access back — that still needs a Confirm & release press.`))return;
+  update(ref,{status:back},back==='enquiry'?'Unblocked — back on the enquiry list, and they have been told':'Unblocked — back to pending for re-review, and they have been told');
 }
 
 /* Email confirmation used to go straight from this page to a database function.

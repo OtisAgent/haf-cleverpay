@@ -448,6 +448,12 @@ export default {
       /* status / docs updates from the queue */
       const m = p.match(/^\/team\/applications\/([A-Za-z0-9-]+)$/);
       if (m && M === 'PATCH') {
+        /* Read the record as it stands BEFORE the press. Blocking and
+           unblocking are the same button in two states, and which one just
+           happened is a fact about the record, not about the request - a
+           reviewer's browser holding a stale row must not be able to decide
+           that somebody was unblocked. */
+        const before = await findApp(env, m[1]);
         const patch = { updated_at: nowIso() };
         if (b.status) {
           patch.status = b.status;
@@ -464,6 +470,40 @@ export default {
                and the version this sends unless somebody deliberately says
                otherwise. */
             patch.route_back = ['fix', 'new'].includes(b.routeBack) ? b.routeBack : 'none';
+          }
+          /* ── Block ──
+             Brent, 14 Aug: "they get an email with the notes we add to the
+             block and reason - they get the notes and the opportunity to go
+             into the clever.usehaf.co.uk - sign in and fix any problems".
+
+             So the reason is not optional here, and it is not optional
+             anywhere else either: a pause with nothing written on it is a
+             locked door with no sign on it, and the person on the other side
+             of it has no idea what to fix. The press is refused without one
+             rather than sent with an empty reason, because an email whose
+             only content is "we have paused your account" is worse than no
+             email at all.
+
+             blocked_at is what the mail engine reads to hold every OTHER
+             email back (canMail), so the two must not fight: it is stamped
+             here and cleared the moment somebody is unblocked, or a restored
+             account would go silent for good. */
+          if (b.status === 'blocked') {
+            const why = St(b.blockReason || '').trim();
+            if (why.length < 4)
+              return bad('Say why this account is being blocked — your words are what they are sent.', 400);
+            patch.block_reason = why.slice(0, 1000);
+            patch.blocked_at = nowIso();
+            patch.blocked_by = who;
+            patch.unblocked_at = null;
+            patch.unblocked_by = null;
+          } else if (before && before.status === 'blocked') {
+            /* a move OFF blocked is the unblock — and it is read from the
+               record as it stands, never from the button, so approving an
+               account that was never blocked does not quietly count as one */
+            patch.blocked_at = null;
+            patch.unblocked_at = nowIso();
+            patch.unblocked_by = who;
           }
         }
         if (b.docs !== undefined) patch.docs = b.docs;
@@ -505,7 +545,9 @@ export default {
            Approve on its own still says nothing to anybody, exactly as it has
            since 3 August - it names no moment here, so no email exists to send. */
         const ev = b.confirm_access ? 'compliance_approved'
-          : b.status === 'rejected' ? 'compliance_rejected' : null;
+          : b.status === 'rejected' ? 'compliance_rejected'
+          : b.status === 'blocked' ? 'account_paused'
+          : (before && before.status === 'blocked') ? 'account_restored' : null;
         return ev ? named(out, ev, r.body[0].ref) : out;
       }
 

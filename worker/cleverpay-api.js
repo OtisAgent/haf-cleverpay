@@ -409,12 +409,21 @@ const BOXES = {
   compliance_application_cancelled: 'updates@usehaf.co.uk',
   membership_upgraded: 'accounts@usehaf.co.uk',
   plna_allocated: 'knect@usehaf.co.uk',
+  /* A pause is a paperwork conversation, so it comes from the mailbox that
+     tells somebody where their application has got to - never from knect@,
+     which is the one that says welcome to the network. */
+  account_paused: 'updates@usehaf.co.uk',
+  account_restored: 'updates@usehaf.co.uk',
 };
 /* The six a freight forwarder or business account must never receive: they hand
    over no documents, so there is no document conversation to have with them. */
 const COMPLIANCE_ONLY = ['compliance_submission_complete', 'compliance_action_required',
   'compliance_approved', 'compliance_rejected', 'compliance_application_cancelled',
   'plna_allocated'];
+/* The two moments that may legitimately happen to the same person more than
+   once. Everything else is a one-off in a life: you are approved once, you are
+   declined once. A pause is a state you can enter and leave repeatedly. */
+const REPEATABLE = ['account_paused', 'account_restored'];
 
 /* One moment, one template - the role is a version OF the moment, never a
    moment of its own. Henry switches the moment; this picks the wording. */
@@ -447,6 +456,12 @@ function slugFor(row, ev) {
     return 'haf-j7-application-cancelled' + (row.may_reapply === true ? '-reapply' : '');
   if (ev === 'membership_upgraded') return 'haf-j8-upgrade-active';
   if (ev === 'plna_allocated') return 'haf-j9-plna-allocated';
+  /* Brent, 14 Aug: a blocked account is told, in the reviewer's own words,
+     and pointed at the door it can put things right through. Deliberately one
+     wording for every account type - a freight forwarder is paused for the
+     same kind of reason a driver is, and neither is being declined. */
+  if (ev === 'account_paused') return 'haf-j10-account-paused';
+  if (ev === 'account_restored') return 'haf-j11-account-restored';
   return null;
 }
 
@@ -476,7 +491,11 @@ function mergeFor(row, ev, extra) {
     company: St(row.company || ''),
     username: St(row.username || row.ref || ''),
     action_url: actionUrl(row, ev),
-    reason: St(row.reject_reason || ''),
+    /* Two different presses both put a reviewer's words in front of a
+       customer, and they are stored in two different places on purpose - a
+       decline is not a pause and must never be able to quote the other one's
+       reason. The moment picks which. */
+    reason: St((ev === 'account_paused' ? row.block_reason : row.reject_reason) || ''),
     item_name: '',
     item_reason: '',
     ...(extra || {}),
@@ -510,14 +529,29 @@ async function journeyMail(env, ref, ev, extra, snap) {
      release opens a door, and only it may send this one. */
   if (ev === 'compliance_approved' && !(row.access_confirmed_at && row.access_confirmed_by))
     return 'awaiting-release';
+  /* wall 3b - the pause email exists to carry the reviewer's words. Without
+     them it is a locked door with no sign on it, so it does not go at all. */
+  if (ev === 'account_paused' && !St(row.block_reason || '').trim()) return 'no-reason';
   /* wall 2 - the switchboard, which is Henry's page and not a code change. */
   const sw = await sb(env, `/journey_switch?select=key,on&key=in.(live,${E(ev)})`);
   const on = (k) => (sw.body || []).some((s) => s.key === k && s.on === true);
   if (!on('live')) return 'master-switch-off';
   if (!on(ev)) return 'moment-switch-off';
-  /* wall 4 - claim it, then send it. */
+  /* wall 4 - claim it, then send it.
+     The ledger holds one row per person per moment, forever, and that is what
+     stops every other email being sent twice. Two moments must not obey it:
+     an account can be paused, put right, and paused again for something else
+     entirely, and the second pause is a different conversation - "already
+     sent" there would silently swallow the notes the reviewer just typed. So
+     those two claim a numbered row instead of the bare moment, and everything
+     downstream reads the numbered key so the ledger still tells the truth
+     about what was sent and when. */
+  const logKey = REPEATABLE.includes(ev)
+    ? ev + '#' + (((await sb(env,
+        `/haf_mail_log?select=event&ref=eq.${E(row.ref)}&event=like.${E(ev)}*`)).body || []).length + 1)
+    : ev;
   const claim = await sb(env, '/haf_mail_log', { method: 'POST', body: S({
-    ref: row.ref, event: ev, email: row.email, template: slug,
+    ref: row.ref, event: logKey, email: row.email, template: slug,
     status: 'sending', sender: box }) });
   if (!claim.ok) return 'already-sent';
   let status = 'sent';
@@ -540,7 +574,7 @@ async function journeyMail(env, ref, ev, extra, snap) {
         || (out && out.message) || r.status).slice(0, 300);
     } else { status = first.status; provider = first._id || null; }
   } catch (e) { status = 'failed'; error = St(e).slice(0, 300); }
-  await sb(env, `/haf_mail_log?ref=eq.${E(row.ref)}&event=eq.${E(ev)}`,
+  await sb(env, `/haf_mail_log?ref=eq.${E(row.ref)}&event=eq.${E(logKey)}`,
     { method: 'PATCH', body: S({ status, provider_id: provider, error }) });
   return status;
 }
