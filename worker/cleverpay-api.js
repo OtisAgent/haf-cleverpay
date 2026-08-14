@@ -533,6 +533,38 @@ function mailNow(env, ctx, ref, ev, extra, snap) {
   if (ctx && typeof ctx.waitUntil === 'function') ctx.waitUntil(p);
 }
 
+/* ── "please confirm your email", with something to press ─────────────────────
+   Confirming the address is a WALL: an unconfirmed account cannot be released
+   into the network. On 4 August that wall stood for twenty-four days and every
+   one of the twenty real applicants was behind it, because the email asking
+   them to confirm carried no link and no token - there was no way over it from
+   their side at all. The lesson is not "remember to send the email". It is that
+   the ask and the means must be built in the same breath, or the ask is a
+   closed door with a knock on it.
+
+   So the token is minted HERE, on the request that creates the account, and it
+   travels inside the button. The moment the account exists is the moment
+   confirming it becomes possible. Nothing about this runs on a later sweep.
+
+   It is written to the record BEFORE the email leaves: a link whose token the
+   database has never heard of confirms nobody, and that is the failure that
+   would look exactly like success from this side. If the write fails there is
+   no point sending, so it does not. */
+async function confirmMailNow(env, ctx, row) {
+  if (!row || !row.ref || !row.email || row.email_verified) return;
+  const token = [...crypto.getRandomValues(new Uint8Array(32))]
+    .map((b) => b.toString(16).padStart(2, '0')).join('');
+  const job = (async () => {
+    const w = await sb(env, `/${APPS}?ref=eq.${E(row.ref)}`, { method: 'PATCH',
+      body: S({ email_confirm_token: token, email_confirm_sent_at: nowIso() }) });
+    if (!w.ok) return;
+    await journeyMail(env, row.ref, 'email_confirm_required', {
+      action_url: `${CLEVER_URL}/confirm.html?ref=${E(row.ref)}&t=${E(token)}`,
+    });
+  })().catch(() => {});
+  if (ctx && typeof ctx.waitUntil === 'function') ctx.waitUntil(job);
+}
+
 /* "We have your documents" is the email that stops an application going quiet
    on somebody, so it leaves the moment the last required file lands - not when
    a reviewer next opens the queue and remembers.
@@ -615,6 +647,8 @@ export default {
         alertNewEnquiry(env, ctx, r.body[0]);
         /* Their first email leaves now, on this request - not on the next sweep. */
         mailNow(env, ctx, r.body[0].ref, 'account_created');
+        /* And the one that lets them over the email wall, with the token in it. */
+        confirmMailNow(env, ctx, r.body[0]);
         return J(strip(r.body[0]), 200, cors);
       }
 

@@ -120,14 +120,47 @@ test('sign-up sends the account-created email, from knect@', async () => {
     body: JSON.stringify({ type: 'driver', username: 'DAVEF-4821', pinHash: 'x',
       email: 'dave@example.com', fname: 'Dave' }),
   }), ENV(), c);
-  check('one email sent', sent.length === 1, 'sent ' + sent.length);
-  check('driver wording', sent[0]?.template_name === 'haf-j1-account-created-driver', sent[0]?.template_name);
-  check('from knect@', sent[0]?.message.from_email === 'knect@usehaf.co.uk');
-  check('signs off as HAF TEAM', sent[0]?.message.from_name === 'HAF TEAM');
+  /* Two emails leave a sign-up, and the second one is the point of the first:
+     the account exists, and here is how you prove the address is yours. Both
+     are found by NAME rather than by position - which one wins the race to
+     Mandrill is not something a customer can see, and not something a test
+     should have an opinion about. */
+  const created = sent.find((s) => s.template_name === 'haf-j1-account-created-driver');
+  const confirm = sent.find((s) => s.template_name === 'haf-j2-confirm-email');
+  check('two emails sent: the account, and how to confirm it',
+    sent.length === 2, 'sent ' + sent.length);
+  check('driver wording', !!created, sent.map((s) => s.template_name).join(', '));
+  check('from knect@', created?.message.from_email === 'knect@usehaf.co.uk');
+  check('signs off as HAF TEAM', created?.message.from_name === 'HAF TEAM');
   check('reply goes back to the same box',
-    sent[0]?.message.headers['Reply-To'] === sent[0]?.message.from_email);
-  check('ledger claimed before the send', claims.length === 1 && claims[0].status === 'sending');
-  check('ledger settled after it', patched.length === 1 && patched[0].status === 'sent');
+    created?.message.headers['Reply-To'] === created?.message.from_email);
+
+  /* The 4 August fault, written down as an assertion: an email that asks
+     somebody to confirm their address must carry the thing that lets them do
+     it. A bare homepage link confirms nobody, and it looked perfectly fine
+     from our side for twenty-four days. */
+  const cUrl = confirm?.message.global_merge_vars
+    .find((v) => v.name === 'action_url')?.content;
+  check('the confirm email goes at all', !!confirm);
+  check('its button goes to the confirm page', !!cUrl && cUrl.includes('/confirm.html'), cUrl);
+  check('its button carries this person\'s reference', !!cUrl && cUrl.includes('ref=HAF-CP-'), cUrl);
+  check('its button carries a token long enough to be one',
+    (cUrl?.match(/[?&]t=([^&]+)/)?.[1] || '').length >= 24, cUrl);
+  /* Read from the RECORD, not from the ledger: the question is whether the
+     database would recognise the token in that button, and only the record can
+     answer it. A link whose token nothing has stored confirms nobody, and from
+     the sending side it looks identical to one that works. */
+  check('the token in the button is the one stored on the record',
+    !!state.app?.email_confirm_token && !!cUrl
+      && cUrl.includes('t=' + state.app.email_confirm_token),
+    state.app?.email_confirm_token ? 'stored, but not the one sent' : 'nothing stored');
+  check('and the record remembers when it was sent', !!state.app?.email_confirm_sent_at);
+
+  check('ledger claimed before each send',
+    claims.length === 2 && claims.every((k) => k.status === 'sending'),
+    'claims ' + claims.length);
+  check('ledger settled after them',
+    patched.filter((p) => p.status === 'sent').length === 2);
 });
 
 /* ── 2. a freight forwarder gets their own wording and their own road ── */
