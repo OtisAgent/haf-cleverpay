@@ -379,6 +379,7 @@ function noteKeyUse(env, ctx, row, path) {
    preview can be walked end to end without a customer ever hearing from it. */
 const MANDRILL = 'https://mandrillapp.com/api/1.0/messages/send-template.json';
 const KNECT_URL = 'https://knect.usehaf.co.uk';
+const PLNA_URL = 'https://plna.usehaf.co.uk';
 const CLEVER_URL = 'https://clever.usehaf.co.uk';
 const NEEDS_DOCS = ['driver', 'fleet'];
 const BOX_TYPES = ['driver', 'fleet', 'freight', 'business'];
@@ -424,7 +425,12 @@ function slugFor(row, ev) {
   if (ev === 'email_confirm_required') return 'haf-j2-confirm-email';
   if (ev === 'compliance_submission_complete') return 'haf-j3-documents-received';
   if (ev === 'compliance_action_required') return 'haf-j4-action-required';
-  if (ev === 'compliance_approved') return 'haf-j5-approved-' + (t === 'fleet' ? 'fleet' : 'driver');
+  /* Brent, 14 Aug: the release press tells them the account is open and that
+     access is granted across BOTH systems. Freight and business get their own
+     version - they are released to HAF KNECT and to nothing else, and the
+     driver wording would promise them a PLNA they were never checked for. */
+  if (ev === 'compliance_approved')
+    return 'haf-j5-approved-' + (t === 'fleet' ? 'fleet' : t === 'driver' ? 'driver' : 'freight');
   /* Brent's standing rule: a declined applicant is never re-onboarded without
      his written yes. So a rejection offers no way back unless a reviewer has
      deliberately opened one - and a missing column reads as no way back, which
@@ -448,7 +454,15 @@ function slugFor(row, ev) {
    the document site; a freight forwarder's runs straight into KNECT, because
    they have nothing to upload and no queue to sit in. */
 function actionUrl(row, ev) {
-  if (ev === 'membership_upgraded' || ev === 'plna_allocated' || ev === 'compliance_approved')
+  /* The approval email names both doors in its panel and carries one button,
+     as every HAF email does. The button goes to the door that just opened for
+     THEM: a driver's own app, a fleet's dashboard, KNECT for everyone else.
+     The label in each template is written to match, so the two cannot drift. */
+  if (ev === 'compliance_approved')
+    return row.type === 'driver' ? PLNA_URL
+         : row.type === 'fleet'  ? KNECT_URL + '/fleet'
+         : KNECT_URL;
+  if (ev === 'membership_upgraded' || ev === 'plna_allocated')
     return KNECT_URL;
   if (ev === 'account_created' && !NEEDS_DOCS.includes(row.type)) return KNECT_URL;
   return CLEVER_URL;
@@ -486,7 +500,12 @@ async function journeyMail(env, ref, ev, extra, snap) {
   const box = BOXES[ev];
   const slug = slugFor(row, ev);
   if (!box || !slug) return 'no-such-moment';
-  if (COMPLIANCE_ONLY.includes(ev) && !NEEDS_DOCS.includes(row.type)) return 'not-their-journey';
+  /* compliance_approved is deliberately NOT in this wall. Every other
+     compliance moment belongs to the two roles that send documents, but the
+     release press is pressed on freight and business accounts too, and when
+     it is, that person has just been let in and must be told. */
+  if (COMPLIANCE_ONLY.includes(ev) && ev !== 'compliance_approved'
+      && !NEEDS_DOCS.includes(row.type)) return 'not-their-journey';
   /* wall 3 - approving moves a record through a queue; only a named Confirm &
      release opens a door, and only it may send this one. */
   if (ev === 'compliance_approved' && !(row.access_confirmed_at && row.access_confirmed_by))
@@ -800,9 +819,42 @@ export default {
         h.set('x-cp-tg', env.TG_TOKEN || '');
         h.set('x-cp-tgchat', env.TG_CHAT || '');
         h.set('x-cp-origin', url.origin);
+        const raw = M === 'GET' ? undefined : await req.arrayBuffer();
+        /* ── the paperwork has to exist before the press can open anything ──
+           Brent, 14 Aug: a freight account with an empty document list was
+           released and PLNA let it straight in. Nothing ever looked at the
+           documents — Confirm & release stamped the record and the door opened
+           for somebody who had uploaded nothing.
+
+           So the press is read here, on the way in, and refused while anything
+           marked required is missing. It names the missing documents, because
+           the reviewer's next move is to go and get them. It lives in this
+           worker rather than the back office one purely for room: the back
+           office is a few hundred characters under the size a worker can be
+           uploaded at, and a guard that cannot be deployed guards nothing.
+
+           This is the friendly half. The database refuses an unproven clearance
+           outright, so a release that slipped past this still cannot open PLNA. */
+        if (M === 'PATCH' && /^\/team\/applications\//.test(p)) {
+          let tb = null;
+          try { tb = JSON.parse(new TextDecoder().decode(raw)); } catch { tb = null; }
+          if (tb && tb.confirm_access) {
+            const cur = await findApp(env, decodeURIComponent(p.split('/')[3] || ''));
+            if (cur) {
+              const cr = await sb(env, '/cleverpay_portal_config?id=eq.1&limit=1');
+              const cfg = cr.ok && cr.body && cr.body[0] ? cr.body[0].config : null;
+              const set = cur.type === 'freight' ? (cfg && cfg.freight) : (cfg && cfg.driver);
+              const need = (set && Array.isArray(set.docs) ? set.docs : []).filter(d => d.status === 'required');
+              const held = (Array.isArray(tb.docs) ? tb.docs : (Array.isArray(cur.docs) ? cur.docs : [])).map(d => d.id);
+              const miss = need.filter(d => !held.includes(d.id));
+              if (miss.length) return bad('Cannot release access — still missing: '
+                + miss.map(d => d.name || d.id).join(', ')
+                + '. Add them to the record, then release.', 409);
+            }
+          }
+        }
         const res = await env.ADMIN.fetch(new Request(url.toString(), {
-          method: M, headers: h,
-          body: M === 'GET' ? undefined : await req.arrayBuffer(),
+          method: M, headers: h, body: raw,
         }));
         /* ── the reviewer's button IS the trigger ──
            The back office is where the press happens and knows which one it

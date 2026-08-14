@@ -107,6 +107,10 @@ const api = async (path, init = {}) => {
 };
 const login = async u => (await api('/team/login', { method: 'POST', body: JSON.stringify({ username: u, password: PIN }) })).body.token;
 
+/* How many documents the refusal actually names. The message lists them by
+   their real names rather than counting them at the reviewer, because the
+   reviewer's next move is to go and get those exact files. */
+const named = e => { const m = /still missing: (.+?)\. Add them/.exec(e || ''); return m ? m[1].split(', ').length : 0; };
 let pass = 0, fail = 0;
 const ok = (n, c, d) => { if (c) { pass++; console.log('  PASS  ' + n); } else { fail++; console.log('  FAIL  ' + n + (d !== undefined ? '  → ' + JSON.stringify(d) : '')); } };
 
@@ -134,7 +138,7 @@ console.log('\n── the hole Brent found: freight, nothing uploaded ──');
   const a = makeApp('freight', []);
   const r = await release(a.ref);
   ok('release is refused', r.status === 409, r.status);
-  ok('the reason names the missing documents', /missing 5 required documents/.test(r.body?.error || ''), r.body);
+  ok('the reason names all five missing documents', named(r.body?.error) === 5, r.body);
   ok('nothing was stamped', a.access_confirmed_at === null, a.access_confirmed_at);
   ok('HAF KNECT was not switched on', a.knect !== true, a.knect);
   ok('no "you are in" email was named', !r.event, r.event);
@@ -146,7 +150,7 @@ console.log('\n── a driver with nothing uploaded ──');
   const a = makeApp('driver', []);
   const r = await release(a.ref);
   ok('release is refused', r.status === 409, r.status);
-  ok('all seven are named', /missing 7 required documents/.test(r.body?.error || ''), r.body);
+  ok('all seven are named', named(r.body?.error) === 7, r.body);
 }
 
 console.log('\n── one required document short ──');
@@ -155,7 +159,7 @@ console.log('\n── one required document short ──');
   const a = makeApp('driver', files(short));
   const r = await release(a.ref);
   ok('still refused on the last one', r.status === 409, r.status);
-  ok('exactly one is named', /missing 1 required document:/.test(r.body?.error || ''), r.body);
+  ok('exactly one is named', named(r.body?.error) === 1, r.body);
 }
 
 console.log('\n── optional paperwork is not a blocker ──');
