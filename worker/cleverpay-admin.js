@@ -208,9 +208,26 @@ function missingRequired(cfg, app) {
   return out;
 }
 
+/* One sentence, ten places. Every one of these is the same apology and the
+   same instruction, and ten copies of it is ten chances for one to drift. */
+const TRY = ' \u2014 please try again.';
+
 /* every write to an application goes through here */
 const patchApp = (env, ref, patch) =>
   sb(env, `/${APPS}?ref=eq.${E(ref)}`, { method: 'PATCH', body: S(patch) });
+
+/* The document requirement set, read in one place. Three routes need it and
+   each spelled the same fetch out longhand; a fourth would have been a fourth
+   copy of a line that has to stay identical to be correct. */
+const readCfg = async (env) => {
+  const r = await sb(env, '/cleverpay_portal_config?id=eq.1&limit=1');
+  return r.ok && r.body && r.body[0] ? r.body[0].config : null;
+};
+
+/* Who this office may write to. There are exactly three silences and they are
+   the same three everywhere: nobody left an address, they asked us not to, or
+   they are blocked. Written once so a route cannot quietly honour two of them. */
+const canMail = (a) => !!(a && a.email && !a.reminder_opt_out && !a.blocked_at);
 
 async function teamUser(env, req) {
   const m = (req.headers.get('Authorization') || '').match(/^Bearer (.+)$/);
@@ -367,7 +384,7 @@ export default {
         const pw = await sha256('HAF-CP-TEAM|' + who + '|' + pin);
         const r = await sb(env, `/cleverpay_team_users?username=eq.${E(who)}`,
           { method: 'PATCH', body: S({ pw_hash: pw, must_set_pin: false, setup_code: null }) });
-        if (!r.ok) return bad('Could not save your PIN — please try again.', 500);
+        if (!r.ok) return bad('Could not save your PIN' + TRY, 500);
         const tk = (req.headers.get('Authorization') || '').replace(/^Bearer /, '');
         await sb(env, `/cleverpay_team_sessions?token=eq.${E(tk)}`,
           { method: 'PATCH', body: S({ expires_at: new Date(Date.now() + 7 * 864e5).toISOString() }) });
@@ -410,7 +427,7 @@ export default {
           method: 'PATCH',
           body: S({ on, updated_at: nowIso(), updated_by: who })
         });
-        if (!r.ok) return bad('Could not save that — please try again.', 500);
+        if (!r.ok) return bad('Could not save that' + TRY, 500);
         if (!(r.body || []).length) return bad('That is not a switch.', 404);
         return J({ ok: true, key, on, updated_by: who }, 200, cors);
       }
@@ -425,7 +442,7 @@ export default {
         row.status = b.status === 'approved' ? 'approved' : 'pending';
         if (row.status === 'approved') row.approved_at = nowIso();
         const r = await sb(env, `/${APPS}`, { method: 'POST', body: S(row) });
-        return r.ok ? J(view(r.body[0]), 200, cors) : bad('Could not add — please try again.', 500);
+        return r.ok ? J(view(r.body[0]), 200, cors) : bad('Could not add' + TRY, 500);
       }
 
       /* status / docs updates from the queue */
@@ -603,7 +620,7 @@ export default {
         patch.notes = recordHistory(f.notes, app.notes, who, 'changed ' + changed.join(', '));
         patch.updated_at = nowIso();
         const r = await patchApp(env, app.ref, patch);
-        if (!r.ok || !r.body[0]) return bad('Could not save those changes — please try again.', 500);
+        if (!r.ok || !r.body[0]) return bad('Could not save those changes' + TRY, 500);
         return J({ ok: true, app: view(r.body[0]), changed }, 200, cors);
       }
 
@@ -621,21 +638,23 @@ export default {
            for the case where they genuinely should be told — and it is handled
            before the state check, because telling an already-archived applicant
            is exactly when the office reaches for it. */
-        const told = !!(want && b.notify === true && app.email
-          && !app.reminder_opt_out && !app.blocked_at);
-        if (isArchived(app.notes) === want) {
-          const same = J({ ok: true, app: view(app), changed: false, emailed: told,
-            email: told ? app.email : null }, 200, cors);
-          return told ? named(same, 'compliance_application_cancelled', app.ref) : same;
+        const told = !!(want && b.notify === true && canMail(app));
+        /* Already in the state being asked for means there is nothing to write,
+           but the reply and the email are the same either way — so it is one
+           exit, not two nearly-identical ones that have to be kept in step. */
+        const changed = isArchived(app.notes) !== want;
+        let row = app;
+        if (changed) {
+          const r = await patchApp(env, app.ref, {
+            notes: recordHistory(undefined, app.notes, who, want ? ARCHIVED : RESTORED),
+            updated_at: nowIso(),
+          });
+          if (!r.ok || !r.body[0]) return bad('Could not save that' + TRY, 500);
+          row = r.body[0];
         }
-        const r = await patchApp(env, app.ref, {
-          notes: recordHistory(undefined, app.notes, who, want ? ARCHIVED : RESTORED),
-          updated_at: nowIso(),
-        });
-        if (!r.ok || !r.body[0]) return bad('Could not save that — please try again.', 500);
-        const done = J({ ok: true, app: view(r.body[0]), changed: true,
-          emailed: told, email: told ? app.email : null }, 200, cors);
-        return told ? named(done, 'compliance_application_cancelled', app.ref) : done;
+        const out = J({ ok: true, app: view(row), changed, emailed: told,
+          email: told ? app.email : null }, 200, cors);
+        return told ? named(out, 'compliance_application_cancelled', app.ref) : out;
       }
 
       /* ── clear it and send it back to the applicant ──
@@ -649,15 +668,14 @@ export default {
         if (!app) return bad(NOTFOUND, 404);
         if (app.type === 'business') return bad('Business enquiries have no documents to clear.', 400);
         if (!app.email) return bad('There is no email address on this application to send it back to.', 400);
-        const cr = await sb(env, '/cleverpay_portal_config?id=eq.1&limit=1');
-        const cfg = cr.ok && cr.body && cr.body[0] ? cr.body[0].config : null;
+        const cfg = await readCfg(env);
         if (!cfg) return bad('Could not read the document settings — try again in a moment.', 503);
         await dropFiles(env, app);
         const now = nowIso();
         const missing = missingRequired(cfg, { ...app, docs: [], dvla_licence_no: null, dvla_check_code: null, ni_number: null });
         /* an applicant who has asked not to be emailed, or who is blocked, is
            still cleared — but the portal must say plainly that nothing was sent */
-        const mailable = !app.reminder_opt_out && !app.blocked_at;
+        const mailable = canMail(app);
         const patch = {
           docs: [], status: 'pending', updated_at: now,
           approved_at: null, approved_by: null, rejected_at: null, reject_reason: null,
@@ -671,7 +689,7 @@ export default {
           patch.reminder_docs = missing; patch.reminder_count = (app.reminder_count || 0) + 1;
         }
         const r = await patchApp(env, app.ref, patch);
-        if (!r.ok || !r.body[0]) return bad('Could not clear that application — please try again.', 500);
+        if (!r.ok || !r.body[0]) return bad('Could not clear that application' + TRY, 500);
         /* Clearing takes an applicant's documents away. They are owed the
            reason on the same press, not on a sweep: this is the one moment
            where silence looks exactly like the office losing their paperwork. */
@@ -699,16 +717,55 @@ export default {
            asked not to be emailed, or who is blocked, is not told — an
            application ending is not a reason to override either, and that is a
            deliberate silence rather than a failure. */
-        const mailable = !!(app.email && !app.reminder_opt_out && !app.blocked_at);
+        const mailable = canMail(app);
         const snap = mailable ? snapshot(app) : null;
         await dropFiles(env, app);
         const r = await sb(env, `/${APPS}?ref=eq.${E(app.ref)}`, { method: 'DELETE' });
-        if (!r.ok) return bad('Could not delete that application — please try again.', 500);
+        if (!r.ok) return bad('Could not delete that application' + TRY, 500);
         const name = [app.fname, app.lname].filter(Boolean).join(' ') || app.company || app.username || '';
         await tellTeam(env, `CleverPay: application ${app.ref} (${name}) was deleted by ${who} on ${nowIso().slice(0, 16).replace('T', ' ')}. Documents removed with it. ${snap ? 'The applicant has been emailed to say it is closed.' : 'The applicant has NOT been emailed.'} This cannot be undone.`);
         const gone = J({ ok: true, ref: app.ref, name, emailed: !!snap,
           email: snap ? app.email : null }, 200, cors);
         return snap ? named(gone, 'compliance_application_cancelled', app.ref, '', snap) : gone;
+      }
+
+      /* ── Confirm email ──
+         This press used to go straight from the portal page to the database and
+         never touch a worker at all. It saved fine, but a press that does not
+         come through here cannot name a moment, so it was the one button in the
+         portal that could never send anything — and it is pressed at exactly the
+         moment somebody stops being stuck and starts being able to move.
+
+         What it says depends on where they actually are, which is Brent's rule
+         for the whole set: if the office is still waiting on paperwork, they get
+         the list of what is outstanding, because confirming the address is what
+         makes that email reachable in the first place. If nothing is outstanding
+         they hear nothing here — "we have your documents" has already gone, and
+         a second email saying the same thing is noise. Business enquiries have
+         no document conversation at all, so they are silent too. */
+      if (R('/team/confirm-email', 'POST')) {
+        const app = await findApp(env, b.ref || '');
+        if (!app) return bad(NOTFOUND, 404);
+        const now = nowIso();
+        const r = await patchApp(env, app.ref, {
+          email_verified: true, email_verified_at: app.email_verified_at || now, updated_at: now,
+        });
+        if (!r.ok || !r.body[0]) return bad('Could not confirm that email' + TRY, 500);
+        const fresh = r.body[0];
+        /* Same three silences the rest of this office keeps: no address to write
+           to, asked not to be emailed, or blocked. Each is reported back rather
+           than hidden, so the portal can say plainly that nothing was sent. */
+        let missing = [];
+        if (canMail(fresh) && fresh.type !== 'business') {
+          const cfg = await readCfg(env);
+          if (cfg) missing = missingRequired(cfg, fresh);
+        }
+        const names = missing.map(x => x.name);
+        const out = J({ ok: true, app: view(fresh), emailed: names.length > 0,
+          email: names.length ? fresh.email : null, missing: names }, 200, cors);
+        return names.length
+          ? named(out, 'compliance_action_required', fresh.ref, names.join(', '))
+          : out;
       }
 
       /* ── chase the documents we are still waiting on ──
@@ -722,8 +779,7 @@ export default {
         if (!app) return bad(NOTFOUND, 404);
         if (app.type === 'business') return bad('Business enquiries do not have compliance documents.', 400);
         if (!app.email) return bad('There is no email address on this application.', 400);
-        const cr = await sb(env, '/cleverpay_portal_config?id=eq.1&limit=1');
-        const cfg = cr.ok && cr.body && cr.body[0] ? cr.body[0].config : null;
+        const cfg = await readCfg(env);
         if (!cfg) return bad('Could not read the document settings — try again in a moment.', 503);
         const missing = missingRequired(cfg, app);
         if (!missing.length) return bad('Every required document is already in — there is nothing to chase.', 400);
@@ -738,7 +794,7 @@ export default {
             reminder_count: (app.reminder_count || 0) + 1, updated_at: now,
           }),
         });
-        if (!r.ok || !r.body || !r.body[0]) return bad('Could not send that reminder — please try again.', 500);
+        if (!r.ok || !r.body || !r.body[0]) return bad('Could not send that reminder' + TRY, 500);
         /* This used to write "please chase them" onto the record and wait for a
            job to notice. It goes now, naming the documents the reviewer is
            actually waiting on, so the applicant reads the same list the office
@@ -780,7 +836,7 @@ export default {
             key_hash: await keyHash(key), key_prefix: key.slice(0, 12), created_by: who,
           };
           const ins = await sb(env, '/cleverpay_api_keys', { method: 'POST', body: S(row) });
-          if (!ins.ok) return bad('Could not create the key — please try again.', 500);
+          if (!ins.ok) return bad('Could not create the key' + TRY, 500);
           /* rotate: the old key stops working the moment the new one exists */
           if (active) await sb(env, `/cleverpay_api_keys?id=eq.${active.id}`, {
             method: 'PATCH', body: S({ revoked_at: nowIso(), revoked_by: who }) });

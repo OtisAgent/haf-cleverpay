@@ -1032,26 +1032,28 @@ function unblockAcc(ref){
   update(ref,{status:back},back==='enquiry'?'Unblocked — back on the enquiry list':'Unblocked — returned to pending for re-review');
 }
 
-/* Email confirmation goes through a database function that checks the team
-   session token server-side — the public key alone cannot flip this flag. */
-const SB_URL='https://jsdwvogsxlnczzbefwgp.supabase.co';
-const SB_ANON='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpzZHd2b2dzeGxuY3p6YmVmd2dwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEzODgyMzYsImV4cCI6MjA5Njk2NDIzNn0.pxqM-Oh4f_3PlqCbKIKvcKZnNRUZ1ASKqqdNg78M_4M';
+/* Email confirmation used to go straight from this page to a database function.
+   It saved correctly, but it was the only press in the portal that never went
+   through the worker — and the worker is the only thing that can attach an
+   email to a press. So this was the one button that could never write to the
+   applicant, at exactly the moment they stop being stuck.
+
+   It now goes the same road as every other press. If the office is still
+   waiting on paperwork, confirming the address sends them the outstanding list;
+   if nothing is outstanding they hear nothing, because "we have your documents"
+   has already gone. The toast says which of the two happened rather than
+   claiming an email that may not have left. */
 async function confirmEmail(ref,silent){
   if(!TEAM)return false;
-  let ok=false;
-  try{
-    const res=await fetch(SB_URL+'/rest/v1/rpc/cleverpay_team_set_email_verified',{
-      method:'POST',
-      headers:{'Content-Type':'application/json',apikey:SB_ANON,Authorization:'Bearer '+SB_ANON},
-      body:JSON.stringify({p_ref:ref,p_token:TEAM.token,p_verified:true})
-    });
-    ok=res.ok;
-  }catch(e){}
-  if(!ok){showToast(silent?'Approved, but the email could not be confirmed — use the Confirm email button on the card to retry':'Could not confirm the email — try again',true);return false;}
+  const r=await cpApi('/team/confirm-email',{method:'POST',token:TEAM.token,body:{ref:ref}});
+  if(r.status===401){showToast('Session expired — please sign in again',true);doSignOut();return false;}
+  if(!r.ok){showToast(silent?'Approved, but the email could not be confirmed — use the Confirm email button on the card to retry':(r.body&&r.body.error)||'Could not confirm the email — try again',true);return false;}
   const i=QUEUE.findIndex(a=>a.ref===ref);
-  if(i>=0)QUEUE[i]={...QUEUE[i],email_verified:true};
+  if(i>=0)QUEUE[i]={...QUEUE[i],...(r.body&&r.body.app?r.body.app:{email_verified:true})};
   renderQueue();
-  if(!silent)showToast('Email confirmed');
+  if(!silent)showToast(r.body&&r.body.emailed
+    ?'Email confirmed — and we have asked them for the '+(r.body.missing||[]).length+' document'+((r.body.missing||[]).length===1?'':'s')+' still outstanding'
+    :'Email confirmed');
   return true;
 }
 async function update(ref,patch,okMsg){
