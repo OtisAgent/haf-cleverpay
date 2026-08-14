@@ -45,13 +45,13 @@
     <div class="page-head">
       <div class="page-kicker">HAF CleverPay</div>
       <h1 class="page-title">Welcome to CleverPay</h1>
-      <p class="page-sub">Log in to continue your application, or sign up for a new HAF account.</p>
+      <p class="page-sub">Sign in to continue your application, send us your documents and see where you are up to.</p>
     </div>
 
     <!-- LOG IN -->
     <div class="login-card">
       <div class="lc-title">Log in</div>
-      <div class="lc-sub">Already applied? Enter your HAF username or application reference and your security PIN to upload documents and check your status.</div>
+      <div class="lc-sub">Enter your HAF username or application reference and your security PIN to upload documents and check your status.</div>
       <div class="lc-row" style="margin-bottom:.55rem">
         <input class="fi" id="login-id" type="text" placeholder="HAF username or reference" autocomplete="username" onkeydown="if(event.key==='Enter')doLogin()">
       </div>
@@ -59,12 +59,35 @@
         <input class="fi" id="login-pin" type="password" inputmode="numeric" maxlength="6" placeholder="Security PIN" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()">
         <button class="btn btn-or" onclick="doLogin()">Log in</button>
       </div>
-      <div class="lc-err" id="login-err">No application found with that username or reference — check it, or sign up below.</div>
+      <div class="lc-err" id="login-err">No application found with that username or reference — check it and try again.</div>
+      <!-- A PIN nobody can replace is a locked door. The same link covers a
+           forgotten username: the reset email is addressed to the person and
+           names them, so it hands back both. -->
+      <div class="lc-help">
+        <a href="reset.html">Forgotten your username or PIN?</a>
+      </div>
     </div>
 
-    <!-- SIGN UP -->
-    <div class="signup-label">New to HAF? Sign up</div>
-    <div class="type-grid">
+    <!-- TEAM SIGN-IN — the second door on this page, and the only one left on it.
+         Full width under the log-in card so the screen reads as two doors, not a
+         card with a footnote. Deliberately quieter than the orange Log in button:
+         almost everyone who lands here is an applicant, not staff. -->
+    <a class="team-band" href="team.html">
+      <div class="tb-icon">
+        <svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg>
+      </div>
+      <div class="tb-body">
+        <div class="tb-name">HAF team sign-in</div>
+        <div class="tb-sub">For the HAF team only — review applications, check documents and release access to the network.</div>
+      </div>
+      <div class="tb-arrow"><svg viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></div>
+    </a>
+
+    <!-- The sign-up forms below stay in the page and stay reachable: someone
+         arriving from join.usehaf.co.uk with a plan already chosen is dropped
+         straight into their form. What has gone is the chooser — new accounts
+         are opened at join.usehaf.co.uk now, not here. -->
+    <div class="type-grid" hidden>
       <div class="type-card" id="card-driver" onclick="selectType('driver')">
         <div class="type-icon">
           <svg viewBox="0 0 24 24"><rect x="1" y="3" width="15" height="13" rx="1"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
@@ -88,7 +111,7 @@
       </div>
     </div>
 
-    <div class="biz-band" id="card-business" onclick="selectType('business')">
+    <div class="biz-band" id="card-business" hidden onclick="selectType('business')">
       <div class="type-icon" style="width:44px;height:44px;flex:none">
         <svg viewBox="0 0 24 24"><path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/><path d="M9 21v-4h6v4"/><path d="M9 10h.01M15 10h.01M9 14h.01M15 14h.01"/></svg>
       </div>
@@ -99,7 +122,6 @@
       <div class="bb-arrow"><svg viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></div>
     </div>
 
-    <div class="team-link">HAF team? <a href="team.html">Sign in to the team portal</a></div>
   </div>
 
   <!-- STEP B0: Business account routing -->

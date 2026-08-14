@@ -50,7 +50,46 @@ const JOIN = (function () {
   return id && ALL_CARDS.includes(type) ? { id, type, name, user } : null;
 })();
 
+/* ── ADDING DRIVING TO AN ACCOUNT THAT ALREADY EXISTS ──────────────────────
+   Brent, 14 Aug: a business or freight forwarder who wants to drive as well
+   "should go through the clever.usehaf.co.uk system". The sidebar in KNECT now
+   sends them here with ?add=driver (or ?add=fleet) and their HAF username.
+
+   These people are NOT new applicants. They already hold a HAF account, a
+   username and a PIN. Dropping them on the sign-up form would ask them to
+   invent a second username and then reject them as a duplicate — turning
+   somebody away at a door they were invited through. So they get the sign-in
+   box with their username already filled in, and a line telling them what is
+   about to be asked of them. */
+const ADD = (function () {
+  const q = new URLSearchParams(location.search);
+  const type = (q.get('add') || '').replace(/[^a-z]/g, '');
+  const user = (q.get('u') || '').replace(/[^a-z0-9]/gi, '').slice(0, 24).toUpperCase();
+  return ALL_CARDS.includes(type) ? { type, user } : null;
+})();
+
+function applyAddChoice(){
+  if (!ADD) return false;
+  const what = ADD.type === 'fleet' ? 'a fleet' : 'owner driver';
+  const note = document.getElementById('join-carry');
+  if (note) {
+    note.textContent = ADD.user
+      ? 'Adding ' + what + ' to your HAF account — you are ' + ADD.user
+        + '. Sign in with your PIN and we will ask for the documents we need before you can take work.'
+      : 'Adding ' + what + ' to your HAF account. Sign in with your HAF username and PIN, and we will ask for the documents we need before you can take work.';
+    note.style.display = '';
+  }
+  const idBox = document.getElementById('login-id');
+  const pinBox = document.getElementById('login-pin');
+  if (idBox && ADD.user) idBox.value = ADD.user;
+  if (pinBox) pinBox.focus();
+  return true;
+}
+
 function applyJoinChoice(){
+  /* Somebody adding driving to an account they already hold comes first: they
+     have a username, so there is nothing here for them to fill in. */
+  if (applyAddChoice()) return;
   if (!JOIN) return;
   const note = document.getElementById('join-carry');
   /* Two different people arrive here holding a join id, and they need opposite
@@ -337,7 +376,7 @@ async function doLogin(){
   if(!raw) return;
   const r = await cpApi('/login', { method: 'POST', body: { id: raw, pin } });
   if(!r.ok){
-    if(r.status === 404) showLoginErr('No application found with that username or reference — check it, or sign up below.');
+    if(r.status === 404) showLoginErr('No application found with that username or reference — check it, or open a HAF account at join.usehaf.co.uk.');
     else if(r.status === 401) showLoginErr(pin ? 'Incorrect PIN — check it and try again.' : 'Enter your security PIN to log in.');
     else showLoginErr(r.body?.error || 'Could not log in — please try again.');
     return;

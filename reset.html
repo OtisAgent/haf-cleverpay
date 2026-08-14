@@ -132,7 +132,7 @@ async function request(){
   try{ await rpc('request_pin_reset',{p_id:u}); }
   catch(e){ /* the message below is deliberately the same either way */ }
   show('sent','Check your email',
-    'If that account exists, a reset link is on its way to the address on the application. It works once and lasts two hours.',
+    'If that account exists, a reset link is on its way to the address on the application. Give it up to half an hour, and check your junk folder. The link works once, and expires two hours after you asked for it.',
     '<a class="btn dark" href="index.html">Back to sign in</a>');
 }
 

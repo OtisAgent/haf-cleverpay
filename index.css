@@ -144,7 +144,9 @@ select.fi{appearance:none;-webkit-appearance:none;background-image:url("data:ima
 }
 
 /* ── LOG IN CARD ── */
-.login-card{background:var(--p);border:1.5px solid var(--lns);border-radius:var(--r);padding:1.4rem 1.3rem;margin-bottom:1.6rem}
+/* The log-in card and the team tile are a matched pair now — same width, same
+   corner, same border weight — so keep them close enough to read as one block. */
+.login-card{background:var(--p);border:1.5px solid var(--lns);border-radius:var(--r);padding:1.4rem 1.3rem;margin-bottom:.85rem}
 .lc-title{font-family:var(--dp);font-size:1.05rem;font-weight:900;letter-spacing:-.03em;margin-bottom:.25rem}
 .lc-sub{font-size:.76rem;color:var(--mu);line-height:1.6;margin-bottom:.9rem}
 .lc-row{display:flex;gap:.55rem}
@@ -154,10 +156,33 @@ select.fi{appearance:none;-webkit-appearance:none;background-image:url("data:ima
 .lc-err.show{display:block}
 .signup-label{font-size:.66rem;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--mu);margin-bottom:.75rem;display:flex;align-items:center;gap:.5rem}
 .signup-label::after{content:'';flex:1;height:1px;background:var(--ln)}
+.lc-help{margin-top:.85rem;padding-top:.8rem;border-top:1px solid var(--ln);font-size:.75rem;color:var(--mu)}
+.lc-help a{color:var(--or);font-weight:700;text-decoration:none}
+.lc-help a:hover{text-decoration:underline}
 .team-link{text-align:center;margin-top:2rem;font-size:.76rem;color:var(--mu)}
 .team-link a{color:var(--or);font-weight:700;text-decoration:none}
 .team-link a:hover{text-decoration:underline}
 @media(max-width:480px){.lc-row{flex-direction:column}.lc-row .btn{width:100%}}
+
+/* ── TEAM SIGN-IN TILE ──────────────────────────────────────────────────────
+   Same width and corner as the log-in card above it, one weight quieter: the
+   applicant's orange button stays the loudest thing on the screen. */
+.team-band{display:flex;align-items:center;gap:.9rem;background:var(--p);border:1.5px solid var(--lns);border-radius:var(--r);padding:1.05rem 1.3rem;text-decoration:none;cursor:pointer;transition:border-color .15s,background .15s}
+.team-band:hover{border-color:rgba(241,142,0,.35);background:var(--p2)}
+.tb-icon{width:44px;height:44px;border-radius:12px;background:var(--p2);border:1.5px solid var(--lns);display:flex;align-items:center;justify-content:center;color:var(--mu);flex:none;transition:color .15s,border-color .15s}
+.team-band:hover .tb-icon{color:var(--or);border-color:rgba(241,142,0,.3)}
+.tb-icon svg{width:21px;height:21px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.tb-body{flex:1;min-width:0}
+.tb-name{font-family:var(--dp);font-size:.95rem;font-weight:900;letter-spacing:-.03em;color:var(--tx)}
+.tb-sub{font-size:.73rem;color:var(--mu);line-height:1.5;margin-top:.15rem}
+.tb-arrow{flex:none;color:var(--mu);transition:color .15s,transform .15s}
+.team-band:hover .tb-arrow{color:var(--or);transform:translateX(2px)}
+.tb-arrow svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+@media(max-width:480px){.team-band{align-items:flex-start}.tb-icon{margin-top:.1rem}}
+
+/* The sign-up chooser is kept in the page for the join.usehaf.co.uk hand-over
+   but never shown: a display rule set on the class would otherwise beat hidden. */
+.type-grid[hidden],.biz-band[hidden]{display:none}
 
 /* ── BUSINESS BAND (purpose-built route under the tiles) ── */
 .biz-band{display:flex;align-items:center;gap:.9rem;background:var(--p);border:2px solid var(--lns);border-radius:var(--r);padding:1.1rem 1.2rem;margin:-.6rem 0 1.5rem;cursor:pointer;text-align:left;transition:border-color .15s,background .15s}
