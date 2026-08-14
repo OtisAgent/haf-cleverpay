@@ -32,18 +32,28 @@ a{color:var(--or);text-decoration:none}
 .theme-btn:hover{color:var(--tx)}
 
 /* ── STEPS ── */
-.steps{display:flex;align-items:center;justify-content:center;gap:0;padding:.9rem 1.4rem;border-bottom:1px solid var(--ln);background:var(--p);overflow-x:auto;scrollbar-width:none}
-.steps::-webkit-scrollbar{display:none}
-.step{display:flex;align-items:center;gap:.45rem;font-size:.74rem;font-weight:700;letter-spacing:.02em;color:var(--mu);white-space:nowrap;flex-shrink:0}
-.step-n{width:22px;height:22px;border-radius:50%;background:var(--p2);border:1.5px solid var(--lns);display:flex;align-items:center;justify-content:center;font-size:.66rem;font-weight:800;color:var(--mu)}
+/* The progress row fits the screen it is on rather than scrolling sideways.
+   The connector lines absorb any spare space and give it back when space is
+   tight; below 500px the finished labels step aside and leave their ticks,
+   so the stage the applicant is actually on stays readable on a phone. */
+.steps{display:flex;align-items:center;justify-content:center;gap:0;padding:.9rem 1.4rem;border-bottom:1px solid var(--ln);background:var(--p);overflow:hidden}
+.step{display:flex;align-items:center;gap:.45rem;font-size:.74rem;font-weight:700;letter-spacing:.02em;color:var(--mu);white-space:nowrap;flex:0 1 auto;min-width:0}
+.step-l{overflow:hidden;text-overflow:ellipsis}
+.step-n{width:22px;height:22px;flex:0 0 22px;border-radius:50%;background:var(--p2);border:1.5px solid var(--lns);display:flex;align-items:center;justify-content:center;font-size:.66rem;font-weight:800;color:var(--mu)}
 .step.active .step-n{background:var(--or);border-color:var(--or);color:#0e1113}
 .step.active{color:var(--or)}
 .step.done .step-n{background:var(--gn);border-color:var(--gn);color:#fff}
 .step.done{color:var(--gn)}
 .step.granted .step-n{background:var(--gn);border-color:var(--gn);color:#fff}
 .step.granted{color:var(--gn)}
-.step-sep{width:32px;height:1.5px;background:var(--lns);margin:0 .4rem;flex-shrink:0}
+.step-sep{flex:1 1 12px;min-width:8px;max-width:32px;height:1.5px;background:var(--lns);margin:0 .4rem}
 .step-sep.done{background:var(--gn)}
+@media (max-width:500px){
+  .steps{padding:.9rem .7rem}
+  .step-sep{margin:0 .25rem;min-width:6px}
+  .step .step-l{display:none}
+  .step.active .step-l,.step.granted .step-l{display:inline}
+}
 
 /* ── PAGE ── */
 .page{max-width:540px;margin:0 auto;padding:2.5rem 1.25rem 5rem}
@@ -108,6 +118,24 @@ a{color:var(--or);text-decoration:none}
 .al-icon svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 .al-name{font-family:var(--dp);font-size:.8rem;font-weight:900;color:var(--tx);letter-spacing:-.02em}
 .al-url{font-size:.66rem;color:var(--mu)}
+
+/* ── PLNA LOCKED ──
+   A tile that looks like the KNECT one but is not a way in. It reads red so
+   the difference is obvious at a glance, and it does not behave like a link:
+   no hover lift, no pointer, and the click is stopped in the page script.
+   The panel underneath says the one thing the person can do about it. */
+.access-link.locked{border-color:rgba(208,64,64,.3);background:var(--rd-d);cursor:default}
+.access-link.locked:hover{border-color:rgba(208,64,64,.3);background:var(--rd-d)}
+.access-link.locked .al-icon{background:var(--rd-d);border-color:rgba(208,64,64,.28);color:var(--rd)}
+.access-link.locked .al-name{color:var(--rd)}
+.access-link.locked .al-url{color:var(--rd);font-weight:800}
+.plna-locked{display:none;margin-top:1rem;text-align:left;background:var(--rd-d);border:1.5px solid rgba(208,64,64,.22);border-radius:var(--rx);padding:.95rem 1rem}
+.plna-locked.show{display:block}
+.pl-head{display:flex;align-items:center;gap:.4rem;font-family:var(--dp);font-size:.86rem;font-weight:900;color:var(--rd);margin-bottom:.35rem}
+.pl-head svg{width:15px;height:15px;flex-shrink:0;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+.pl-body{font-size:.78rem;color:var(--mu);line-height:1.65;margin-bottom:.8rem}
+.pl-btn{display:inline-flex;align-items:center;justify-content:center;text-align:center;font-weight:700;font-size:.8rem;padding:.6rem 1.1rem;border-radius:var(--pill);background:var(--rd);color:#fff;text-decoration:none;transition:filter .15s}
+.pl-btn:hover{filter:brightness(1.1);color:#fff}
 
 /* ── REJECTION PANEL ── */
 .reject-panel{display:none;background:var(--rd-d);border:1.5px solid rgba(208,64,64,.22);border-radius:var(--r);padding:1.4rem;margin-bottom:1.2rem}

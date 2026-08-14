@@ -23,13 +23,13 @@
 </header>
 
 <nav class="steps" id="step-bar">
-  <div class="step done"><div class="step-n">✓</div>Account</div>
-  <div class="step-sep done"></div>
-  <div class="step done"><div class="step-n">✓</div>Documents</div>
+  <div class="step done"><div class="step-n">✓</div><span class="step-l">Account</span></div>
+  <div class="step-sep done" id="sep-2"></div>
+  <div class="step active" id="step-2"><div class="step-n">2</div><span class="step-l">Documents</span></div>
   <div class="step-sep done" id="sep-3"></div>
-  <div class="step active" id="step-3"><div class="step-n" id="step3-n">3</div>Review</div>
+  <div class="step active" id="step-3"><div class="step-n" id="step3-n">3</div><span class="step-l">Review</span></div>
   <div class="step-sep" id="sep-4"></div>
-  <div class="step" id="step-4"><div class="step-n" id="step4-n">4</div>Access</div>
+  <div class="step" id="step-4"><div class="step-n" id="step4-n">4</div><span class="step-l">Access</span></div>
 </nav>
 
 <main class="page">
@@ -86,8 +86,8 @@
 
   <!-- ACCESS PANEL (shown when approved) -->
   <div class="access-panel" id="access-panel">
-    <div class="ap-head">Access granted</div>
-    <div class="ap-sub">Your account is verified and active. Log in to your platforms below using your HAF username.</div>
+    <div class="ap-head" id="ap-head">Access granted</div>
+    <div class="ap-sub" id="ap-sub">Your account is verified and active. Log in to your platforms below using your HAF username.</div>
     <div class="ap-username" id="ap-username">—</div>
     <div class="ap-uname-label">Your HAF username</div>
     <div class="access-links">
@@ -96,7 +96,7 @@
           <svg viewBox="0 0 24 24"><rect x="1" y="3" width="15" height="13" rx="1"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
         </div>
         <div class="al-name">HAF PLNA</div>
-        <div class="al-url">plna.usehaf.co.uk</div>
+        <div class="al-url" id="plna-url">plna.usehaf.co.uk</div>
       </a>
       <a href="https://knect.usehaf.co.uk" target="_blank" class="access-link">
         <div class="al-icon">
@@ -105,6 +105,16 @@
         <div class="al-name">HAF KNECT</div>
         <div class="al-url">knect.usehaf.co.uk</div>
       </a>
+    </div>
+
+    <!-- Shown instead of a working PLNA link until the person is Clever checked -->
+    <div class="plna-locked" id="plna-locked">
+      <div class="pl-head">
+        <svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        HAF PLNA is locked
+      </div>
+      <div class="pl-body">To get a HAF PLNA and drive on the network, go and get Clever checked. Your HAF KNECT account is open now &mdash; you can post jobs and see your dashboards straight away.</div>
+      <a class="pl-btn" href="docs.html">Upload your documents here to add a vehicle</a>
     </div>
   </div>
 
@@ -229,19 +239,65 @@ function loadPage(){
   document.getElementById('ref-display').textContent = app.ref;
   document.getElementById('tl-submitted').textContent = fmtDate(app.submitted);
 
-  const docCount = (app.docs || []).length;
-  document.getElementById('tl-docs-count').textContent = docCount + ' document' + (docCount !== 1 ? 's' : '') + ' uploaded';
-
-  /* Hide driver PLNA link for freight, keep both for drivers */
-  if(app.type === 'freight'){
-    const plna = document.getElementById('plna-link');
-    if(plna) plna.style.display = 'none';
-  }
-
-  renderStatus(app);
+  renderStatus(app, false);
 }
 
-function renderStatus(app){
+/* ── What "Clever checked" has to mean before we offer anybody a HAF PLNA ──
+   Two things, and the applicant controls neither of them:
+
+   1. every document the team's settings mark REQUIRED is actually on the
+      record, and
+   2. a named compliance reviewer has pressed Confirm & release — that press,
+      and only that press, stamps access_confirmed_at.
+
+   Approved on its own was never enough. A record can sit approved with an
+   empty document list, and until 14 Aug this page read approved and handed
+   out a working PLNA link to somebody who had uploaded nothing.
+
+   HAF KNECT is deliberately not gated on any of this: an approved account can
+   post jobs and read its dashboards from the moment it is approved. Driving on
+   the network is the part that needs the paperwork. */
+function requiredMissing(app){
+  const set = app.type === 'freight' ? (CFG && CFG.freight) : (CFG && CFG.driver);
+  const defs = (set && Array.isArray(set.docs) ? set.docs : []).filter(d => d.status === 'required');
+  /* No settings in hand yet. Fall back to the compliance press alone rather
+     than inventing a lock — that stamp is still something no applicant can
+     give themselves, so the hole stays shut either way. */
+  if(!defs.length) return 0;
+  const have = (Array.isArray(app.docs) ? app.docs : []).map(d => d.id);
+  return defs.filter(d => !have.includes(d.id)).length;
+}
+
+function cleverChecked(app){
+  return !!app.access_confirmed_at && requiredMissing(app) === 0;
+}
+
+/* The PLNA tile has two states and no third one. Unlocked it is an ordinary
+   link. Locked it is red, inert, and sits above a panel saying what to do. */
+function renderPlnaTile(app){
+  const tile = document.getElementById('plna-link');
+  const url = document.getElementById('plna-url');
+  const note = document.getElementById('plna-locked');
+  const open = cleverChecked(app);
+  tile.classList.toggle('locked', !open);
+  note.classList.toggle('show', !open);
+  if(open){
+    tile.setAttribute('href', 'https://plna.usehaf.co.uk');
+    tile.setAttribute('target', '_blank');
+    url.textContent = 'plna.usehaf.co.uk';
+  } else {
+    /* Removing the href is what actually stops the navigation — a click
+       handler alone still opens on a middle-click or a long-press. */
+    tile.removeAttribute('href');
+    tile.removeAttribute('target');
+    url.textContent = 'Locked';
+  }
+  document.getElementById('ap-sub').textContent = open
+    ? 'Your account is verified and active. Log in to your platforms below using your HAF username.'
+    : 'Your HAF KNECT account is open — sign in below with your HAF username to post jobs and see your dashboards.';
+}
+
+function renderStatus(app, live){
   const status = app.status || 'pending';
   const icon = document.getElementById('status-icon');
   const title = document.getElementById('status-title');
@@ -249,6 +305,19 @@ function renderStatus(app){
 
   icon.className = 'status-icon ' + status;
   title.className = 'status-title ' + status;
+
+  /* ── the Documents step tells the truth ──
+     Steps 1 and 2 used to be written into the page as already ticked, so a
+     person who had uploaded nothing still saw a green tick against Documents.
+     It is ticked now only when nothing required is outstanding. */
+  const docCount = (app.docs || []).length;
+  document.getElementById('tl-docs-count').textContent =
+    docCount + ' document' + (docCount !== 1 ? 's' : '') + ' uploaded';
+  const docsShort = requiredMissing(app);
+  const stepDocs = document.getElementById('step-2');
+  stepDocs.className = docsShort ? 'step active' : 'step done';
+  stepDocs.querySelector('.step-n').textContent = docsShort ? '2' : '✓';
+  document.getElementById('sep-2').className = docsShort ? 'step-sep' : 'step-sep done';
 
   /* Access needs BOTH: team approval AND a confirmed email address. */
   const emailOk = !!app.email_verified;
@@ -313,7 +382,14 @@ function renderStatus(app){
     document.getElementById('tl-review-sub').textContent = 'All documents verified by the HAF compliance team.';
     document.getElementById('tl-access-dot').className = 'tl-dot done';
     document.getElementById('tl-access-dot').innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
-    document.getElementById('tl-access-sub').textContent = 'Log in to PLNA and HAF KNECT using your username above.';
+
+    /* Which doors are actually open decides what this line promises. Telling an
+       approved person to "log in to PLNA" when PLNA will refuse them is the
+       same failure as the link itself — it sends them at a locked door. */
+    renderPlnaTile(app);
+    document.getElementById('tl-access-sub').textContent = cleverChecked(app)
+      ? 'Log in to PLNA and HAF KNECT using your username above.'
+      : 'HAF KNECT is open — log in with your username above. HAF PLNA unlocks once you are Clever checked.';
 
     /* Freight profit-pooling panel */
     if(app.type === 'freight'){
