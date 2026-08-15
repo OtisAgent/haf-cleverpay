@@ -19,6 +19,9 @@ const OK_ORIGINS = [JOIN_ORIGIN, 'https://clever.usehaf.co.uk', 'https://otisage
 const isJoinOrigin = (o) =>
   o === JOIN_ORIGIN || o === 'https://haf-pay.pages.dev'
   || (o.startsWith('https://') && o.endsWith('.haf-pay.pages.dev'));
+/* Every front door of ours - see the stamp at /apply. Defined after
+   OK_ORIGINS/isOurPreview below, so it is a function, not a const read at load. */
+const isOurDoor = (o) => !o || OK_ORIGINS.includes(o) || isOurPreview(o) || isJoinOrigin(o);
 /* compliance files live in a PRIVATE bucket — reachable only with the service key, never by URL */
 const DOCS = 'https://jsdwvogsxlnczzbefwgp.supabase.co/storage/v1/object/cleverpay-docs/';
 const DOC_MIME = ['application/pdf', 'image/jpeg', 'image/png', 'image/heic', 'image/heif', 'image/webp'];
@@ -608,12 +611,30 @@ async function confirmMailNow(env, ctx, row) {
   const token = [...crypto.getRandomValues(new Uint8Array(32))]
     .map((b) => b.toString(16).padStart(2, '0')).join('');
   const job = (async () => {
+    /* The token goes down first and alone: a link whose token the database has
+       never heard of confirms nobody. */
     const w = await sb(env, `/${APPS}?ref=eq.${E(row.ref)}`, { method: 'PATCH',
-      body: S({ email_confirm_token: token, email_confirm_sent_at: nowIso() }) });
+      body: S({ email_confirm_token: token }) });
     if (!w.ok) return;
-    await journeyMail(env, row.ref, 'email_confirm_required', {
+    const sent = await journeyMail(env, row.ref, 'email_confirm_required', {
       action_url: `${CLEVER_URL}/confirm.html?ref=${E(row.ref)}&t=${E(token)}`,
     });
+    /* ── and "sent" is only written when something was actually sent ──
+       15 Aug: this stamp used to go down with the token, before the send was
+       even attempted. Every unstamped applicant was therefore refused by wall 1,
+       nothing left the building, and the record still read "confirmation sent" -
+       so the team screen showed a healthy queue while twenty people sat waiting
+       for an email that had never existed. A record that reports work nobody did
+       is worse than one that reports nothing: it stops anybody looking.
+
+       journeyMail answers 'sent' or 'queued' when Mandrill took it, and the
+       reason it refused otherwise. Only the first two are the truth. */
+    if (sent === 'sent' || sent === 'queued') {
+      await sb(env, `/${APPS}?ref=eq.${E(row.ref)}`, { method: 'PATCH',
+        body: S({ email_confirm_sent_at: nowIso() }) });
+    } else {
+      console.log(`confirm email NOT sent for ${row.ref}: ${sent}`);
+    }
   })().catch(() => {});
   if (ctx && typeof ctx.waitUntil === 'function') ctx.waitUntil(job);
 }
@@ -681,7 +702,25 @@ export default {
            The email engine reads stamped rows and NOTHING else. That is what
            holds the existing crowd back - not nine scheduled jobs switched off
            by hand, which anybody could switch on again by accident. */
-        if (isJoinOrigin(req.headers.get('Origin') || '')) row.journey = 'v2';
+        /* 15 Aug, Brent: "the automatic triggers and button clicks that are
+           needed to give someone information to know where they stand... this
+           is for people's life". Until today only the join page stamped,
+           because on 13 Aug the stamp was doing two jobs at once: marking the
+           new journey AND holding the pre-rebuild crowd back. Those are
+           different jobs. An OLD row with no stamp is what holds the old crowd
+           back - it was never a reason to silence a NEW sign-up.
+
+           clever.usehaf.co.uk is a real front door with real people walking
+           through it: 25 of the 28 sign-ups since 1 July came through it, were
+           saved unstamped, and heard nothing at all - no welcome, no
+           confirm-your-email - which left them stuck behind the email wall and
+           unable to be released onto the network.
+
+           So every door of OURS stamps. The set is the one CORS already trusts:
+           our named origins and our own project previews. A counterfeit page on
+           free hosting still fails, because a real browser sends its real
+           origin and that origin is not ours. */
+        if (isOurDoor(req.headers.get('Origin') || '')) row.journey = 'v2';
         let r = await sb(env, `/${APPS}`, { method: 'POST', body: S(row) });
         /* The stamp is bookkeeping. The account is the person's only way in.
            The journey column arrives with migration 0046, and until somebody runs

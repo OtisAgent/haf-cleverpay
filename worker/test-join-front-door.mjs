@@ -89,6 +89,15 @@ const server = createServer(async (req, res) => {
     rows.push(row);
     return send([row], 201);
   }
+  /* PATCH by ref — needed so a test can see what the worker WROTE BACK about a
+     person, which is where the 15 Aug "confirmation sent" lie lived. */
+  if (req.method === 'PATCH') {
+    const patch = JSON.parse(raw || '{}');
+    const ref = (u.searchParams.get('ref') || '').replace('eq.', '');
+    const hit = rows.filter((r) => r.ref === ref);
+    hit.forEach((r) => Object.assign(r, patch));
+    return send(hit);
+  }
   const or = u.searchParams.get('or');
   if (or) {
     const want = decodeURIComponent(or).replace(/[()]/g, '').split(',').map((s) => s.split('.eq.')[1]);
@@ -105,7 +114,13 @@ writeFileSync(tmp, readFileSync(new URL('./cleverpay-api.js', import.meta.url), 
   .replace('https://jsdwvogsxlnczzbefwgp.supabase.co/rest/v1', `http://127.0.0.1:${PORT}/rest/v1`));
 const worker = (await import(tmp.href)).default;
 const env = { SB_KEY: 'stub-key' };
-const ctx = { waitUntil: (p) => p };
+/* The work that runs AFTER the applicant's page is answered — their welcome and
+   their confirm email — rides on waitUntil. Hold onto those promises: a test
+   that checks the record before they have finished is testing the wrong moment,
+   and would have called the missing confirm token a pass. */
+const pending = [];
+const ctx = { waitUntil: (p) => { pending.push(p); return p; } };
+const settle = () => Promise.all(pending.splice(0));
 const call = (path, { method = 'GET', origin, body } = {}) =>
   worker.fetch(new Request('https://api.test' + path, {
     method,
@@ -173,6 +188,27 @@ r = await call('/apply', { method: 'POST', origin: 'https://not-haf.pages.dev', 
 await r.json();
 ok('somebody else\'s page on free hosting is NOT stamped as our journey',
   DB.cleverpay_applications[3] && DB.cleverpay_applications[3].journey === undefined);
+
+/* ── the door this test suite never watched ───────────────────────────────────
+   15 Aug. Every check above asks about the JOIN page, and every one of them
+   passed all the way through the weeks in which the OTHER front door — the one
+   25 of 28 real sign-ups actually used — saved people unstamped and left them
+   in silence. A test suite that only walks the door you were thinking about
+   will pass while the business is broken. So both doors are walked here now. */
+console.log('\n── the other front door: clever.usehaf.co.uk ──');
+r = await call('/apply', { method: 'POST', origin: 'https://clever.usehaf.co.uk', body: {
+  type: 'driver', username: 'CLEVER01', pinHash: sha('c'), fname: 'Real', lname: 'Driver',
+  email: 'real.driver@example.invalid' } });
+ok('a driver signing up on the Clever page gets an account', r.status === 200, r.status);
+await settle();                       /* their welcome + confirm email finish first */
+const clev = DB.cleverpay_applications.find((a) => a.username === 'CLEVER01');
+ok('...and is stamped onto the journey, so the emails will actually go',
+  clev && clev.journey === 'v2', clev && clev.journey);
+ok('...and is given a confirm token, so the link in the email can work',
+  clev && typeof clev.email_confirm_token === 'string' && clev.email_confirm_token.length === 64);
+/* mail is not armed in this harness (no MAIL_KEY), so nothing can have left. */
+ok('...and the record does NOT claim "confirmation sent" when nothing was sent',
+  clev && clev.email_confirm_sent_at === undefined, clev && clev.email_confirm_sent_at);
 schema = new Set(LIVE_COLUMNS);
 
 console.log('\n── the log in, with what they chose on the join page ──');
