@@ -370,13 +370,16 @@ function showLoginErr(msg){
 }
 
 async function doLogin(){
-  const raw = document.getElementById('login-id').value.trim().toUpperCase();
+  /* A username and a reference are upper case; an email address is not, and
+     shouting one back at the person makes them doubt what they typed. */
+  const typed = document.getElementById('login-id').value.trim();
+  const raw = typed.includes('@') ? typed : typed.toUpperCase();
   const pin = document.getElementById('login-pin').value.trim();
   document.getElementById('login-err').classList.remove('show');
   if(!raw) return;
   const r = await cpApi('/login', { method: 'POST', body: { id: raw, pin } });
   if(!r.ok){
-    if(r.status === 404) showLoginErr('No application found with that username or reference — check it, or open a HAF account at join.usehaf.co.uk.');
+    if(r.status === 404) showLoginErr('No account found with that username, reference or email address — check it, or open a HAF account at join.usehaf.co.uk.');
     else if(r.status === 401) showLoginErr(pin ? 'Incorrect PIN — check it and try again.' : 'Enter your security PIN to log in.');
     else showLoginErr(r.body?.error || 'Could not log in — please try again.');
     return;

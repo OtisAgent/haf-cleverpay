@@ -99,6 +99,10 @@ const S = JSON.stringify;
 const E = encodeURIComponent;
 const St = String;
 const NOTFOUND = 'Not found.';
+/* Event names repeat across the button handlers; naming them once keeps the
+   built artifact inside the 20,000-byte upload envelope. */
+const EV_ACT = 'compliance_action_required';
+const EV_CANX = 'compliance_application_cancelled';
 const NOAUTH = 'Not authorised.';
 const CT = 'Content-Type';
 const AJ = 'application/json';
@@ -696,7 +700,7 @@ export default {
         }
         const out = J({ ok: true, app: view(row), changed, emailed: told,
           email: told ? app.email : null }, 200, cors);
-        return told ? named(out, 'compliance_application_cancelled', app.ref) : out;
+        return told ? named(out, EV_CANX, app.ref) : out;
       }
 
       /* ── clear it and send it back to the applicant ──
@@ -738,7 +742,7 @@ export default {
         const cleared = J({ ok: true, app: view(r.body[0]), emailed: mailable, email: app.email,
           missing: missing.map(x => x.name) }, 200, cors);
         return mailable
-          ? named(cleared, 'compliance_action_required', app.ref, missing.map(x => x.name).join(', '))
+          ? named(cleared, EV_ACT, app.ref, missing.map(x => x.name).join(', '))
           : cleared;
       }
 
@@ -768,7 +772,7 @@ export default {
         await tellTeam(env, `CleverPay: application ${app.ref} (${name}) was deleted by ${who} on ${nowIso().slice(0, 16).replace('T', ' ')}. Documents removed with it. ${snap ? 'The applicant has been emailed to say it is closed.' : 'The applicant has NOT been emailed.'} This cannot be undone.`);
         const gone = J({ ok: true, ref: app.ref, name, emailed: !!snap,
           email: snap ? app.email : null }, 200, cors);
-        return snap ? named(gone, 'compliance_application_cancelled', app.ref, '', snap) : gone;
+        return snap ? named(gone, EV_CANX, app.ref, '', snap) : gone;
       }
 
       /* ── Confirm email ──
@@ -806,7 +810,7 @@ export default {
         const out = J({ ok: true, app: view(fresh), emailed: names.length > 0,
           email: names.length ? fresh.email : null, missing: names }, 200, cors);
         return names.length
-          ? named(out, 'compliance_action_required', fresh.ref, names.join(', '))
+          ? named(out, EV_ACT, fresh.ref, names.join(', '))
           : out;
       }
 
@@ -843,7 +847,7 @@ export default {
            is looking at. */
         return named(
           J({ ok: true, email: app.email, missing: missing.map(x => x.name), app: view(r.body[0]) }, 200, cors),
-          'compliance_action_required', app.ref, missing.map(x => x.name).join(', '));
+          EV_ACT, app.ref, missing.map(x => x.name).join(', '));
       }
 
       /* ── the integration panel — Brent and Gemma only ──

@@ -124,6 +124,18 @@ async function findApp(env, id) {
   return r.ok && r.body && r.body[0] ? r.body[0] : null;
 }
 
+/* Every account that sits on one email address.
+
+   Deliberately a LIST and not a row. An email is not unique here — two are
+   shared today — so it cannot identify an account on its own and this must
+   never pick "the first one" and hope. Only the sign-in uses it, and only
+   together with the PIN, which is what actually chooses between them. */
+async function findAppsByEmail(env, email) {
+  const q = E(St(email).trim().toLowerCase());
+  const r = await sb(env, `/${APPS}?email=ilike.${q}&limit=10`);
+  return r.ok && Array.isArray(r.body) ? r.body : [];
+}
+
 /* ── the driving-record check ──
    A photo of a photocard only proves the card exists. It says nothing about what
    is actually on the record — points, disqualifications, or whether the licence
@@ -760,15 +772,47 @@ export default {
         return J({ ok: true, ref: row.ref }, 200, cors);
       }
 
-      /* ── applicant: log in ── */
+      /* ── applicant: log in ──
+         The box takes three things now, not two: username, reference, or the
+         email address they signed up with.
+
+         16 Aug. Until today it matched a username or a reference and nothing
+         else, so an email — the one thing a person reliably remembers about
+         their own account — came back "No application found". That does not
+         read as "wrong box", it reads as "you have no account", and it sent a
+         real joiner away from a live account with a working PIN. Their username
+         is generated for them at sign-up and shown once on the last screen; if
+         they missed it there, an email was their only way back in and it was
+         closed.
+
+         Nothing is loosened. An email cannot pick an account on its own, so it
+         does not: it produces every account on that address, and the PIN — hashed
+         against each account's OWN username, so no two are alike — decides which
+         one, or none. A wrong PIN is still refused, and an email match with no
+         PIN on the record opens nothing. */
       if (R('/login', 'POST')) {
-        const app = await findApp(env, b.id || '');
-        if (!app) return bad('No application found with that username or reference.', 404);
-        if (app.pin_hash) {
-          const attempt = b.pinHash || await sha256('HAF-CP|' + app.username + '|' + (b.pin || ''));
-          if (attempt !== app.pin_hash) return bad('Incorrect PIN.', 401);
+        const raw = St(b.id || '').trim();
+        const direct = raw ? await findApp(env, raw) : null;
+        if (direct) {
+          if (direct.pin_hash) {
+            const attempt = b.pinHash || await sha256('HAF-CP|' + direct.username + '|' + (b.pin || ''));
+            if (attempt !== direct.pin_hash) return bad('Incorrect PIN.', 401);
+          }
+          return J(strip(direct), 200, cors);
         }
-        return J(strip(app), 200, cors);
+        if (raw.includes('@')) {
+          const found = await findAppsByEmail(env, raw);
+          for (const app of found) {
+            if (!app.pin_hash) continue;
+            const attempt = b.pinHash || await sha256('HAF-CP|' + app.username + '|' + (b.pin || ''));
+            if (attempt === app.pin_hash) return J(strip(app), 200, cors);
+          }
+          /* The address is known but no PIN on it matched — that is a wrong PIN,
+             not a missing account, and saying so stops them re-typing an email
+             that was right all along. */
+          if (found.length) return bad('Incorrect PIN.', 401);
+        }
+        return bad('No account found with that username, reference or email address.', 404);
       }
 
       /* ── applicant: save docs / poll status (needs ref + matching pin) ── */
