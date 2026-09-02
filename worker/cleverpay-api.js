@@ -601,6 +601,43 @@ function mailNow(env, ctx, ref, ev, extra, snap) {
   if (ctx && typeof ctx.waitUntil === 'function') ctx.waitUntil(p);
 }
 
+/* ── their HAF KNECT login, built on the request that creates the account ─────
+   Brent, 2 Sep: "open up the users to be able to sign in and sign up the HAF
+   KNECT accounts."
+
+   The login row lives on the network database, and until now nothing on this
+   request built it — a half-hourly reconciler did. So somebody finished signing
+   up, was shown their username, went straight to knect.usehaf.co.uk and was
+   told their PIN did not match, because the door had nothing to compare it
+   against yet. Up to half an hour of being told you do not exist, in the first
+   five minutes of knowing us.
+
+   Same lesson as the confirm token above: the ask and the means are built in
+   the same breath. The function called here writes plna_drivers and can do
+   nothing else — it cannot touch the clearance list, so this creates a login
+   and never a permission. PLNA still waits on the Clever check.
+
+   Fire-and-forget on purpose: if the network database is slow or down, the
+   person's application is already saved and the reconciler still picks the
+   account up later. A hiccup here must never cost somebody their sign-up. */
+/* The network's own public read key — the same one knect.usehaf.co.uk ships in
+   plain sight, sent as `apikey` alone because PostgREST needs no second copy of
+   it and this script is uploaded through a 20,000-byte pipe. It opens this one
+   function and nothing private. */
+const KNECT_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdna3BxcXJ0eHRsYWZka3hjYXFnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIxOTM2NjAsImV4cCI6MjA5Nzc2OTY2MH0.hB70KOYZu4dshwhsrxF_dFyBn0n72gStWTwxYGsLdgY';
+
+function knectLoginNow(ctx, row) {
+  if (!row || !row.username || !row.pin_hash) return;
+  const p = fetch('https://ggkpqqrtxtlafdkxcaqg.supabase.co/rest/v1/rpc/haf_knect_account_ensure', {
+    method: 'POST',
+    headers: { apikey: KNECT_KEY, 'Content-Type': 'application/json' },
+    body: S({ p_username: row.username,
+              p_full_name: [row.fname, row.lname].filter(Boolean).join(' ') || row.username,
+              p_account_type: row.type || 'driver', p_cp_pin_hash: row.pin_hash }),
+  }).catch(() => {});
+  if (ctx && typeof ctx.waitUntil === 'function') ctx.waitUntil(p);
+}
+
 /* ── "please confirm your email", with something to press ─────────────────────
    Confirming the address is a WALL: an unconfirmed account cannot be released
    into the network. On 4 August that wall stood for twenty-four days and every
@@ -749,6 +786,10 @@ export default {
         }
         if (!r.ok) return bad('Could not save your application. Please try again.', 500);
         alertNewEnquiry(env, ctx, r.body[0]);
+        /* Their HAF KNECT login exists from this moment, not from the next
+           reconciler run — so the username on the last screen of the sign-up
+           actually works when they use it. */
+        knectLoginNow(ctx, r.body[0]);
         /* Their first email leaves now, on this request - not on the next sweep. */
         mailNow(env, ctx, r.body[0].ref, 'account_created');
         /* And the one that lets them over the email wall, with the token in it. */
