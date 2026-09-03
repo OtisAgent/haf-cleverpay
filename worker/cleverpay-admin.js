@@ -105,6 +105,12 @@ const EV_ACT = 'compliance_action_required';
 const EV_CANX = 'compliance_application_cancelled';
 /* Said in two places, so it is written once - same reason as the event names. */
 const NOCFG = 'Could not read the document settings — try again in a moment.';
+/* Three more said in two places each. Naming the document request cost 20
+   characters and put the build 3 bytes past the upload pipe, so the back
+   office refused to publish at all - these pay for it. Same words, said once. */
+const BADLOGIN = 'Wrong username or password.';
+const EXPIRED = 'Session expired — sign in again.';
+const NODOC = 'No such document on this application.';
 const NOAUTH = 'Not authorised.';
 const CT = 'Content-Type';
 const AJ = 'application/json';
@@ -361,12 +367,12 @@ export default {
         const hash = await sha256('HAF-CP-TEAM|' + u + '|' + (b.password || ''));
         const r = await sb(env, `/cleverpay_team_users?username=eq.${E(u)}&limit=1`);
         const user = r.ok && r.body && r.body[0];
-        if (!user) return bad('Wrong username or password.', 401);
+        if (!user) return bad(BADLOGIN, 401);
         const first = !!user.must_set_pin;
         const ok = first
           ? !!user.setup_code && (b.password || '').trim().toUpperCase() === user.setup_code.toUpperCase()
           : user.pw_hash === hash;
-        if (!ok) return bad(first ? 'That setup code is not right.' : 'Wrong username or password.', 401);
+        if (!ok) return bad(first ? 'That setup code is not right.' : BADLOGIN, 401);
         const token = crypto.randomUUID() + crypto.randomUUID().replace(/-/g, '');
         const expires = new Date(Date.now() + (first ? 36e5 : 7 * 864e5)).toISOString();
         await sb(env, '/cleverpay_team_sessions', { method: 'POST', body: S({ token, username: u, expires_at: expires }) });
@@ -375,10 +381,10 @@ export default {
 
       /* ── everything below needs a session ── */
       const who = await teamUser(env, req);
-      if (!who) return bad('Session expired — sign in again.', 401);
+      if (!who) return bad(EXPIRED, 401);
       const ur = await sb(env, `/cleverpay_team_users?username=eq.${E(who)}&limit=1`);
       const me = ur.ok && ur.body && ur.body[0];
-      if (!me) return bad('Session expired — sign in again.', 401);
+      if (!me) return bad(EXPIRED, 401);
 
       /* choose / change your own PIN — nobody else ever sets it for you */
       if (R('/team/set-pin', 'POST')) {
@@ -563,7 +569,7 @@ export default {
         const app = await findApp(env, url.searchParams.get('ref') || '');
         const id = (url.searchParams.get('id') || '').replace(/[^a-z0-9_-]/gi, '');
         const d = app && (Array.isArray(app.docs) ? app.docs : []).find(x => x.id === id);
-        if (!d) return bad('No such document on this application.', 404);
+        if (!d) return bad(NODOC, 404);
         if (!d.path) return bad('no_file', 404);
         const f = await store(env, d.path, { method: 'GET' });
         if (!f.ok) return bad('That file could not be opened.', 502);
@@ -580,7 +586,7 @@ export default {
         if (!app) return bad(NOTFOUND, 404);
         const id = St(b.id || '').replace(/[^a-z0-9_-]/gi, '');
         const held = (Array.isArray(app.docs) ? app.docs : []);
-        if (!held.some(d => d.id === id)) return bad('No such document on this application.', 404);
+        if (!held.some(d => d.id === id)) return bad(NODOC, 404);
         const docs = held.filter(d => d.id !== id);
         const r = await patchApp(env, app.ref, { docs, updated_at: nowIso() });
         if (!r.ok || !r.body[0]) return bad('Could not remove that document.', 500);
