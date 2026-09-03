@@ -267,6 +267,23 @@ console.log('\n── A paused account can still get in and fix it ──');
   ok('the pause is untouched until a reviewer lifts it', a.status === 'blocked', a.status);
 }
 
+console.log('\n── Replace one document without losing the others ──');
+{
+  const required = REQ('driver');
+  const original = files(required).map((d, i) => ({ ...d, checked: true, checked_by: 'cleverg', path: 'old/' + i }));
+  const a = makeApp('driver', original);
+  const replacement = { ...original[0], filename: 'corrected.pdf', path: 'new/corrected' };
+  delete replacement.checked;
+  delete replacement.checked_by;
+  const r = await api('/docs', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ref: a.ref, docs: [replacement] }) });
+  ok('the corrected file is accepted', r.status === 200, r.status);
+  ok('only that document is replaced', a.docs.find(d => d.id === replacement.id)?.path === 'new/corrected', a.docs);
+  ok('every other document stays on the record', a.docs.length === original.length, a.docs.length);
+  ok('the replacement needs checking again', !a.docs.find(d => d.id === replacement.id)?.checked, a.docs);
+  ok('the other review ticks are preserved', a.docs.filter(d => d.id !== replacement.id).every(d => d.checked), a.docs);
+}
+
 console.log('\n── Unblock ──');
 {
   const a = makeApp('driver', files(REQ('driver')));

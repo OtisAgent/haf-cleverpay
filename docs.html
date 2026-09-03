@@ -279,6 +279,30 @@ async function loadPage(){
   const docs = await getDocList(app.type);
   totalReq = docs.filter(d => d.req).length;
 
+  /* A return visit is a correction journey, not a fresh application. Keep the
+     files already accepted onto the record visible and counted, so replacing
+     one item cannot make every other upload disappear. */
+  (Array.isArray(app.docs) ? app.docs : []).forEach(d => {
+    if(!d || !d.id) return;
+    const def = docs.find(x => x.id === d.id);
+    uploaded[d.id] = {
+      name: d.filename || (def && def.name) || d.id,
+      req: def ? def.req : !!d.req,
+      path: d.path,
+      mime: d.mime,
+      size: d.size,
+      existing: true
+    };
+  });
+
+  if(app.type === 'driver'){
+    const prior = {lic:app.dvla_licence_no, code:app.dvla_check_code, ni:app.ni_number};
+    Object.entries(prior).forEach(([k,v]) => {
+      const el = document.getElementById('rc-'+k);
+      if(el && v) { el.value = v; rcCheck(k, false); }
+    });
+  }
+
   const section = document.getElementById('doc-section');
   const reqDocs = docs.filter(d => d.req);
   const optDocs = docs.filter(d => !d.req);
@@ -303,6 +327,12 @@ async function loadPage(){
     const input = document.getElementById('input-' + d.id);
     if(!card || !input) return;
     input.addEventListener('change', () => handleUpload(d.id, d.name, d.req, input, card));
+    if(uploaded[d.id]){
+      card.classList.add('uploaded');
+      document.getElementById('fname-' + d.id).textContent =
+        (uploaded[d.id].name || d.name) + ' · choose a file to replace';
+      document.getElementById('status-' + d.id).innerHTML = TICK;
+    }
   });
 
   updateProgress();
@@ -411,7 +441,9 @@ async function submitDocs(){
     document.getElementById('rec-check').scrollIntoView({behavior:'smooth', block:'center'});
     return;
   }
-  const docList = Object.entries(uploaded).map(([id, d]) =>
+  /* Send only files chosen on this visit. Existing files are already on the
+     record; the API merges these corrections into them. */
+  const docList = Object.entries(uploaded).filter(([,d]) => !d.existing).map(([id, d]) =>
     ({id, filename: d.name, req: d.req, path: d.path, mime: d.mime, size: d.size}));
   const body = { ref: app.ref, pinHash: app.pinHash, docs: docList };
   if(isDriver()) body.dvla = { licence: rcValue('lic'), code: rcValue('code'), ni: rcValue('ni') };

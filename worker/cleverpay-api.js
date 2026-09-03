@@ -860,7 +860,15 @@ export default {
       if (R('/docs', 'POST')) {
         const app = await findApp(env, b.ref || '');
         if (!app || (app.pin_hash && app.pin_hash !== b.pinHash)) return bad(NOAUTH, 401);
-        const patch = { docs: b.docs || [], updated_at: nowIso() };
+        /* A returning applicant may be replacing only the document the team
+           asked them to correct. Keep every other file already on the record,
+           and let the newly submitted copy supersede only its own document type.
+           The replacement deliberately arrives without a review tick. */
+        const incoming = Array.isArray(b.docs) ? b.docs : [];
+        const ids = incoming.map(d => d && d.id).filter(Boolean);
+        const docs = (Array.isArray(app.docs) ? app.docs : []).filter(d => !ids.includes(d.id));
+        docs.push(...incoming);
+        const patch = { docs, updated_at: nowIso() };
         if (b.dvla) {
           const v = readDvla(b.dvla, app);
           if (v.error) return bad(v.error, 400);
