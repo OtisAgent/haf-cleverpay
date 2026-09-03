@@ -111,7 +111,7 @@ const T = [];
 const test = (name, fn) => T.push([name, fn]);
 
 /* ── 1. the account email leaves on the sign-up request itself ── */
-test('sign-up sends the account-created email, from knect@', async () => {
+test('sign-up sends one useful confirmation email, from knect@', async () => {
   stubNetwork();
   state.exists = false;
   const c = ctx();
@@ -120,20 +120,17 @@ test('sign-up sends the account-created email, from knect@', async () => {
     body: JSON.stringify({ type: 'driver', username: 'DAVEF-4821', pinHash: 'x',
       email: 'dave@example.com', fname: 'Dave' }),
   }), ENV(), c);
-  /* Two emails leave a sign-up, and the second one is the point of the first:
-     the account exists, and here is how you prove the address is yours. Both
-     are found by NAME rather than by position - which one wins the race to
-     Mandrill is not something a customer can see, and not something a test
-     should have an opinion about. */
-  const created = sent.find((s) => s.template_name === 'haf-j1-account-created-driver');
   const confirm = sent.find((s) => s.template_name === 'haf-j2-confirm-email');
-  check('two emails sent: the account, and how to confirm it',
-    sent.length === 2, 'sent ' + sent.length);
-  check('driver wording', !!created, sent.map((s) => s.template_name).join(', '));
-  check('from knect@', created?.message.from_email === 'knect@usehaf.co.uk');
-  check('signs off as HAF TEAM', created?.message.from_name === 'HAF TEAM');
+  check('one email sent', sent.length === 1, 'sent ' + sent.length);
+  check('confirmation wording', !!confirm, sent.map((s) => s.template_name).join(', '));
+  check('from knect@', confirm?.message.from_email === 'knect@usehaf.co.uk');
+  check('signs off as HAF TEAM', confirm?.message.from_name === 'HAF TEAM');
   check('reply goes back to the same box',
-    created?.message.headers['Reply-To'] === created?.message.from_email);
+    confirm?.message.headers['Reply-To'] === confirm?.message.from_email);
+  const vars = Object.fromEntries((confirm?.message.global_merge_vars || [])
+    .map((v) => [v.name, v.content]));
+  check('email carries the username', vars.username === 'DAVEF-4821', vars.username);
+  check('email carries the reference', vars.reference === state.app.ref, vars.reference);
 
   /* The 4 August fault, written down as an assertion: an email that asks
      somebody to confirm their address must carry the thing that lets them do
@@ -156,15 +153,15 @@ test('sign-up sends the account-created email, from knect@', async () => {
     state.app?.email_confirm_token ? 'stored, but not the one sent' : 'nothing stored');
   check('and the record remembers when it was sent', !!state.app?.email_confirm_sent_at);
 
-  check('ledger claimed before each send',
-    claims.length === 2 && claims.every((k) => k.status === 'sending'),
+  check('ledger claimed before the send',
+    claims.length === 1 && claims.every((k) => k.status === 'sending'),
     'claims ' + claims.length);
-  check('ledger settled after them',
-    patched.filter((p) => p.status === 'sent').length === 2);
+  check('ledger settled after it',
+    patched.filter((p) => p.status === 'sent').length === 1);
 });
 
 /* ── 2. a freight forwarder gets their own wording and their own road ── */
-test('freight sign-up goes to KNECT, never to the document site', async () => {
+test('freight sign-up gets the same one-step confirmation', async () => {
   stubNetwork({ app: APP({ type: 'freight' }) });
   state.exists = false;
   const c = ctx();
@@ -174,8 +171,9 @@ test('freight sign-up goes to KNECT, never to the document site', async () => {
       email: 'f@example.com', company: 'Kite Freight' }),
   }), ENV(), c);
   const url = sent[0]?.message.global_merge_vars.find((v) => v.name === 'action_url');
-  check('freight wording', sent[0]?.template_name === 'haf-j1-account-created-freight');
-  check('button points at KNECT', url?.content === 'https://knect.usehaf.co.uk', url?.content);
+  check('one email sent', sent.length === 1);
+  check('confirmation wording', sent[0]?.template_name === 'haf-j2-confirm-email');
+  check('button confirms this address', url?.content.includes('/confirm.html?'), url?.content);
 });
 
 /* ── 3. wall 3: approve alone tells nobody ── */
@@ -234,11 +232,12 @@ test('a second press on the same button sends nothing', async () => {
 });
 
 /* ── 8. a freight account can never be pulled into the document journey ── */
-test('freight never receives a compliance email', async () => {
+test('freight receives only its release email, never document chasing', async () => {
   stubNetwork({ app: APP({ type: 'freight', access_confirmed_at: 'x', access_confirmed_by: 'gemma' }) });
   const c = ctx();
   await hit(press(), ENV({ ADMIN: adminSaying('compliance_approved', 'HAF-CP-TEST') }), c);
-  check('nothing sent', sent.length === 0);
+  check('one release email sent', sent.length === 1);
+  check('freight approval wording', sent[0]?.template_name === 'haf-j5-approved-freight');
 });
 
 /* ── 9. chasing a document says WHICH document ── */

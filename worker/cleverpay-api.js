@@ -505,6 +505,7 @@ function mergeFor(row, ev, extra) {
     plan_name: St(row.plan || row.tier || 'HAF'),
     company: St(row.company || ''),
     username: St(row.username || row.ref || ''),
+    reference: St(row.ref || ''),
     action_url: actionUrl(row, ev),
     /* Two different presses both put a reviewer's words in front of a
        customer, and they are stored in two different places on purpose - a
@@ -791,8 +792,9 @@ export default {
            actually works when they use it. */
         knectLoginNow(ctx, r.body[0]);
         /* Their first email leaves now, on this request - not on the next sweep. */
-        mailNow(env, ctx, r.body[0].ref, 'account_created');
-        /* And the one that lets them over the email wall, with the token in it. */
+        /* One useful first email, not two competing welcomes. It carries the
+           identity, reference and the button that actually clears the first
+           wall. Receipts remain separate because they record money moving. */
         confirmMailNow(env, ctx, r.body[0]);
         return J(strip(r.body[0]), 200, cors);
       }

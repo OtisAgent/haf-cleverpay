@@ -126,14 +126,14 @@ function run(){
       paint('good', r.already?'Already confirmed':'Email confirmed',
         done,
         refBox(ref)+
-        '<div class="next"><h2>What happens next</h2><p>'+
+        '<div class="next"><h2>Your next step</h2><p>'+
         (r.status==='approved'
-          ? 'Your checks are complete. The HAF compliance team gives the final all-clear on every account by hand — the moment they do, your sign-in details land in this inbox.'
+          ? 'Sign in to see which HAF services are open for your account.'
           : r.status==='rejected'
-            ? 'There is already a decision on this application. Check the email we sent you, or reply to it if anything looks wrong.'
-            : 'Your documents are with the HAF compliance team. We\'ll email this address as soon as there\'s a decision — usually within one working day.')+
+            ? 'Sign in to see the decision and the route available to you.'
+            : 'Sign in to see exactly what is complete, upload anything we need and follow your review.')+
         '</p></div>'+
-        '<a class="btn" href="status.html">Check my application</a>');
+        '<a class="btn" href="index.html">Sign in to my HAF account</a>');
       return;
     }
     if(r.reason==='expired'){

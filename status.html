@@ -44,9 +44,12 @@
 
     <div class="ref-box" onclick="copyRef()">
       <div>
-        <div class="rb-label">Your reference</div>
+        <div class="rb-label">Your HAF account</div>
+        <div class="rb-val" id="username-display">—</div>
+        <div class="rb-hint">Username</div>
+        <div class="rb-label" style="margin-top:10px">Application reference</div>
         <div class="rb-val" id="ref-display">—</div>
-        <div class="rb-hint">Keep this — you may need it if you contact us.</div>
+        <div class="rb-hint">Keep both with your PIN. They identify your account.</div>
       </div>
       <div class="copy-btn" id="copy-btn">Copy</div>
     </div>
@@ -250,6 +253,7 @@ function loadPage(){
   const app = JSON.parse(raw);
 
   document.getElementById('ref-display').textContent = app.ref;
+  document.getElementById('username-display').textContent = app.username || '—';
   document.getElementById('tl-submitted').textContent = fmtDate(app.submitted);
 
   renderStatus(app, false);
@@ -322,6 +326,7 @@ function renderStatus(app, live){
   const icon = document.getElementById('status-icon');
   const title = document.getElementById('status-title');
   const body = document.getElementById('status-body');
+  document.getElementById('username-display').textContent = app.username || '—';
 
   icon.className = 'status-icon ' + status;
   title.className = 'status-title ' + status;
