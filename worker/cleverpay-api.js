@@ -414,21 +414,26 @@ const WHY_MISSING = 'We cannot finish your application until this reaches us. '
    Approved sits under knect@ rather than updates@ deliberately: it is the one
    that says welcome to the network, not the one that says where your paperwork
    has got to. Say the word and it moves - it is this line and nothing else. */
+/* Written out once each rather than ten times. This is not tidiness: the whole
+   worker ships through a 20,000-byte pipe and the build was one byte over it,
+   so the two addresses that repeat had to be spelled once. Same values, same
+   routing - if a mailbox ever moves, it moves here. */
+const NETBOX = 'knect@usehaf.co.uk', APPBOX = 'updates@usehaf.co.uk';
 const BOXES = {
-  account_created: 'knect@usehaf.co.uk',
-  email_confirm_required: 'knect@usehaf.co.uk',
-  compliance_submission_complete: 'updates@usehaf.co.uk',
-  compliance_action_required: 'updates@usehaf.co.uk',
-  compliance_approved: 'knect@usehaf.co.uk',
-  compliance_rejected: 'updates@usehaf.co.uk',
-  compliance_application_cancelled: 'updates@usehaf.co.uk',
+  account_created: NETBOX,
+  email_confirm_required: NETBOX,
+  compliance_submission_complete: APPBOX,
+  compliance_action_required: APPBOX,
+  compliance_approved: NETBOX,
+  compliance_rejected: APPBOX,
+  compliance_application_cancelled: APPBOX,
   membership_upgraded: 'accounts@usehaf.co.uk',
-  plna_allocated: 'knect@usehaf.co.uk',
+  plna_allocated: NETBOX,
   /* A pause is a paperwork conversation, so it comes from the mailbox that
      tells somebody where their application has got to - never from knect@,
      which is the one that says welcome to the network. */
-  account_paused: 'updates@usehaf.co.uk',
-  account_restored: 'updates@usehaf.co.uk',
+  account_paused: APPBOX,
+  account_restored: APPBOX,
 };
 /* The six a freight forwarder or business account must never receive: they hand
    over no documents, so there is no document conversation to have with them. */
