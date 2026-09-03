@@ -435,10 +435,20 @@ const BOXES = {
 const COMPLIANCE_ONLY = ['compliance_submission_complete', 'compliance_action_required',
   'compliance_approved', 'compliance_rejected', 'compliance_application_cancelled',
   'plna_allocated'];
-/* The two moments that may legitimately happen to the same person more than
-   once. Everything else is a one-off in a life: you are approved once, you are
-   declined once. A pause is a state you can enter and leave repeatedly. */
-const REPEATABLE = ['account_paused', 'account_restored'];
+/* The moments that may legitimately happen to the same person more than once.
+   Everything else is a one-off in a life: you are approved once, you are
+   declined once. A pause is a state you can enter and leave repeatedly.
+
+   3 Sep: compliance_action_required joined them, and it was a real fault that
+   it had not. The back office lets a reviewer chase outstanding paperwork once
+   a day and tells them so on the card. The ledger, meanwhile, held one row per
+   person per moment forever - so the FIRST chase went and every chase after it
+   was silently swallowed as already-sent. The record said reminded, the person
+   was never told. Asking twice for a document is not the same conversation
+   twice; it is the same conversation continuing. The 20-hour gate in the back
+   office is the real throttle, so this cannot become a flood. */
+const REPEATABLE = ['account_paused', 'account_restored',
+  'compliance_action_required'];
 
 /* One moment, one template - the role is a version OF the moment, never a
    moment of its own. Henry switches the moment; this picks the wording. */

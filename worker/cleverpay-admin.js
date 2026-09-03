@@ -103,6 +103,8 @@ const NOTFOUND = 'Not found.';
    built artifact inside the 20,000-byte upload envelope. */
 const EV_ACT = 'compliance_action_required';
 const EV_CANX = 'compliance_application_cancelled';
+/* Said in two places, so it is written once - same reason as the event names. */
+const NOCFG = 'Could not read the document settings — try again in a moment.';
 const NOAUTH = 'Not authorised.';
 const CT = 'Content-Type';
 const AJ = 'application/json';
@@ -132,6 +134,7 @@ async function findApp(env, id) {
    without their National Insurance number (which payroll needs in any case).
    The code also dies after 21 days — CODE_LIFE_DAYS — so it is stamped when it
    arrives and the portal shows its age rather than letting somebody try a dead one. */
+const NI_LABEL = 'National Insurance number';
 const CODE_LIFE_DAYS = 21;
 const NI_RE = /^[A-CEGHJ-PR-TW-Z][A-CEGHJ-NPR-TW-Z]\d{6}[A-D]$/;
 const DL_RE = /^[A-Z9]{5}\d{6}[A-Z9]{2}\d[A-Z]{2}$/;
@@ -171,7 +174,7 @@ const EDIT_FIELDS = {
   name: 'contact name', title: 'job title',
 };
 const DVLA_LABELS = {
-  dvla_licence_no: 'driving licence number', dvla_check_code: 'DVLA check code', ni_number: 'National Insurance number',
+  dvla_licence_no: 'driving licence number', dvla_check_code: 'DVLA check code', ni_number: NI_LABEL,
 };
 
 /* No column exists for an audit trail and the applications table is not mine to
@@ -206,7 +209,7 @@ function missingRequired(cfg, app) {
       hint: 'The 16 characters printed at 5 on the front of your photocard.' });
     if (!app.dvla_check_code) out.push({ id: 'dvla-check-code', name: 'DVLA check code',
       hint: 'Create one at https://www.gov.uk/view-driving-licence — it lets us see your driving record without you sending anything else. It expires after ' + CODE_LIFE_DAYS + ' days.' });
-    if (!app.ni_number) out.push({ id: 'ni-number', name: 'National Insurance number',
+    if (!app.ni_number) out.push({ id: 'ni-number', name: NI_LABEL,
       hint: 'You need it to create the check code, and we need it to set your payments up.' });
   }
   return out;
@@ -715,7 +718,7 @@ export default {
         if (app.type === 'business') return bad('Business enquiries have no documents to clear.', 400);
         if (!app.email) return bad('There is no email address on this application to send it back to.', 400);
         const cfg = await readCfg(env);
-        if (!cfg) return bad('Could not read the document settings — try again in a moment.', 503);
+        if (!cfg) return bad(NOCFG, 503);
         await dropFiles(env, app);
         const now = nowIso();
         const missing = missingRequired(cfg, { ...app, docs: [], dvla_licence_no: null, dvla_check_code: null, ni_number: null });
@@ -826,9 +829,18 @@ export default {
         if (app.type === 'business') return bad('Business enquiries do not have compliance documents.', 400);
         if (!app.email) return bad('There is no email address on this application.', 400);
         const cfg = await readCfg(env);
-        if (!cfg) return bad('Could not read the document settings — try again in a moment.', 503);
-        const missing = missingRequired(cfg, app);
-        if (!missing.length) return bad('Every required document is already in — there is nothing to chase.', 400);
+        if (!cfg) return bad(NOCFG, 503);
+        const out = missingRequired(cfg, app);
+        if (!out.length) return bad('Every required document is already in — there is nothing to chase.', 400);
+        /* Brent, 3 Sep: ask for CERTAIN documents, not always all of them. The
+           reviewer ticks what they actually want and only those are named in the
+           email and written to the record. Nothing ticked means everything
+           outstanding, which is what the button did before and what most chases
+           still want. Ids that are not genuinely outstanding are ignored rather
+           than trusted, so this can never invent a document to ask for. */
+        const only = Array.isArray(b.ids) ? b.ids : [];
+        const pick = only.length ? out.filter(d => only.includes(d.id)) : [];
+        const missing = pick.length ? pick : out;
         const last = app.reminder_requested_at || app.reminder_sent_at;
         if (last && Date.now() - Date.parse(last) < 20 * 3600e3)
           return bad('This applicant has already been reminded today — you can send another tomorrow.', 429);

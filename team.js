@@ -1124,17 +1124,32 @@ function openRemind(ref){
   remindTarget=ref;
   document.getElementById('rm-who').textContent=displayName(a);
   document.getElementById('rm-email').textContent=a.email||'no email on file';
-  document.getElementById('rm-list').innerHTML=missingAll.map(d=>`<li>${d.name}</li>`).join('');
+  /* Brent, 3 Sep: ask for CERTAIN documents. Every outstanding one is ticked to
+     begin with, because chasing the lot is still the common case — untick what
+     you are not asking for this time. */
+  document.getElementById('rm-list').innerHTML=missingAll.map(d=>
+    `<li><label class="rm-pick"><input type="checkbox" class="rm-doc" value="${d.id}" checked onchange="syncRemindPick()"> ${d.name}</label></li>`).join('');
+  syncRemindPick();
   document.getElementById('rm-go').disabled=false;
   document.getElementById('rm-ov').classList.add('open');
 }
 function closeRemind(){document.getElementById('rm-ov').classList.remove('open');remindTarget=null}
+/* Which documents are ticked right now. Nothing ticked is not a send: the button
+   goes dead rather than quietly chasing everything the reviewer just unticked. */
+function remindPicked(){return[...document.querySelectorAll('#rm-list .rm-doc:checked')].map(c=>c.value)}
+function syncRemindPick(){
+  const n=remindPicked().length;
+  const go=document.getElementById('rm-go');
+  go.disabled=!n;
+  go.textContent=n?`Ask for ${n} document${n!==1?'s':''}`:'Tick what to ask for';
+}
 async function confirmRemind(){
   const ref=remindTarget;if(!ref)return;
+  const ids=remindPicked();if(!ids.length)return;
   const go=document.getElementById('rm-go');
   go.disabled=true;go.textContent='Sending…';
-  const r=await cpApi('/team/remind',{method:'POST',body:{ref},token:TEAM.token});
-  go.textContent='Send the reminder';
+  const r=await cpApi('/team/remind',{method:'POST',body:{ref,ids},token:TEAM.token});
+  syncRemindPick();
   if(r.status===401){showToast('Session expired — please sign in again',true);doSignOut();return}
   if(!r.ok){go.disabled=false;showToast(r.body?.error||'Could not send that reminder — try again',true);return}
   const i=QUEUE.findIndex(a=>a.ref===ref);
