@@ -54,6 +54,34 @@ async function savePin(){
   enterShell();
   showToast('PIN saved — use it to sign in from now on');
 }
+/* Change my PIN — available to anyone signed in, any time, without asking HAF.
+   The server checks the current PIN, so this cannot be used to take over a session. */
+function openChangePin(){
+  ['cp-cur','cp-a','cp-b'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('cp-err').classList.remove('show');
+  document.getElementById('cp-ov').classList.add('open');
+  document.getElementById('cp-cur').focus();
+}
+function closeChangePin(){document.getElementById('cp-ov').classList.remove('open')}
+document.getElementById('cp-ov').addEventListener('click',function(e){if(e.target===this)closeChangePin()});
+async function saveChangedPin(){
+  const cur=document.getElementById('cp-cur').value.trim();
+  const a=document.getElementById('cp-a').value.trim();
+  const b=document.getElementById('cp-b').value.trim();
+  const err=document.getElementById('cp-err');
+  const fail=m=>{err.textContent=m;err.classList.add('show')};
+  if(!/^\d{4,6}$/.test(cur))return fail('Type the PIN you use now.');
+  if(!/^\d{4,6}$/.test(a))return fail('Your new PIN must be 4 to 6 numbers.');
+  if(a!==b)return fail('Those two PINs do not match.');
+  err.classList.remove('show');
+  const btn=document.getElementById('cp-go');
+  btn.disabled=true;btn.textContent='Saving…';
+  const r=await cpApi('/team/set-pin',{method:'POST',token:TEAM.token,body:{pin:a,currentPin:cur}});
+  btn.disabled=false;btn.textContent='Save my new PIN';
+  if(!r.ok)return fail(r.body?.error||'Could not save your PIN — try again.');
+  closeChangePin();
+  showToast('PIN changed — use the new one from now on');
+}
 function enterShell(){
   document.getElementById('gate').style.display='none';
   document.getElementById('shell').classList.add('show');
