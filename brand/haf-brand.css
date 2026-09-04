@@ -1,0 +1,238 @@
+/* HAF type — Montserrat, the stand-in for Gotham until the licence lands.
+   One variable file per subset, served from our own origin so every HAF
+   surface loads the same faces and no page depends on Google.
+   When Gotham arrives, drop its faces in here and change nothing else. */
+
+@font-face {
+  font-family: 'Montserrat';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('./fonts/montserrat-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+@font-face {
+  font-family: 'Montserrat';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('./fonts/montserrat-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+
+/* ===========================================================================
+   HAF BRAND — one stylesheet for the whole network
+   Source of truth: "HAF Logo Usage and Brand Guidelines" (spec sheet, Sep 2026)
+
+     Pantone 151c   #f18e00    orange, accent only
+     HAF Grey       #2f373e    the ink
+
+   Day is the default. Night is the same palette inverted, switched by putting
+   data-theme="night" on <html>. Nothing here changes layout or behaviour, only
+   colour, type and the logo treatment.
+   ========================================================================= */
+
+:root {
+  /* ---- brand constants: identical in both themes ---- */
+  --haf-orange:        #f18e00;
+  --haf-orange-hover:  #d97d00;
+  --haf-grey:          #2f373e;
+
+  /* ---- day (default) ---- */
+  --haf-bg:            #f4f1eb;
+  --haf-surface:       #fbfaf7;
+  --haf-surface-2:     #ffffff;
+  /* a third step down, for the app screens that stack panel on panel */
+  --haf-surface-3:     #e9e5dd;
+  --haf-ink:           #2f373e;
+  --haf-ink-muted:     #6f777d;
+  --haf-ink-faint:     #98a0a6;
+  --haf-line:          rgba(47, 55, 62, .14);
+  --haf-line-strong:   rgba(47, 55, 62, .22);
+  --haf-line-xstrong:  rgba(47, 55, 62, .30);
+  /* the bar that sits over scrolling content, translucent so it reads as glass */
+  --haf-bar:           rgba(244, 241, 235, .92);
+
+  /* status — held to the same warmth as the brand, not stock web colours */
+  --haf-positive:      #4f7f58;
+  --haf-caution:       #b98530;
+  --haf-negative:      #b4483f;
+  /* the tinted panel each status sits in — same hue, 12% over the surface */
+  --haf-positive-wash: rgba(79, 127, 88, .12);
+  --haf-caution-wash:  rgba(185, 133, 48, .12);
+  --haf-negative-wash: rgba(180, 72, 63, .12);
+
+  /* logo layers, consumed by the SVG marks */
+  --haf-badge-fill:    #2f373e;
+  --haf-badge-mark:    #ffffff;
+
+  /* type — the spec sheet calls for Gotham. We do not hold that licence, so
+     Montserrat stands in: same geometric sans skeleton, self-hosted in
+     haf-fonts.css. When Gotham arrives it goes in front of Montserrat here
+     and in haf-fonts.css, and nothing else in the network has to change. */
+  --haf-font:          "Gotham", "Montserrat", "Inter", Arial, sans-serif;
+  --haf-font-display:  "Gotham", "Montserrat", "Inter", Arial, sans-serif;
+  --haf-weight-body:   400;
+  --haf-weight-medium: 500;
+  --haf-weight-display: 700;
+
+  --haf-shadow:        0 24px 70px rgba(22, 25, 27, .10);
+  --haf-shadow-soft:   0 12px 30px rgba(22, 25, 27, .07);
+  --haf-radius:        24px;
+  --haf-radius-sm:     14px;
+  --haf-pill:          999px;
+}
+
+/* ---- night: the day palette inverted ---- */
+:root[data-theme="night"] {
+  --haf-bg:            #0e1113;
+  --haf-surface:       #171a1d;
+  --haf-surface-2:     #202428;
+  --haf-surface-3:     #262b30;
+  --haf-ink:           #f4f1eb;
+  --haf-ink-muted:     #a9b0b4;
+  --haf-ink-faint:     #6b747b;
+  --haf-line:          rgba(244, 241, 235, .14);
+  --haf-line-strong:   rgba(244, 241, 235, .24);
+  --haf-line-xstrong:  rgba(244, 241, 235, .32);
+  --haf-bar:           rgba(14, 17, 19, .92);
+
+  --haf-positive:      #6fa87a;
+  --haf-caution:       #d8a34d;
+  --haf-negative:      #d9695f;
+  --haf-positive-wash: rgba(111, 168, 122, .14);
+  --haf-caution-wash:  rgba(216, 163, 77, .14);
+  --haf-negative-wash: rgba(217, 105, 95, .14);
+
+  /* The badge is a solid hexagon, not an outline, so it cannot "drop out" to
+     the page — filling it with the page colour makes it disappear, and grey
+     on near-black only reaches 1.6:1. At night the badge inverts properly:
+     the hexagon takes the cream, the H takes the grey. Reads at 24px. */
+  --haf-badge-fill:    #f4f1eb;
+  --haf-badge-mark:    #2f373e;
+
+  --haf-shadow:        0 28px 80px rgba(0, 0, 0, .45);
+  --haf-shadow-soft:   0 14px 36px rgba(0, 0, 0, .32);
+}
+
+/* Respect the visitor's own setting the first time, day unless they say dark. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    color-scheme: dark;
+  }
+}
+
+html { color-scheme: light; }
+:root[data-theme="night"] { color-scheme: dark; }
+
+body {
+  background: var(--haf-bg);
+  color: var(--haf-ink);
+  font-family: var(--haf-font);
+  font-weight: var(--haf-weight-body);
+  /* spec sheet: body 10pt / 15pt leading = 150% */
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, h4, .haf-display {
+  font-family: var(--haf-font-display);
+  font-weight: var(--haf-weight-display);
+  color: var(--haf-ink);
+  /* spec sheet: headings set at 100% leading */
+  line-height: 1.05;
+  letter-spacing: 0;
+}
+
+a { color: var(--haf-orange); }
+a:hover { color: var(--haf-orange-hover); }
+
+/* ---- the logo ---------------------------------------------------------- */
+/* The marks are SVGs whose letterforms use currentColor, so they take the ink
+   colour of whatever sits around them and invert with the theme for free. */
+.haf-logo { color: var(--haf-ink); display: inline-block; }
+.haf-logo svg { height: 100%; width: auto; display: block; }
+.haf-logo--header { height: 34px; }
+.haf-logo--hero   { height: 64px; }
+
+/* A mark sitting on a dark bar in the DAY theme would fill its hexagon with
+   HAF Grey on top of a dark bar and disappear. Put this on any logo that sits
+   on a dark surface and it takes the night treatment whatever the theme is. */
+.haf-logo--on-dark {
+  --haf-badge-fill: #f4f1eb;
+  --haf-badge-mark: #2f373e;
+  color: #ffffff;
+}
+/* The mirror case: a mark on a cream panel inside a night page. */
+.haf-logo--on-light {
+  --haf-badge-fill: #2f373e;
+  --haf-badge-mark: #ffffff;
+  color: #2f373e;
+}
+
+/* Exclusion zone, per the spec sheet: 1/18 x on every side. It is baked into
+   each SVG's viewBox, so never crop the mark or sit type inside its box. */
+
+/* ---- primary action ---------------------------------------------------- */
+.haf-btn {
+  background: var(--haf-orange);
+  color: #ffffff;
+  font-family: var(--haf-font-display);
+  font-weight: var(--haf-weight-display);
+  border: 0;
+  border-radius: var(--haf-pill);
+  padding: 14px 26px;
+  cursor: pointer;
+}
+.haf-btn:hover { background: var(--haf-orange-hover); }
+
+.haf-card {
+  background: var(--haf-surface);
+  border: 1px solid var(--haf-line);
+  border-radius: var(--haf-radius);
+  box-shadow: var(--haf-shadow-soft);
+}
+
+/* ---- day / night switch ------------------------------------------------ */
+/* One control, same place on every HAF surface. Driven by haf-theme.js. */
+.haf-theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: transparent;
+  color: var(--haf-ink-muted);
+  font-family: var(--haf-font);
+  font-size: 13px;
+  line-height: 1;
+  border: 1px solid var(--haf-line);
+  border-radius: var(--haf-pill);
+  padding: 8px 14px;
+  cursor: pointer;
+}
+.haf-theme-toggle:hover {
+  color: var(--haf-ink);
+  border-color: var(--haf-line-strong);
+}
+.haf-theme-toggle svg { width: 15px; height: 15px; }
+/* the sun shows in day, the moon in night — never both */
+.haf-theme-toggle .haf-icon-moon { display: block; }
+.haf-theme-toggle .haf-icon-sun  { display: none; }
+:root[data-theme="night"] .haf-theme-toggle .haf-icon-moon { display: none; }
+:root[data-theme="night"] .haf-theme-toggle .haf-icon-sun  { display: block; }
+
+/* ---- theme-aware raster logos ------------------------------------------ */
+/* Where a PNG has to be used instead of the SVG, ship both and let the theme
+   choose, so the night page never shows the day file. */
+.haf-logo-img--night { display: none; }
+:root[data-theme="night"] .haf-logo-img--day   { display: none; }
+:root[data-theme="night"] .haf-logo-img--night { display: block; }
+
+/* Everything that paints colour should cross-fade, not snap, when switching. */
+body, .haf-card, .haf-btn, .haf-theme-toggle, header, footer, nav {
+  transition: background-color .18s ease, color .18s ease, border-color .18s ease;
+}
+@media (prefers-reduced-motion: reduce) {
+  body, .haf-card, .haf-btn, .haf-theme-toggle, header, footer, nav { transition: none; }
+}

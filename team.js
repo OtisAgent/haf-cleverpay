@@ -873,7 +873,7 @@ function appCardHtml(a){
         ${(()=>{const n=netState(a);return n.t==='—'?'':`<span class="npill ${n.c}" title="${n.ti}">${n.t}</span>`})()}
         ${a.added_by?`<span class="chip chip-reviewing" title="Added manually by the HAF team">Added by ${a.added_by}</span>`:''}
         ${a.viewed_at?`<span class="chip chip-seen" title="First opened ${fmtDate(a.viewed_at)}">Opened by ${a.viewed_by||'the team'}</span>`:''}
-        ${missingAll.length?`<span class="chip" title="Still waiting on: ${missingAll.map(d=>d.name).join(', ')}" style="background:rgba(208,64,64,.1);color:var(--rd);border:1px solid rgba(208,64,64,.2)">${missingAll.length} outstanding</span>`:''}
+        ${missingAll.length?`<span class="chip" title="Still waiting on: ${missingAll.map(d=>d.name).join(', ')}" style="background:rgba(180,72,63,.1);color:var(--rd);border:1px solid rgba(180,72,63,.2)">${missingAll.length} outstanding</span>`:''}
         ${(a.type==='driver'&&a.dvla_checked_at)?`<span class="chip chip-approved" title="Driving record checked on GOV.UK by ${a.dvla_checked_by||'the team'} · ${fmtDate(a.dvla_checked_at)}">Record ✓</span>`:''}
         ${a.reminder_requested_at?`<span class="chip chip-seen" title="Document reminder sent ${fmtDate(a.reminder_requested_at)}${a.reminder_by?' by '+a.reminder_by:''}${a.reminder_count>1?' · '+a.reminder_count+' in total':''}">Reminded ${fmtDate(a.reminder_requested_at)}</span>`:''}
       </div>

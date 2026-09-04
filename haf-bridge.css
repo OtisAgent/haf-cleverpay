@@ -1,0 +1,128 @@
+/* CleverPay — the bridge onto the HAF brand.
+ *
+ * CleverPay was built dark-first with a light alternative, and every page was
+ * then pinned to light by hand. Both halves are replaced here: the page's own
+ * colour names now mean the HAF tokens, day is what you get with no attribute
+ * set, and night is the inverted set. The site's own [data-theme=light] block
+ * is left in place but can never win, because this file loads after it and the
+ * attribute is no longer written onto the page.
+ *
+ * Loaded AFTER each page's own stylesheet, so these win.
+ */
+
+:root {
+  /* surfaces */
+  --bg:  var(--haf-bg);
+  --p:   var(--haf-surface-2);
+  --p2:  var(--haf-surface);
+  --p3:  var(--haf-surface-3);
+
+  /* ink */
+  --tx:  var(--haf-ink);
+  --mu:  var(--haf-ink-muted);
+  --su:  var(--haf-ink-faint);
+
+  /* lines */
+  --ln:  var(--haf-line);
+  --lns: var(--haf-line-strong);
+  --lnx: var(--haf-line-xstrong);
+
+  /* the one orange, and its two washes */
+  --or:   var(--haf-orange);
+  --or-d: rgba(241, 142, 0, .10);
+  --or-g: rgba(241, 142, 0, .28);
+
+  /* status, held to the brand's warmth rather than stock web colours */
+  --gn:   var(--haf-positive);
+  --gn-d: rgba(79, 127, 88, .12);
+  --gn-g: rgba(79, 127, 88, .25);
+  --rd:   var(--haf-negative);
+  --rd-d: rgba(180, 72, 63, .12);
+  --am:   var(--haf-caution);
+  --am-d: rgba(185, 133, 48, .12);
+
+  /* The team screens carried a blue for "information". There is no blue in the
+     guidelines, so it becomes the grey — a state, not a fifth brand colour. */
+  --bl:   var(--haf-grey);
+  --bl-d: rgba(47, 55, 62, .10);
+
+  --fn: var(--haf-font);
+  --dp: var(--haf-font-display);
+}
+
+:root[data-theme="night"] {
+  --gn-d: rgba(111, 168, 122, .14);
+  --gn-g: rgba(111, 168, 122, .28);
+  --rd-d: rgba(217, 105, 95, .14);
+  --am-d: rgba(216, 163, 77, .14);
+  --bl:   #c3cad0;
+  --bl-d: rgba(244, 241, 235, .10);
+}
+
+body { font-family: var(--haf-font); }
+
+/* ---- the top bar ------------------------------------------------------- */
+/* It was a hard-coded dark glass with a light override. One rule now, and the
+   token behind it flips with the theme. */
+.bar { background: var(--haf-bar); }
+:root[data-theme="night"] .bar { background: var(--haf-bar); }
+
+/* ---- the logo ---------------------------------------------------------- */
+/* The orange rounded square with a letter H in it was never the logo. The
+   real badge goes there, with the product name beside it. */
+.logo { gap: .65rem; }
+.logo .haf-logo { height: 30px; display: block; flex-shrink: 0; }
+.logo .haf-logo svg { height: 100%; width: auto; display: block; }
+.logo-t {
+  font-family: var(--haf-font-display);
+  font-weight: var(--haf-weight-display);
+  letter-spacing: 0;
+  color: var(--haf-ink);
+}
+.logo-t span { color: var(--haf-orange-ink); }
+
+/* the divider that separates the HAF mark from the product name */
+.logo-t::before {
+  content: "";
+  display: inline-block;
+  width: 1px;
+  height: 1.05em;
+  background: var(--haf-line);
+  margin-right: .65rem;
+  vertical-align: -.16em;
+}
+
+/* ---- switch ------------------------------------------------------------ */
+/* The page's own square icon button keeps its shape; it just drives the HAF
+   switch now, so the choice carries to every other HAF site. */
+.theme-btn, .icon-btn[data-haf-theme-toggle] {
+  background: var(--haf-surface);
+  border: 1px solid var(--haf-line);
+  color: var(--haf-ink-muted);
+  cursor: pointer;
+}
+.theme-btn:hover { color: var(--haf-ink); }
+.theme-btn .haf-icon-moon,
+.theme-btn .haf-icon-sun { width: 15px; height: 15px; }
+
+/* ---- anything sitting on the orange ------------------------------------ */
+.logo-m, .btn-primary, .btn.primary, .pill.on {
+  background: var(--haf-orange);
+  color: #ffffff;
+}
+
+/* ---- the two standalone letters (confirm, reset) ----------------------- */
+/* They have no stylesheet of their own to bridge — their colours were typed
+   straight into the page and have been swapped for tokens, so all that is
+   left is the type and the header bar. */
+[data-haf-page="letter"] body { font-family: var(--haf-font); }
+/* These pages use a solid HAF Grey bar, not the translucent glass one the app
+   screens use, so they must not pick up the .bar rule above. */
+[data-haf-page="letter"] .bar { background: var(--haf-grey); }
+[data-haf-page="letter"] .logo-t { font-family: var(--haf-font-display); color: #ffffff; }
+[data-haf-page="letter"] .logo .haf-logo { height: 30px; }
+[data-haf-page="letter"] .logo .haf-logo svg { height: 100%; width: auto; display: block; }
+[data-haf-page="letter"][data-theme="night"] .bar { background: var(--haf-surface-2); }
+
+/* ---- anything sitting on the orange takes white ------------------------ */
+.btn-full, .add-btn { color: #ffffff; }
