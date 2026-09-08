@@ -60,10 +60,17 @@ async function cpDocChosen(ref,id,input){
   if(row)row.classList.add('uploading');
   showToast('Uploading '+f.name+'…');
 
+  /* The door for raw file bytes is /docs/file on the API worker, and it always
+     was — nothing under /team/ is forwarded anywhere that serves a file body.
+     This asked for /team/doc-file, which no worker has ever answered, so every
+     press of Add file came back "Not found" and the office could not put a
+     document on a record at all. Compliance then had nothing to release
+     against. The same door takes the applicant (PIN in `k`) and the team
+     (their session in Authorization), and stamps a team upload `by_team`. */
   const q=new URLSearchParams({ref:ref,id:id,filename:f.name});
   let r;
   try{
-    const res=await fetch(CP_API+'/team/doc-file?'+q.toString(),{
+    const res=await fetch(CP_API+'/docs/file?'+q.toString(),{
       method:'POST',
       headers:{'Content-Type':mime,'Authorization':'Bearer '+TEAM.token},
       body:f});

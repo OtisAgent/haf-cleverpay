@@ -6,3 +6,6 @@ worker/_shots/
 worker/_*.mjs
 worker/_preview-site/
 worker/_preview-spec.json
+_gemmafiles/
+_gemma-worker.mjs
+_gemma-admin.mjs
