@@ -581,10 +581,30 @@ async function journeyMail(env, ref, ev, extra, snap) {
     ? ev + '#' + (((await sb(env,
         `/haf_mail_log?select=event&ref=eq.${E(row.ref)}&event=like.${E(ev)}*`)).body || []).length + 1)
     : ev;
+  /* 8 Sep 2026 - Brent: the customer journey sends on Resend, Mailchimp is
+     newsletters and marketing only. This worker cannot send on Resend itself:
+     Resend holds no templates and twenty designs will not fit inside the
+     worker's 20,000-byte ceiling. So it stops sending and starts DECIDING.
+
+     Every wall above still runs here, unchanged. What changes is the last
+     step: the row is claimed as 'queued' carrying its own merge fields, and
+     haf_mail_drain.py renders it from the repo and sends it on Resend. The
+     ledger row is written at exactly the same moment it always was, so the
+     claim still stops a second copy, and every downstream reader sees the row
+     it expects.
+
+     THE TWO EXCEPTIONS ARE DELIBERATE AND THEY ARE THE POINT. A person who has
+     just signed up is sitting looking at their inbox for the confirmation link
+     they need to carry on. Half an hour is not a delay there, it is a lost
+     sign-up. Those two keep sending instantly, and they are the last two HAF
+     emails on Mandrill - they move the day the Resend key is installed here. */
+  const INSTANT = ['account_created', 'email_confirm_required'];
   const claim = await sb(env, '/haf_mail_log', { method: 'POST', body: S({
     ref: row.ref, event: logKey, email: row.email, template: slug,
-    status: 'sending', sender: box }) });
+    status: INSTANT.includes(ev) ? 'sending' : 'queued', sender: box,
+    vars: mergeFor(row, ev, extra) }) });
   if (!claim.ok) return 'already-sent';
+  if (!INSTANT.includes(ev)) return 'queued';
   let status = 'sent';
   let provider = null;
   let error = null;
