@@ -90,7 +90,20 @@ function applyJoinChoice(){
   /* Somebody adding driving to an account they already hold comes first: they
      have a username, so there is nothing here for them to fill in. */
   if (applyAddChoice()) return;
-  if (!JOIN) return;
+  /* sso.html sends anyone whose key did not open an account back here rather
+     than leaving them on a spinner. They still know who they are, so the box
+     starts with their username in it and only the PIN left to type. */
+  if (!JOIN) {
+    const bare = (new URLSearchParams(location.search).get('u') || '')
+      .replace(/[^a-z0-9]/gi, '').slice(0, 24).toUpperCase();
+    if (bare) {
+      const idBox = document.getElementById('login-id');
+      if (idBox) idBox.value = bare;
+      const pinBox = document.getElementById('login-pin');
+      if (pinBox) pinBox.focus();
+    }
+    return;
+  }
   const note = document.getElementById('join-carry');
   /* Two different people arrive here holding a join id, and they need opposite
      things.

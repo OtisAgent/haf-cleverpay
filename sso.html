@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<script src="/brand/haf-theme.js"></script>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex,nofollow">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<title>Signing you in — HAF CleverPay</title>
+<link rel="stylesheet" href="/brand/haf-brand.css">
+<style>
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;
+     background:var(--haf-bg);color:var(--haf-ink);font-family:Inter,Montserrat,Arial,sans-serif}
+.box{text-align:center;padding:24px}
+.spin{width:34px;height:34px;border:3px solid var(--haf-surface-2);border-top-color:var(--haf-orange);
+      border-radius:50%;margin:0 auto 16px;animation:r .8s linear infinite}
+@keyframes r{to{transform:rotate(360deg)}}
+p{font-size:15px;font-weight:500;margin:0;color:var(--haf-ink-muted)}
+</style>
+<link rel="stylesheet" href="/haf-bridge.css">
+</head>
+<body>
+<div class="box"><div class="spin"></div><p id="msg">Signing you in…</p></div>
+<script src="/api.js"></script>
+<script>
+/* ── ONE HAF LOGIN, CARRIED (Brent, 8 Sep 2026) ────────────────────────────────
+   Somebody who has just opened their HAF account on join.usehaf.co.uk arrives
+   here to send us their documents. They chose their PIN thirty seconds ago.
+   Asking for it again at this door is asking the same person the same question
+   twice, and it is the thing Brent asked to be rid of: one account, one PIN,
+   every HAF site.
+
+   This is the same hand-over PLNA has had since August (plna/sso.html), now on
+   this side too. The key travels in the URL fragment — a browser never sends a
+   fragment to any server — and the first thing this page does is take it back
+   out of the address bar and out of history, so a screenshot or a shared link
+   carries nobody's credential.
+
+   Nothing is trusted on the strength of arriving here: the key is checked
+   against the account by the same /login the sign-in box uses, and a key that
+   does not match lands exactly where a stranger lands — the ordinary sign-in
+   page. */
+(async function () {
+  const q = new URLSearchParams(location.hash.slice(1));
+  const user = (q.get('u') || '').replace(/[^a-z0-9]/gi, '').slice(0, 24).toUpperCase();
+  const key  = (q.get('k') || '').replace(/[^a-f0-9]/gi, '').slice(0, 64);
+  history.replaceState(null, '', location.pathname);   /* the key stops here */
+
+  /* No key, or a malformed one: the ordinary front door, with their username
+     filled in if we know it, so they are never left on a dead page. */
+  const fallback = () => location.replace('index.html' + (user ? '?u=' + encodeURIComponent(user) : ''));
+  if (!user || key.length !== 64) return fallback();
+
+  const r = await cpApi('/login', { method: 'POST', body: { id: user, pinHash: key } });
+  if (!r.ok || !r.body || !r.body.ref) {
+    document.getElementById('msg').textContent = 'Taking you to the sign-in page…';
+    return setTimeout(fallback, 900);
+  }
+
+  /* The same shape the sign-in box writes, so every page after this one — the
+     documents page, the status page, the uploader — works exactly as it always
+     has and knows nothing about how the person got here. */
+  localStorage.setItem('cp_application', JSON.stringify({ ...r.body, pinHash: key }));
+
+  /* Documents are the whole reason a new driver is sent here. Somebody who has
+     already sent theirs is shown where they stand instead. */
+  const docs = Array.isArray(r.body.docs) ? r.body.docs : [];
+  location.replace(docs.length ? 'status.html' : 'docs.html');
+})().catch(function () {
+  document.getElementById('msg').textContent = 'Connection problem — taking you to the sign-in page…';
+  setTimeout(function () { location.replace('index.html'); }, 1400);
+});
+</script>
+</body>
+</html>
