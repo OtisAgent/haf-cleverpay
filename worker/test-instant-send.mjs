@@ -50,8 +50,23 @@ function stubNetwork({ app = APP(), switches = {}, claimFails = false } = {}) {
     if (u.includes('/haf_mail_log')) {
       if (init.method === 'POST') {
         claims.push(body);
-        /* what the database does to a second press on the same button */
+        /* 8 Sep: for every moment except the two that must stay instant, the
+           CLAIM is now the send instruction — the worker records what is due
+           and haf_mail_drain renders it from the repo and posts it to Resend.
+           So a queued claim is recorded here in the shape the old Mandrill
+           call had, and every assertion below goes on testing the thing that
+           matters: the right wording, from the right box, to the right person.
+           Test the customer-visible outcome, not the plumbing that carries it. */
+        /* what the database does to a second press on the same button. This
+           check comes FIRST: a claim that loses the race queues nothing, and
+           recording the send before testing that would have made the duplicate
+           guard look broken when it is the one thing here that never was. */
         if (claimFails) return new Response('{"code":"23505"}', { status: 409 });
+        if (body.status === 'queued') {
+          sent.push({ template_name: body.template, _queued: true,
+            message: { to: [{ email: body.email }], from_email: body.sender,
+              global_merge_vars: body.vars || [] } });
+        }
         return new Response(JSON.stringify([body]), { status: 201 });
       }
       patched.push(body);
@@ -296,6 +311,13 @@ test('an ordinary edit in the back office sends nothing', async () => {
 });
 
 /* ── 13. a Mandrill failure is recorded, and never breaks the press ── */
+/* 8 Sep: this case now drives email_confirm_required, one of the two moments
+   that still send from the worker itself. It used to drive compliance_approved,
+   which is queued now — and a queued moment cannot fail at this point in the
+   journey, because nothing has been sent yet. Its rejection is caught and
+   written to the same ledger row by haf_mail_drain, which is tested on the
+   Python side. Pointing this at a moment that still sends keeps the guarantee
+   under test rather than quietly retiring it. */
 test('a rejected send is written down, not swallowed', async () => {
   stubNetwork({ app: APP({ access_confirmed_at: 'x', access_confirmed_by: 'gemma' }) });
   const real = globalThis.fetch;
@@ -303,7 +325,7 @@ test('a rejected send is written down, not swallowed', async () => {
     ? new Response(JSON.stringify([{ status: 'rejected', reject_reason: 'hard-bounce' }]), { status: 200 })
     : real(u, i));
   const c = ctx();
-  const res = await hit(press(), ENV({ ADMIN: adminSaying('compliance_approved', 'HAF-CP-TEST') }), c);
+  const res = await hit(press(), ENV({ ADMIN: adminSaying('email_confirm_required', 'HAF-CP-TEST') }), c);
   check('the button still answered 200', res.status === 200);
   check('the failure is on the ledger',
     patched[0]?.status === 'failed' && String(patched[0]?.error).includes('hard-bounce'),
