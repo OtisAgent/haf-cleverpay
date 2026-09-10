@@ -1043,6 +1043,21 @@ export default {
           try { tb = JSON.parse(new TextDecoder().decode(raw)); } catch { tb = null; }
           if (tb && tb.confirm_access) {
             const cur = await findApp(env, decodeURIComponent(p.split('/')[3] || ''));
+            /* ── the address has to be confirmed before the door opens ──
+               Brent, 10 Sep: "the email must be confirmed yes, and for any
+               account opening". Proved on his own test account that morning —
+               released, and let onto both KNECT and PLNA, having never
+               confirmed. Every piece of this was written as though that could
+               not happen; nothing checked it.
+
+               A reviewer cannot fix this from here, so the refusal names the
+               button that can: Confirm email, one row up in the same portal.
+               The database refuses an unconfirmed release outright as well, so
+               a press that slipped past this still opens nothing. */
+            if (cur && !cur.email_verified) return bad(
+              'Cannot release access — this address has not been confirmed yet. '
+              + 'Ask them to click the link in their sign-up email, or press Confirm email '
+              + 'once you know they have it, then release.', 409);
             if (cur) {
               const cr = await sb(env, '/cleverpay_portal_config?id=eq.1&limit=1');
               const cfg = cr.ok && cr.body && cr.body[0] ? cr.body[0].config : null;
@@ -1056,7 +1071,11 @@ export default {
             }
           }
         }
-        const res = await env.ADMIN.fetch(new Request(url.toString(), {
+        /* Team & access is a third worker for the same reason the back office
+           became a second one: room. Same private binding, same key on the
+           request, nothing held at rest out there either. */
+        const tgt = (p.startsWith('/team/users') && env.USERS) || env.ADMIN;
+        const res = await tgt.fetch(new Request(url.toString(), {
           method: M, headers: h, body: raw,
         }));
         /* ── the reviewer's button IS the trigger ──

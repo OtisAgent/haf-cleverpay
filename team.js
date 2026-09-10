@@ -135,7 +135,7 @@ function refreshQueue(){loadQueue();showToast('Queue refreshed')}
 /* ── TABS ── */
 function setTab(t){
   currentTab=t;
-  ['signedup','pending','reviewing','approved','rejected','all','archived','settings','integration'].forEach(x=>{
+  ['signedup','pending','reviewing','approved','rejected','all','payments','archived','settings','integration'].forEach(x=>{
     document.getElementById('tab-'+x)?.classList.toggle('active',x===t);
   });
   renderView();
@@ -143,9 +143,10 @@ function setTab(t){
 function renderView(){
   /* the reading column is sized for cards — a record list wants the whole screen */
   document.getElementById('main-content')
-    .classList.toggle('wide',LIST_TABS.includes(currentTab)&&getView(currentTab)==='list');
+    .classList.toggle('wide',currentTab==='payments'||(LIST_TABS.includes(currentTab)&&getView(currentTab)==='list'));
   if(currentTab==='settings') renderSettings();
   else if(currentTab==='integration') renderIntegration();
+  else if(currentTab==='payments') renderPayments();
   else renderQueue();
 }
 
@@ -163,6 +164,11 @@ function updateKPIs(all){
      so the number and the rows underneath it can never disagree. */
   const tcS=document.getElementById('tc-signedup');
   if(tcS)tcS.textContent=q.length;
+  /* the payments count is the number of accounts the money side knows something
+     about — not the number of accounts, which would say "30" while thirty of them
+     have never paid a penny */
+  const tcP=document.getElementById('tc-payments');
+  if(tcP)tcP.textContent=q.filter(hasMoney).length;
   /* business enquiries arrive as status 'enquiry' — they queue with pending */
   const nPending=n('pending')+n('enquiry');
   document.getElementById('kpi-pending').textContent=nPending;
@@ -210,7 +216,9 @@ function setView(v){
 }
 function setCrmSearch(v){
   crmSearch=v;
-  renderQueue();
+  /* the same search box serves the queue and the payments screen — typing in it
+     must redraw the screen you are actually looking at */
+  if(currentTab==='payments')renderPayments(); else renderQueue();
   const box=document.getElementById('crm-search');
   if(box){box.focus();box.setSelectionRange(box.value.length,box.value.length);}
 }
@@ -268,18 +276,46 @@ function signupStage(a){
   return{t:'All in — needs a check',c:'sg-go',ti:'Everything asked for is on the record; it is waiting on a reviewer'};
 }
 
-/* Two roads out of the front door, and which one an account is on is decided by
-   what it IS, never by how far along it has got. */
+/* ── THE ARRIVALS BOARD, SPLIT BY WHAT AN ACCOUNT IS ──
+   Brent, 10 Sep: "within the cleverpay portal, we need to section off between
+   driver accounts, business accounts without drivers, business accounts that are
+   LTD businesses."
+
+   Four sections, not three, and the fourth is not padding: a courier company that
+   runs drivers is a business account WITH drivers, and it is a different job from
+   both a lone driver and a forwarder who never touches a van. Leaving it unnamed
+   would have quietly filed those companies in with the sole drivers.
+
+   The sections are exclusive — every account appears in exactly one, so the four
+   counts add up to the board — and the order is deliberate. The first two are the
+   accounts in the document process; the last two are the ones that go straight in
+   and are never asked for a driver's paperwork. That is the same line the journey
+   engine draws, so this split cannot disagree with what an applicant is asked for.
+
+   Limited company is a fact about a business, not a fifth kind of account, so it
+   only ever splits the two business sections. A driver or a courier company that
+   is incorporated carries the Ltd tag on its row and stays where it belongs. */
 function signupSections(list){
+  const drivers=list.filter(a=>a.type==='driver');
+  const withDrivers=list.filter(a=>a.type==='fleet');
+  const noDrivers=list.filter(a=>!inDocProcess(a));
   return[
-    {t:'In the document process',
-     n:'Owner drivers and courier companies. Approve their documents on the record — and only a named Confirm &amp; release press lets anybody in.',
-     rows:list.filter(inDocProcess),
-     e:'No drivers or courier companies have signed up yet.'},
-    {t:'Straight into the network',
-     n:'Freight forwarders and business accounts. They are never asked for driver documents — block one, or correct its details, from the record below.',
-     rows:list.filter(a=>!inDocProcess(a)),
-     e:'No freight forwarders or business accounts have signed up yet.'},
+    {t:'Driver accounts',
+     n:'Owner drivers. Documents first, and only a named Confirm &amp; release press lets anybody in.',
+     rows:drivers,
+     e:'No drivers have signed up yet.'},
+    {t:'Business accounts with drivers',
+     n:'Courier companies putting their own drivers on the network. They go through the document process too.',
+     rows:withDrivers,
+     e:'No courier companies have signed up yet.'},
+    {t:'Limited companies',
+     n:'Business accounts whose company number has been checked against the Companies House register and came back real. They are never asked for driver documents.',
+     rows:noDrivers.filter(isLtd),
+     e:'No business account has a company number confirmed on the register yet.'},
+    {t:'Business accounts without drivers',
+     n:'Businesses that book couriers rather than run them, and are not confirmed on the company register. They are never asked for driver documents.',
+     rows:noDrivers.filter(a=>!isLtd(a)),
+     e:'No business accounts have signed up yet.'},
   ];
 }
 
@@ -376,7 +412,7 @@ const CRM_COLS=[
   {k:'username',t:'Username',on:1,s:a=>a.username||'',v:a=>`<span class="c-user">${a.username||'—'}</span>`},
   {k:'ref',t:'Reference',on:1,s:a=>a.ref||'',v:a=>`<span class="c-ref">${a.ref}</span>`},
   {k:'name',t:'Name',on:1,s:a=>displayName(a).toLowerCase(),v:a=>`<span class="c-name">${displayName(a)}</span>`},
-  {k:'type',t:'Account',on:1,sm:1,s:a=>a.type||'',v:a=>typeChip(a)},
+  {k:'type',t:'Account',on:1,sm:1,s:a=>(a.type||'')+(isLtd(a)?' ltd':''),v:a=>typeChip(a)+ltdChip(a)},
   {k:'status',t:'Status',on:1,s:a=>a.status||'',v:a=>statusChip(a.status)},
   /* Where somebody is up to, in one pill, read straight off the record. Off by
      default in the CRM tabs (they have Status and Clever Checked already) and
@@ -488,6 +524,99 @@ function listToolsHtml(shown,total){
 
 /* One table, already filtered. Used on its own for Approved and All, and once per
    section on New Applications. */
+/* ── INVOICES AND PAYMENTS ──
+   Brent, 10 Sep: "we then show what's come in the system for invoices and payment
+   purposes so CleverPay can see all new sign ups."
+
+   Everyone who has come through the front door, newest first, with the things you
+   actually need to raise an invoice against them sitting on the same row: who they
+   are, the company number and VAT number, and what the money side already knows.
+
+   WHERE THE MONEY COMES FROM. It is not in this database. Sign-ups, payments and
+   invoices live in HAF PAY, a separate database this portal has no route to — both
+   CleverPay workers are within a few hundred bytes of the hard ceiling on what can
+   be deployed, so there is no room for one. A sync writes the answer onto the
+   account record instead (scripts/cleverpay_money_sync.py, every 30 minutes), and
+   the team list already returns every column of a record, so it arrives here for
+   free. That is also why this screen says when it was last refreshed: a money
+   figure with no time against it is a figure somebody will eventually act on
+   after it stopped being true. */
+let payFilter='all';
+function setPayFilter(v){payFilter=v;renderPayments()}
+const payMoney=a=>(a&&a.money)||null;
+const hasMoney=a=>{const m=payMoney(a);return !!(m&&(m.plan||m.paid_pence||m.awaiting_pence||m.invoiced_pence||m.outstanding_pence||m.orders));};
+/* £0.00 and "nothing recorded" are different answers and must not print the same */
+const pence=v=>(v===null||v===undefined)?'<span class="c-dim">—</span>':money(v,'gbp');
+
+function renderPayments(){
+  updateKPIs(QUEUE);
+  const el=document.getElementById('main-content');
+  const live=QUEUE.filter(a=>!a.archived);
+  const shown=(payFilter==='money'?live.filter(hasMoney)
+              :payFilter==='none'?live.filter(a=>!hasMoney(a))
+              :live)
+    .filter(a=>crmMatch(a,crmSearch))
+    .slice().sort((x,y)=>String(y.submitted||'').localeCompare(String(x.submitted||'')));
+
+  const sum=k=>live.reduce((n,a)=>n+((payMoney(a)||{})[k]||0),0);
+  /* the newest sync stamp on any record — if the job stops, this stops moving,
+     and a person can see that for themselves without asking anybody */
+  const synced=live.map(a=>(payMoney(a)||{}).synced_at).filter(Boolean).sort().pop();
+
+  const tiles=[
+    ['Signed up',live.length,''],
+    ['On a plan',live.filter(a=>(payMoney(a)||{}).plan).length,''],
+    ['Paid',pence(sum('paid_pence')),'good'],
+    ['Awaiting payment',pence(sum('awaiting_pence')),'warn'],
+    ['Invoiced',pence(sum('invoiced_pence')),''],
+    ['Outstanding',pence(sum('outstanding_pence')),'warn'],
+  ].map(([t,v,c])=>`<div class="paytile${c?' pt-'+c:''}"><div class="pt-v">${v}</div><div class="pt-t">${t}</div></div>`).join('');
+
+  const head=['Signed up','Account','Reference','Company no.','VAT','Contact','Plan',
+              'Paid','Awaiting','Invoiced','Outstanding','Invoices']
+    .map((t,i)=>`<th class="${i>6&&i<11?'num-r ':''}${i>2&&i<6?'sm-hide ':''}">${t}</th>`).join('');
+
+  const body=shown.map((a,i)=>{
+    const m=payMoney(a)||{};
+    const inv=(m.invoices||[]);
+    const invCell=inv.length
+      ? inv.map(v=>`<span class="chip ${String(v.status||'').toLowerCase()==='paid'?'chip-approved':'chip-pending'}" title="${esc(v.status||'')} · issued ${esc(v.issued_on||'—')} · due ${esc(v.due_on||'—')}">${esc(v.number||'invoice')}</span>`).join(' ')
+      : '<span class="c-dim">—</span>';
+    return`<tr class="r ${i%2?'row-b':'row-a'}">
+      <td>${fmtDay(a.submitted)}</td>
+      <td><div class="c-name">${displayName(a)}</div><div class="pay-sub">${typeChip(a)}${ltdChip(a)}</div></td>
+      <td><span class="c-ref">${a.ref}</span><div class="pay-sub c-user">${a.username||'—'}</div></td>
+      <td class="sm-hide">${a.crn?esc(a.crn):'<span class="c-dim">—</span>'}</td>
+      <td class="sm-hide">${a.vat?esc(a.vat):'<span class="c-dim">—</span>'}</td>
+      <td class="sm-hide"><div>${esc(a.email||'—')}</div><div class="pay-sub">${esc(a.phone||'')}</div></td>
+      <td>${m.plan?esc(m.plan)+(m.billing?`<div class="pay-sub">${esc(m.billing)}</div>`:''):'<span class="c-dim">—</span>'}</td>
+      <td class="num-r">${pence(m.paid_pence)}</td>
+      <td class="num-r${m.awaiting_pence?' pay-warn':''}">${pence(m.awaiting_pence)}</td>
+      <td class="num-r">${pence(m.invoiced_pence)}</td>
+      <td class="num-r${m.outstanding_pence?' pay-warn':''}">${pence(m.outstanding_pence)}</td>
+      <td>${invCell}</td>
+    </tr>`;
+  }).join('');
+
+  el.innerHTML=`
+    <div class="paytiles">${tiles}</div>
+    <div class="view-switch">
+      ${[['all','Everyone'],['money','Something owed or paid'],['none','Nothing yet']]
+        .map(([k,t])=>`<button class="vs-btn${payFilter===k?' on':''}" onclick="setPayFilter('${k}')">${t}</button>`).join('')}
+    </div>
+    <div class="list-tools">
+      <div class="list-search">
+        <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input id="crm-search" type="text" placeholder="Search name, company, reference, email or phone" value="${crmSearch.replace(/"/g,'&quot;')}" oninput="setCrmSearch(this.value)">
+      </div>
+      <div class="list-count">${shown.length} of ${live.length}</div>
+    </div>
+    <div class="pay-synced">${synced?'Money side last refreshed '+fmtDate(synced):'The money side has not been refreshed yet — the sync has not run.'}</div>
+    ${shown.length
+      ? `<div class="crm-wrap"><table class="crm pay"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>`
+      : `<div class="empty">Nothing to show here.</div>`}`;
+}
+
 function crmTableHtml(list){
   const cols=activeCols();
   const rows=list.slice();
@@ -582,13 +711,51 @@ function typeChip(a){
   const t=a.type||'driver';
   return`<span class="chip ${TYPE_CLS[t]||'chip-driver'}">${TYPE_NAME[t]||t}</span>`;
 }
+
+/* ── IS THIS A LIMITED COMPANY? ──
+   Brent, 9 Sep: "add a business account tag when they input the company
+   information and it's been verified as a company account IE companies number."
+   So a name ending in "Ltd" earns nothing at all — half the company names on the
+   queue say Ltd and only some of them are. The tag is earned by a company number
+   that has been looked up on the public Companies House register and came back
+   real. That look-up happens off this page (scripts/cleverpay_money_sync.py) and
+   leaves its answer on the record in `company_check`, so the portal never waits
+   on the register and never has to reach it from a browser.
+   Three answers come back and only one of them counts. `unchecked` means we could
+   not reach the register: never a pass, and never a fail either — a real company
+   must not lose its tag because Companies House had a bad morning. */
+const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const compCheck=a=>(a&&a.company_check)||null;
+const crnTyped=a=>String((a&&a.crn)||'').trim();
+const isLtd=a=>{const c=compCheck(a);return !!(c&&c.state==='verified')};
+function ltdChip(a){
+  const c=compCheck(a);
+  if(!crnTyped(a))return'';
+  if(c&&c.state==='verified')
+    return`<span class="chip chip-ltd" title="Companies House ${esc(c.number)} — ${esc(c.name)}${c.status?' · '+esc(c.status):''}${c.type?' · '+esc(c.type):''}">Ltd &#10003;</span>`;
+  /* a number was typed and the register does not know it. That is something a
+     reviewer has to see, not something to hide by leaving the row unmarked. */
+  if(c&&c.state==='not_found')
+    return`<span class="chip chip-badno" title="Companies House has no company with that number — ${esc(c.reason||'not found')}">Company no. not found</span>`;
+  return`<span class="chip chip-unchecked" title="${c?esc(c.reason||'not checked yet'):'Not looked up on the register yet'}">Company no. unchecked</span>`;
+}
 /* One place decides what an account is measured against, so the card, the list,
    the document viewer and the edit panel can never disagree about it. A business
    enquiry is measured against nothing — it is never shown a document requirement. */
 function docSetFor(a){
   const cfg=getConfig();
   if(a.type==='business')return[];
-  return isCompanyAcc(a)?cfg.freight.docs:cfg.driver.docs;
+  /* 🔴 10 Sep: this asked `isCompanyAcc`, which is freight OR fleet, so the portal
+     measured a courier company against the FREIGHT document list. Both of the
+     other two places that decide the same question — the applicant's own upload
+     page (docs.html: "a fleet or courier company hands over the same paperwork as
+     an owner driver") and the API that chases what is missing (worker
+     missingRequired: freight only) — say a fleet gives DRIVER paperwork. So the
+     team would have been shown a list of documents nobody was ever asked for, and
+     an account that had sent everything would have read as incomplete.
+     Being a company decides what DETAILS a record shows, which is what
+     isCompanyAcc is for; it does not decide the paperwork. */
+  return a.type==='freight'?cfg.freight.docs:cfg.driver.docs;
 }
 
 function ini(a){
@@ -868,6 +1035,7 @@ function appCardHtml(a){
       </div>
       <div class="app-right">
         ${typeChip(a)}
+        ${ltdChip(a)}
         ${statusChip(a.status)}
         ${isB?'':(a.email_verified?`<span class="chip chip-approved" title="Email address confirmed">Email ✓</span>`:`<span class="chip chip-pending" title="Access stays locked until the email is confirmed">Email unconfirmed</span>`)}
         ${(()=>{const n=netState(a);return n.t==='—'?'':`<span class="npill ${n.c}" title="${n.ti}">${n.t}</span>`})()}

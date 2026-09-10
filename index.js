@@ -219,6 +219,7 @@ function toggleFleet(){
   fleetOn = !fleetOn;
   document.getElementById('fleet-toggle').classList.toggle('on', fleetOn);
   document.getElementById('fleet-size-wrap').style.display = fleetOn ? '' : 'none';
+  document.getElementById('fleet-co-wrap').style.display = fleetOn ? '' : 'none';
   const sub = document.getElementById('fleet-sub');
   sub.textContent = fleetOn
     ? 'Fleet noted — tell us how many drivers you currently have below.'
@@ -321,8 +322,15 @@ async function submitDriver(e){
     return;
   }
   const fleetSize = document.getElementById('d-fleet-size').value;
+  const company = document.getElementById('d-company').value.trim();
+  const crn = document.getElementById('d-crn').value.trim();
+  const vat = document.getElementById('d-vat').value.trim();
   if(fleetOn && !fleetSize){
     alert('Please tell us how many drivers you currently have.');
+    return;
+  }
+  if(fleetOn && (!company || !crn)){
+    alert('Please give us your company name and Companies House number.');
     return;
   }
   if(!validPin(pin, pin2)) return;
@@ -330,9 +338,19 @@ async function submitDriver(e){
   const username = genDriverUsername(fn, ln, phone, dob);
   const pinHash = await hashPin(username, pin);
 
+  /* ── A FLEET IS A FLEET ──
+     Until 10 Sep this posted `type: 'driver'` with a `fleet: true` beside it. The
+     API only ever stored the fields it recognises, and `fleet` is not one of them,
+     so the answer went in the bin: every courier company that ticked "I operate a
+     fleet" was filed as a lone owner driver, and the number of drivers they told
+     us went with it. The toggle is the answer to "what is this account", so it has
+     to decide the type. */
   const r = await cpApi('/apply', { method: 'POST', body: {
-    type: 'driver', username, pinHash,
+    type: fleetOn ? 'fleet' : 'driver', username, pinHash,
     fname: fn, lname: ln, email, phone, dob, vtype, vreg,
+    company: fleetOn ? company : null,
+    crn: fleetOn ? crn : null,
+    vat: fleetOn ? (vat || null) : null,
     fleet: fleetOn, fleetSize: fleetOn ? fleetSize : null,
     knect: knectDriverOn
   }});

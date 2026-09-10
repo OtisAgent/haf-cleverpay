@@ -516,8 +516,14 @@ const sg = await page.evaluate(() => {
   };
 });
 ok('the tab count is the size of the list under it', sg.count === sg.rows, sg);
-ok('the document road is named', /document process/i.test(sg.heads), sg.heads);
-ok('and the straight-in road is named', /straight into the network/i.test(sg.heads), sg.heads);
+/* 10 Sep 2026: the arrivals board used to be split into two "roads" — the
+   document process and straight into the network. Brent asked for the split to
+   be by WHAT THE ACCOUNT IS, so it is now four named sections. The old wording
+   is gone on purpose; these assert the four names that replaced it. */
+ok('drivers are named', /Driver accounts/i.test(sg.heads), sg.heads);
+ok('courier companies are named', /Business accounts with drivers/i.test(sg.heads), sg.heads);
+ok('limited companies are named', /Limited companies/i.test(sg.heads), sg.heads);
+ok('businesses without drivers are named', /Business accounts without drivers/i.test(sg.heads), sg.heads);
 ok('where each person is up to is on the row', sg.stage);
 await page.screenshot({ path: new URL('signedup-1280.png', SHOTS).pathname, fullPage: true });
 await ctx.close();

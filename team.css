@@ -103,6 +103,35 @@ a{color:var(--haf-orange-ink);text-decoration:none}
 .chip-freight{background:var(--or-d);color:var(--haf-orange-ink);border:1px solid rgba(241,142,0,.18)}.chip-freight::before{background:var(--or)}
 .chip-business{background:rgba(111,119,125,.1);color:var(--haf-ink-muted);border:1px solid rgba(111,119,125,.25)}.chip-business::before{background:var(--haf-ink-muted)}
 .chip-seen{background:rgba(240,237,234,.06);color:var(--mu);border:1px solid var(--ln)}.chip-seen::before{background:var(--mu)}
+/* A courier company running its own drivers. TYPE_CLS has named this chip since
+   the fleet account existed; nothing ever styled it, so it rendered as bare text
+   beside chips that all carried a colour. */
+.chip-fleet{background:var(--bl-d);color:var(--tx);border:1px solid rgba(111,119,125,.35)}.chip-fleet::before{background:var(--tx)}
+/* ── the company register ──
+   Green is only ever the confirmed answer: this number was looked up and came
+   back a real company. "Not found" is the register saying no, which a reviewer
+   has to see. "Unchecked" is us not having reached the register, and it must not
+   look like either of the other two. */
+.chip-ltd{background:var(--gn-d);color:var(--gn);border:1px solid rgba(45,171,96,.28)}.chip-ltd::before{background:var(--gn)}
+.chip-badno{background:var(--rd-d);color:var(--rd);border:1px solid rgba(180,72,63,.28)}.chip-badno::before{background:var(--rd)}
+.chip-unchecked{background:rgba(240,237,234,.05);color:var(--mu);border:1px dashed var(--lns)}.chip-unchecked::before{background:var(--su)}
+
+/* ── INVOICES AND PAYMENTS ── */
+.paytiles{display:grid;grid-template-columns:repeat(6,1fr);gap:.6rem;margin-bottom:.9rem}
+.paytile{background:var(--p);border:1.5px solid var(--lns);border-radius:var(--rs);padding:.7rem .85rem}
+.pt-v{font-family:var(--dp);font-size:1.35rem;font-weight:900;line-height:1;letter-spacing:-.04em;color:var(--tx)}
+.pt-t{font-size:.58rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--mu);margin-top:.32rem}
+.pt-good .pt-v{color:var(--gn)}
+.pt-warn .pt-v{color:var(--am)}
+.pay-synced{font-size:.68rem;font-weight:600;color:var(--mu);margin:-.2rem 0 .6rem}
+.crm .pay-sub{font-size:.66rem;color:var(--mu);margin-top:.18rem}
+.crm.pay th.num-r,.crm.pay td.num-r{text-align:right;font-variant-numeric:tabular-nums}
+.crm.pay td.pay-warn{color:var(--am);font-weight:700}
+.crm.pay td{max-width:none}
+@media(max-width:860px){
+  .paytiles{grid-template-columns:repeat(3,1fr)}
+  .pt-v{font-size:1.05rem}
+}
 
 /* Where the account stands in the network AFTER the compliance check — green only
    once the KNECT membership has actually activated on the record. */

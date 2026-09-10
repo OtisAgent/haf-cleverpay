@@ -16,11 +16,12 @@
    in exactly one place and this script holds nothing at rest. */
 
 
-const SB = 'https://jsdwvogsxlnczzbefwgp.supabase.co/rest/v1';
+const HOST = 'https://jsdwvogsxlnczzbefwgp.supabase.co';
+const SB = HOST + '/rest/v1';
 const APPS = 'cleverpay_applications';
 const OK_ORIGINS = ['https://clever.usehaf.co.uk', 'https://otisagent.github.io', 'https://plna.usehaf.co.uk'];
 /* compliance files live in a PRIVATE bucket — reachable only with the service key, never by URL */
-const DOCS = 'https://jsdwvogsxlnczzbefwgp.supabase.co/storage/v1/object/cleverpay-docs/';
+const DOCS = HOST + '/storage/v1/object/cleverpay-docs/';
 const DOC_MIME = ['application/pdf', 'image/jpeg', 'image/png', 'image/heic', 'image/heif', 'image/webp'];
 const store = (env, path, init) => fetch(DOCS + path, { ...init,
   headers: { apikey: env.SB_KEY, Authorization: 'Bearer ' + env.SB_KEY, ...(init.headers || {}) } });
@@ -365,7 +366,9 @@ export default {
       if (R('/team/login', 'POST')) {
         const u = (b.username || '').toLowerCase().trim();
         const hash = await sha256('HAF-CP-TEAM|' + u + '|' + (b.password || ''));
-        const r = await sb(env, `/cleverpay_team_users?username=eq.${E(u)}&limit=1`);
+        /* A switched-off login is not a login. The filter is on the read, so
+           there is no second code path where a disabled member gets in. */
+        const r = await sb(env, `/cleverpay_team_users?username=eq.${E(u)}&active=is.true&limit=1`);
         const user = r.ok && r.body && r.body[0];
         if (!user) return bad(BADLOGIN, 401);
         const first = !!user.must_set_pin;
@@ -382,7 +385,7 @@ export default {
       /* ── everything below needs a session ── */
       const who = await teamUser(env, req);
       if (!who) return bad(EXPIRED, 401);
-      const ur = await sb(env, `/cleverpay_team_users?username=eq.${E(who)}&limit=1`);
+      const ur = await sb(env, `/cleverpay_team_users?username=eq.${E(who)}&active=is.true&limit=1`);
       const me = ur.ok && ur.body && ur.body[0];
       if (!me) return bad(EXPIRED, 401);
 
@@ -544,6 +547,10 @@ export default {
            block honestly. Approve and reject are untouched; only the press
            that OPENS a door is gated on the paperwork behind it. */
         if (b.confirm_access) {
+          /* can_release has sat on the record since 4 Aug and nothing read it,
+             so every reviewer could open a door. It is read here, at the press
+             itself, which is the only place the answer cannot be argued with. */
+          if (!me.can_release) return bad('Releasing access is not switched on for your login.', 403);
           patch.status = 'approved';
           patch.approved_at = patch.approved_at || nowIso();
           patch.approved_by = patch.approved_by || who;

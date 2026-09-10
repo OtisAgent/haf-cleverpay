@@ -252,6 +252,29 @@
         <div class="fi-hint">Fleet payment tiers are being finalised — we'll confirm yours after sign-up. Nothing to pay now.</div>
       </div>
 
+      <!-- A fleet is a business, and HAF invoices the business rather than the
+           person driving. The company number is also the only thing that proves a
+           company is real: we check it against the public Companies House record,
+           so a name ending in "Ltd" is never taken as read. -->
+      <div id="fleet-co-wrap" style="display:none">
+        <div class="fg">
+          <label class="fl">Company name <span class="req">*</span></label>
+          <input class="fi" id="d-company" type="text" placeholder="e.g. Arrow Connect Ltd">
+        </div>
+        <div class="fi-row">
+          <div class="fg">
+            <label class="fl">Companies House no. <span class="req">*</span></label>
+            <input class="fi" id="d-crn" type="text" placeholder="e.g. 12345678">
+            <div class="fi-hint">Eight characters, as it appears on the register.</div>
+          </div>
+          <div class="fg">
+            <label class="fl">VAT number</label>
+            <input class="fi" id="d-vat" type="text" placeholder="e.g. GB123456789">
+            <div class="fi-hint">Optional — helps with invoice processing.</div>
+          </div>
+        </div>
+      </div>
+
       <div class="section-label" style="margin-top:.5rem">HAF KNECT membership</div>
 
       <div class="knect-toggle" id="d-knect-toggle" onclick="toggleKnectDriver()">
