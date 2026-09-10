@@ -1089,7 +1089,8 @@ export default {
         /* Team & access is a third worker for the same reason the back office
            became a second one: room. Same private binding, same key on the
            request, nothing held at rest out there either. */
-        const tgt = (p.startsWith('/team/users') && env.USERS) || env.ADMIN;
+        const tgt = (p.startsWith('/team/users') && env.USERS)
+          || (p.startsWith('/team/verify') && env.VERIFY) || env.ADMIN;
         const res = await tgt.fetch(new Request(url.toString(), {
           method: M, headers: h, body: raw,
         }));

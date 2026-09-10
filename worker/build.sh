@@ -13,7 +13,7 @@
 set -e
 DIR=$(cd "$(dirname "$0")" && pwd)
 ES="$DIR/../../node_modules/esbuild/bin/esbuild"
-for NAME in cleverpay-api cleverpay-admin cleverpay-users; do
+for NAME in cleverpay-api cleverpay-admin cleverpay-users cleverpay-verify; do
   "$ES" "$DIR/$NAME.js" \
     --minify --bundle --format=esm --target=es2022 --platform=neutral --charset=utf8 \
     --outfile="$DIR/$NAME.build.js" --allow-overwrite >/dev/null

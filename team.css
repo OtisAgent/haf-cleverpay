@@ -543,3 +543,22 @@ table.crm{width:100%;min-width:820px;border-collapse:collapse}
    the little box, so it is usable on a phone in a yard. */
 .rm-pick{display:flex;align-items:center;gap:.6rem;cursor:pointer;padding:.15rem 0}
 .rm-pick input{width:1.15rem;height:1.15rem;accent-color:var(--haf-orange-ink);flex:0 0 auto;cursor:pointer}
+
+/* ── the business check badges ──
+   Four answers, four looks. "Not asked" must never read like "failed": a grey
+   question mark and a red cross are the difference between a reviewer chasing
+   a document and a reviewer refusing a real company. */
+.bv-yes{color:var(--ok,#1a9a5a);font-weight:700}
+.bv-no{color:var(--bad,#c0392b);font-weight:700}
+.bv-unknown{color:var(--mu);font-weight:700}
+.bv-off{color:var(--mu);opacity:.6}
+
+/* ── Verification settings (Gemma's switches and her key) ── */
+.vf-grid{display:grid;grid-template-columns:1.4fr repeat(4,minmax(4.2rem,1fr));gap:.35rem .5rem;align-items:center;font-size:.76rem}
+.vf-head{font-size:.68rem;text-transform:uppercase;letter-spacing:.04em;color:var(--mu)}
+.vf-name{font-weight:600}
+.vf-why{font-size:.7rem;color:var(--mu);grid-column:1/-1;margin:-.15rem 0 .35rem}
+.vf-key{display:flex;gap:.4rem;align-items:center;flex-wrap:wrap;margin:.4rem 0}
+.vf-key input{flex:1 1 14rem;min-width:0;padding:.45rem .55rem;border:1px solid var(--bd);border-radius:.4rem;background:var(--bg);color:var(--fg);font:inherit}
+.vf-state{font-size:.74rem;color:var(--mu)}
+.vf-state b{color:var(--fg)}

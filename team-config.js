@@ -36,18 +36,120 @@ const DEFAULT_CONFIG = {
       {id:'id-utility',   name:'Utility bill — proof of person', hint:'Gas, electricity, water, broadband or council tax bill dated within 3 months, in that person\'s own name at their home address.', legal:'Money Laundering Regulations 2017, reg. 28 — address verification of the beneficial owner',          status:'optional'},
     ]
   },
-  rebate: {standard: '', knect: ''}
+  rebate: {standard: '', knect: ''},
+  /* ── the official checks, per account type ──
+     Saving this screen writes the WHOLE config back, so anything missing from
+     the fallback is silently dropped the first time somebody saves a document
+     list on a page whose config never loaded. That is how a switch disappears
+     with nobody touching it, so the checks live in the fallback too.
+     Off for drivers by default: a driver is a person, not a company. VAT off
+     everywhere until HMRC credentials exist — a check switched on with no way
+     to run reads as a failure. */
+  checks: {
+    company:  {business: true,  fleet: true,  freight: true,  driver: false},
+    director: {business: true,  fleet: true,  freight: true,  driver: false},
+    vat:      {business: false, fleet: false, freight: false, driver: false}
+  }
 };
+
+/* ── VERIFICATION SETTINGS ───────────────────────────────────────────────────
+   Gemma's. Three official checks down the side, four account types across, and
+   her Companies House key at the top. Everything here is hers to change without
+   asking anyone, which is the whole point: a compliance rule she cannot alter
+   herself is a rule that ends up being asked of me at 11pm. */
+const CHECK_ROWS=[
+  {key:'company', name:'Company on the register',
+   why:'Confirms the company number is real, the name matches the register, and the company has not been dissolved. Companies House, free.'},
+  {key:'director', name:'Named person is a director',
+   why:'Confirms the person opening the account is an active officer of that company, and whether they have verified their identity with Companies House (the duty that began November 2025).'},
+  {key:'vat', name:'VAT number with HMRC',
+   why:'Confirms the VAT number belongs to that business. Needs HMRC credentials, which take about a fortnight to come through.'},
+];
+const CHECK_TYPES=[
+  {key:'business', label:'Business'},
+  {key:'fleet',    label:'Fleet'},
+  {key:'freight',  label:'Find a Courier'},
+  {key:'driver',   label:'Driver'},
+];
+
+function renderVerifySection(cfg){
+  const ch=cfg.checks||{};
+  const head=CHECK_TYPES.map(t=>`<div class="vf-head" style="text-align:center">${t.label}</div>`).join('');
+  const rows=CHECK_ROWS.map(r=>{
+    const boxes=CHECK_TYPES.map(t=>{
+      const on=!!(ch[r.key]&&ch[r.key][t.key]===true);
+      return`<div style="text-align:center"><input type="checkbox" id="vf-${r.key}-${t.key}"${on?' checked':''}></div>`;
+    }).join('');
+    return`<div class="vf-name">${r.name}</div>${boxes}<div class="vf-why">${r.why}</div>`;
+  }).join('');
+  return`<div class="set-section">
+    <div class="set-section-head">
+      <div class="set-section-title">Verification — official checks</div>
+      <div class="set-section-sub">Which government checks run on which kind of account. A check switched off is not run and is not held against the applicant. Nothing here is ever guessed: a register that cannot be reached is recorded as "we do not know", never as "not a real company".</div>
+    </div>
+    <div class="vf-key">
+      <input id="vf-ch-key" type="password" autocomplete="off" placeholder="Paste the Companies House API key">
+      <button class="btn-save" onclick="saveVerifyKey('companies_house','vf-ch-key')">Save &amp; test key</button>
+      <span class="vf-state" id="vf-ch-state">checking…</span>
+    </div>
+    <div class="vf-why">The key is tested against a real company before it is stored, and it is never shown again — only its last four characters, so you can tell one key from another. Rotate it here whenever you like.</div>
+    <div class="vf-grid"><div class="vf-head">Check</div>${head}${rows}</div>
+    <div class="save-row"><button class="btn-save" onclick="saveChecks()"><svg viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>Save which checks run</button></div>
+  </div>`;
+}
+
+/* Says which keys are installed, never what they are. */
+async function loadVerifyKeys(){
+  const el=document.getElementById('vf-ch-state');
+  if(!el)return;
+  const r=await cpApi('/team/verify/keys',{token:TEAM.token});
+  if(!r.ok){el.textContent='could not check';return;}
+  const k=(r.body&&r.body.companies_house)||{};
+  el.innerHTML=k.set
+    ?`Companies House: <b>connected</b> · key ending ${k.last4}${k.setBy?' · installed by '+k.setBy:''}`
+    :'Companies House: <b>no key yet</b> — the company and director checks cannot run until one is pasted in';
+}
+
+async function saveVerifyKey(name,inputId){
+  const input=document.getElementById(inputId);
+  const value=(input.value||'').trim();
+  if(!value)return showToast('Paste the key first',true);
+  showToast('Testing that key against the register…');
+  const r=await cpApi('/team/verify/key',{method:'POST',token:TEAM.token,body:{name:name,value:value}});
+  if(!r.ok)return showToast((r.body&&r.body.error)||'Could not save that key',true);
+  input.value='';
+  showToast('Key saved and tested — the official checks can run now');
+  loadVerifyKeys();
+}
+
+/* Reads the boxes, not a remembered state, and saves through the same route as
+   every other setting on this screen. */
+function saveChecks(){
+  const cfg=getConfig();
+  const checks={};
+  CHECK_ROWS.forEach(r=>{
+    checks[r.key]={};
+    CHECK_TYPES.forEach(t=>{
+      const box=document.getElementById('vf-'+r.key+'-'+t.key);
+      checks[r.key][t.key]=!!(box&&box.checked);
+    });
+  });
+  cfg.checks=checks;
+  CFG=cfg;
+  pushConfig('Saved — those checks are the ones that run now');
+}
 
 /* ── SETTINGS TAB (uses getConfig/CFG/TEAM from team.js) ── */
 function renderSettings(){
   const cfg=getConfig();
   const el=document.getElementById('main-content');
   el.innerHTML=`<div class="settings-panel">
+    ${renderVerifySection(cfg)}
     ${renderDocSection('Driver Accounts','Compliance documents required from courier and delivery drivers before their account is activated. Grounded in UK law — see the legal basis for each.',cfg,'driver')}
     ${renderDocSection('Find a Courier Accounts','Compliance documents required from freight forwarding businesses. Based on UK Companies House, HMRC, and insurance requirements.',cfg,'freight')}
     ${renderRebateSection(cfg)}
   </div>`;
+  loadVerifyKeys();
 
   cfg.driver.docs.forEach(d=>{
     document.getElementById('sel-driver-'+d.id)?.addEventListener('change',function(){updateDocSel('driver',d.id,this.value,this)});

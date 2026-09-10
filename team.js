@@ -919,6 +919,92 @@ function recordCheckHtml(a){
     </div>`;
 }
 
+/* ── the business check, beside the driving record check ─────────────────────
+   A driver is confirmed against their driving record; a business is confirmed
+   against the register. Same place on the same screen, so a reviewer has one
+   habit and not two.
+
+   Brent, 10 Sep: "we need to verify the owner of the business in accordance
+   with Companies House ... then we will confirm the director as per the account
+   direct on Companies House, if an issue with that allow them to send an email."
+
+   Three separate answers, never collapsed into one tick. "Not asked" and "asked
+   and not confirmed" look the same on a badge and mean opposite things, so they
+   are drawn differently: a dash is a question nobody has put yet. */
+const CHECK_MARK={yes:'✓',no:'✕',unknown:'?',off:'—'};
+function checkState(v,on){
+  if(!on)return'off';
+  if(v===true)return'yes';
+  if(v===false)return'no';
+  return'unknown';
+}
+function businessCheckHtml(a){
+  if(!['business','fleet','freight'].includes(a.type))return'';
+  const sw=(getConfig().checks)||{};
+  const on=k=>!!(sw[k]&&sw[k][a.type]===true);
+  const st={company:checkState(a.company_verified,on('company')),
+            director:checkState(a.director_verified,on('director')),
+            vat:checkState(a.vat_verified,on('vat'))};
+  const line=(label,state,detail,when)=>`<div class="rc-line">
+      <div class="dl">${label}</div>
+      <div class="rc-v"><span class="bv-${state}">${CHECK_MARK[state]}</span> ${detail}${when?`<span class="rc-gap"> · ${fmtDate(when)}</span>`:''}</div>
+    </div>`;
+  /* The identity-verification duty began in Nov 2025 and the register does not
+     answer it for every officer yet, so a director who has not done it is said
+     so plainly rather than being failed for it. */
+  const dirDetail=st.director==='yes'
+    ?`${a.director_matched_name||'matched'}${a.director_id_verified===true?' — identity verified with Companies House':a.director_id_verified===false?' — has not verified their identity with Companies House yet':''}`
+    :st.director==='off'?'switched off for this account type'
+    :(a.director_note||'not checked yet');
+  const coDetail=st.company==='yes'
+    ?`${a.company_registered_name||'confirmed'}${a.company_status?` — ${a.company_status}`:''}`
+    :st.company==='off'?'switched off for this account type'
+    :st.company==='no'?'not confirmed on the register':'not checked yet';
+  const vatDetail=st.vat==='yes'?(a.vat_registered_name||'confirmed')
+    :st.vat==='off'?'switched off for this account type':'not checked yet';
+  const anyOn=on('company')||on('director')||on('vat');
+  const runBtn=`<button class="btn btn-review" onclick="runBizChecks('${a.ref}')" title="${anyOn?'Look this business up on the official register now':'Every official check is switched off for this account type — turn one on in Settings'}"${anyOn?'':' disabled'}><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>Run the official checks</button>`;
+  /* The way out. A real director the register does not match — a recent
+     appointment, a married name, a company whose filing is behind — is not a
+     fraud, and must never be left at a dead end. */
+  const raiseBtn=`<button class="btn btn-gh" onclick="raiseBizVerify('${a.ref}')" title="Hand this to the team as a ticket — for a real director the register cannot confirm"><svg viewBox="0 0 24 24"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>Needs a person</button>`;
+  const good=st.company==='yes'&&(st.director==='yes'||st.director==='off');
+  return`<div class="detail-sec">Business check</div>
+    <div class="rc-panel${good?' on':''}">
+      <div class="rc-line"><div class="dl">HAF company ID</div><div class="rc-v mono">${a.company_id||'<span class="rc-gap">not issued</span>'}</div></div>
+      <div class="rc-line"><div class="dl">Company number</div><div class="rc-v mono">${a.crn||'<span class="rc-gap">Not provided</span>'}</div></div>
+      ${line('Company on the register',st.company,coDetail,a.company_checked_at)}
+      ${line('Named person is a director',st.director,dirDetail,a.director_checked_at)}
+      ${line('VAT number with HMRC',st.vat,vatDetail,a.vat_checked_at)}
+      ${a.verify_by?`<div class="rc-line"><div class="dl">Last run by</div><div class="rc-v">${a.verify_by}</div></div>`:''}
+      <div class="rc-actions">${runBtn}${raiseBtn}</div>
+    </div>`;
+}
+
+/* Runs only what Gemma has switched on for this account type, and writes the
+   answer with her name and the time against it. The reply carries the saved
+   record, so the screen redraws from what the database now holds rather than
+   from what the browser hoped it would say. */
+async function runBizChecks(ref){
+  showToast('Looking that business up on the register…');
+  const r=await cpApi('/team/verify/run',{method:'POST',token:TEAM.token,body:{ref:ref}});
+  if(!r.ok)return showToast((r.body&&r.body.error)||'Could not run those checks',true);
+  await loadQueue(true);
+  renderView();
+  const c=document.getElementById('card-'+ref);
+  if(c)c.classList.add('expanded');
+  const ran=(r.body&&r.body.ran)||[];
+  const said=ran.map(x=>`${x.check}: ${x.result}`).join(' · ')||'nothing to run';
+  showToast(said,ran.some(x=>x.result==='no'));
+}
+
+async function raiseBizVerify(ref){
+  const note=prompt('Anything to add for whoever picks this up?')||'';
+  const r=await cpApi('/team/verify/raise',{method:'POST',token:TEAM.token,body:{ref:ref,note:note}});
+  if(!r.ok)return showToast((r.body&&r.body.error)||'Could not raise that ticket',true);
+  showToast('Raised with the team — '+((r.body&&r.body.subject)||ref));
+}
+
 /* Ticked only after somebody has genuinely looked — the name and time go on the record. */
 async function tickDvla(ref){
   const a=QUEUE.find(x=>x.ref===ref);
@@ -1022,6 +1108,7 @@ function appDetailHtml(a){
     ${freightExtras}
     ${isB?'':`<div class="detail-sec">Compliance documents</div>
     <div class="doc-rows">${allDocRows.join('')||'<div style="font-size:.74rem;color:var(--mu);padding:.2rem 0">No documents submitted yet.</div>'}</div>`}
+    ${businessCheckHtml(a)}
     ${recordCheckHtml(a)}
     <div class="detail-sec">Actions</div>
     <div class="action-bar">${actions}</div>
