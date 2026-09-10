@@ -397,6 +397,11 @@ const KNECT_URL = 'https://knect.usehaf.co.uk';
 const PLNA_URL = 'https://plna.usehaf.co.uk';
 const CLEVER_URL = 'https://clever.usehaf.co.uk';
 const NEEDS_DOCS = ['driver', 'fleet'];
+/* The office's own requirement list, read in three places. Spelled once here
+   for room: this worker ships through a pipe that cuts the whole upload at
+   20,000 bytes, and on 10 Sep the third repeat of this path was part of what
+   put it 279 bytes over and refused the deploy. */
+const CFGROW = '/cleverpay_portal_config?id=eq.1&limit=1';
 const BOX_TYPES = ['driver', 'fleet', 'freight', 'business'];
 const WHY_MISSING = 'We cannot finish your application until this reaches us. '
   + 'Sign in to your HAF application, upload it, and we will pick the check '
@@ -419,14 +424,24 @@ const WHY_MISSING = 'We cannot finish your application until this reaches us. '
    so the two addresses that repeat had to be spelled once. Same values, same
    routing - if a mailbox ever moves, it moves here. */
 const NETBOX = 'knect@usehaf.co.uk', APPBOX = 'updates@usehaf.co.uk';
+/* The event names this worker repeats, spelled once each — same reason as
+   NETBOX/APPBOX above, and the same 20,000-byte pipe. The VALUES are
+   unchanged: they are what the mail ledger and the templates already key
+   on, so this is a name for a string and nothing more. */
+const EV_CANC = 'compliance_application_cancelled';
+const EV_CHASE = 'compliance_action_required';
+const EV_CONF = 'email_confirm_required';
+const EV_DOCS = 'compliance_submission_complete';
+const EV_NO = 'compliance_rejected';
+const EV_OK = 'compliance_approved';
 const BOXES = {
   account_created: NETBOX,
-  email_confirm_required: NETBOX,
-  compliance_submission_complete: APPBOX,
-  compliance_action_required: APPBOX,
-  compliance_approved: NETBOX,
-  compliance_rejected: APPBOX,
-  compliance_application_cancelled: APPBOX,
+  [EV_CONF]: NETBOX,
+  [EV_DOCS]: APPBOX,
+  [EV_CHASE]: APPBOX,
+  [EV_OK]: NETBOX,
+  [EV_NO]: APPBOX,
+  [EV_CANC]: APPBOX,
   membership_upgraded: 'accounts@usehaf.co.uk',
   plna_allocated: NETBOX,
   /* A pause is a paperwork conversation, so it comes from the mailbox that
@@ -437,8 +452,8 @@ const BOXES = {
 };
 /* The six a freight forwarder or business account must never receive: they hand
    over no documents, so there is no document conversation to have with them. */
-const COMPLIANCE_ONLY = ['compliance_submission_complete', 'compliance_action_required',
-  'compliance_approved', 'compliance_rejected', 'compliance_application_cancelled',
+const COMPLIANCE_ONLY = [EV_DOCS, EV_CHASE,
+  EV_OK, EV_NO, EV_CANC,
   'plna_allocated'];
 /* The moments that may legitimately happen to the same person more than once.
    Everything else is a one-off in a life: you are approved once, you are
@@ -453,7 +468,7 @@ const COMPLIANCE_ONLY = ['compliance_submission_complete', 'compliance_action_re
    twice; it is the same conversation continuing. The 20-hour gate in the back
    office is the real throttle, so this cannot become a flood. */
 const REPEATABLE = ['account_paused', 'account_restored',
-  'compliance_action_required'];
+  EV_CHASE];
 
 /* One moment, one template - the role is a version OF the moment, never a
    moment of its own. Henry switches the moment; this picks the wording. */
@@ -461,14 +476,14 @@ function slugFor(row, ev) {
   const t = row.type;
   if (ev === 'account_created')
     return 'haf-j1-account-created-' + (BOX_TYPES.includes(t) ? t : 'business');
-  if (ev === 'email_confirm_required') return 'haf-j2-confirm-email';
-  if (ev === 'compliance_submission_complete') return 'haf-j3-documents-received';
-  if (ev === 'compliance_action_required') return 'haf-j4-action-required';
+  if (ev === EV_CONF) return 'haf-j2-confirm-email';
+  if (ev === EV_DOCS) return 'haf-j3-documents-received';
+  if (ev === EV_CHASE) return 'haf-j4-action-required';
   /* Brent, 14 Aug: the release press tells them the account is open and that
      access is granted across BOTH systems. Freight and business get their own
      version - they are released to HAF KNECT and to nothing else, and the
      driver wording would promise them a PLNA they were never checked for. */
-  if (ev === 'compliance_approved')
+  if (ev === EV_OK)
     return 'haf-j5-approved-' + (t === 'fleet' ? 'fleet' : t === 'driver' ? 'driver' : 'freight');
   /* Brent's standing rule: a declined applicant is never re-onboarded without
      his written yes. So a rejection offers no way back unless a reviewer has
@@ -479,10 +494,10 @@ function slugFor(row, ev) {
      so every decline would have quietly come out as the closed version no
      matter what a reviewer chose. It failed safe, which is exactly why it
      would have gone unnoticed. */
-  if (ev === 'compliance_rejected')
+  if (ev === EV_NO)
     return 'haf-j6-not-approved-' + (row.route_back === 'fix' ? 'fix'
       : row.route_back === 'new' ? 'new' : 'closed');
-  if (ev === 'compliance_application_cancelled')
+  if (ev === EV_CANC)
     return 'haf-j7-application-cancelled' + (row.may_reapply === true ? '-reapply' : '');
   if (ev === 'membership_upgraded') return 'haf-j8-upgrade-active';
   if (ev === 'plna_allocated') return 'haf-j9-plna-allocated';
@@ -503,7 +518,7 @@ function actionUrl(row, ev) {
      as every HAF email does. The button goes to the door that just opened for
      THEM: a driver's own app, a fleet's dashboard, KNECT for everyone else.
      The label in each template is written to match, so the two cannot drift. */
-  if (ev === 'compliance_approved')
+  if (ev === EV_OK)
     return row.type === 'driver' ? PLNA_URL
          : row.type === 'fleet'  ? KNECT_URL + '/fleet'
          : KNECT_URL;
@@ -554,11 +569,11 @@ async function journeyMail(env, ref, ev, extra, snap) {
      compliance moment belongs to the two roles that send documents, but the
      release press is pressed on freight and business accounts too, and when
      it is, that person has just been let in and must be told. */
-  if (COMPLIANCE_ONLY.includes(ev) && ev !== 'compliance_approved'
+  if (COMPLIANCE_ONLY.includes(ev) && ev !== EV_OK
       && !NEEDS_DOCS.includes(row.type)) return 'not-their-journey';
   /* wall 3 - approving moves a record through a queue; only a named Confirm &
      release opens a door, and only it may send this one. */
-  if (ev === 'compliance_approved' && !(row.access_confirmed_at && row.access_confirmed_by))
+  if (ev === EV_OK && !(row.access_confirmed_at && row.access_confirmed_by))
     return 'awaiting-release';
   /* wall 3b - the pause email exists to carry the reviewer's words. Without
      them it is a locked door with no sign on it, so it does not go at all. */
@@ -598,7 +613,7 @@ async function journeyMail(env, ref, ev, extra, snap) {
      they need to carry on. Half an hour is not a delay there, it is a lost
      sign-up. Those two keep sending instantly, and they are the last two HAF
      emails on Mandrill - they move the day the Resend key is installed here. */
-  const INSTANT = ['account_created', 'email_confirm_required'];
+  const INSTANT = ['account_created', EV_CONF];
   const claim = await sb(env, '/haf_mail_log', { method: 'POST', body: S({
     ref: row.ref, event: logKey, email: row.email, template: slug,
     status: INSTANT.includes(ev) ? 'sending' : 'queued', sender: box,
@@ -701,7 +716,7 @@ async function confirmMailNow(env, ctx, row) {
     const w = await sb(env, `/${APPS}?ref=eq.${E(row.ref)}`, { method: 'PATCH',
       body: S({ email_confirm_token: token }) });
     if (!w.ok) return;
-    const sent = await journeyMail(env, row.ref, 'email_confirm_required', {
+    const sent = await journeyMail(env, row.ref, EV_CONF, {
       action_url: `${CLEVER_URL}/confirm.html?ref=${E(row.ref)}&t=${E(token)}`,
     });
     /* ── and "sent" is only written when something was actually sent ──
@@ -735,13 +750,13 @@ async function confirmMailNow(env, ctx, row) {
    acknowledge. Wall 4 means a later upload cannot send it a second time. */
 async function mailWhenDocsComplete(env, ctx, app) {
   if (!app || !NEEDS_DOCS.includes(app.type)) return;
-  const c = await sb(env, '/cleverpay_portal_config?id=eq.1&limit=1');
+  const c = await sb(env, CFGROW);
   const cfg = c.ok && c.body && c.body[0] ? c.body[0].config : null;
   const want = ((cfg && cfg.driver && cfg.driver.docs) || [])
     .filter((d) => d.status === 'required').map((d) => d.id);
   const have = new Set((app.docs || []).filter((d) => d && (d.path || d.filename)).map((d) => d.id));
   if (!want.length || !want.every((id) => have.has(id))) return;
-  await journeyMail(env, app.ref, 'compliance_submission_complete');
+  await journeyMail(env, app.ref, EV_DOCS);
 }
 
 function mailDocsCheck(env, ctx, app) {
@@ -766,7 +781,7 @@ export default {
     try {
       /* ── public: config (doc requirements + rebates) ── */
       if (R('/config', 'GET')) {
-        const r = await sb(env, '/cleverpay_portal_config?id=eq.1&limit=1');
+        const r = await sb(env, CFGROW);
         return J(r.body && r.body[0] ? r.body[0].config : null, 200, cors);
       }
 
@@ -1059,7 +1074,7 @@ export default {
               + 'Ask them to click the link in their sign-up email, or press Confirm email '
               + 'once you know they have it, then release.', 409);
             if (cur) {
-              const cr = await sb(env, '/cleverpay_portal_config?id=eq.1&limit=1');
+              const cr = await sb(env, CFGROW);
               const cfg = cr.ok && cr.body && cr.body[0] ? cr.body[0].config : null;
               const set = cur.type === 'freight' ? (cfg && cfg.freight) : (cfg && cfg.driver);
               const need = (set && Array.isArray(set.docs) ? set.docs : []).filter(d => d.status === 'required');
