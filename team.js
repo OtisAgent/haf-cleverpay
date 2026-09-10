@@ -1584,12 +1584,25 @@ function igCloseKey(){
   document.getElementById('ig-key-copy').onclick=null;
 }
 
-/* ── INIT ── */
-const stored=sessionStorage.getItem('cp_team_session');
-if(stored){
+/* ── INIT ──
+   🔴 10 Sep 2026: this ran the moment team.js was parsed, and enterShell() calls
+   showUsersTab(), which lives in team-users.js — a LATER script tag. So anyone
+   returning to an open session (a reload, or reopening the tab) hit
+   "showUsersTab is not defined", which killed enterShell() before loadConfig()
+   and loadQueue() ever ran: signed in, and a completely empty board. Signing in
+   from the form was fine, because by then every script had parsed, which is why
+   it survived a full sign-in test and only showed up on a refresh.
+
+   Waiting for DOMContentLoaded is the fix: every plain script tag on the page is
+   parsed by then, so the shell can call into any of them. */
+function restoreSession(){
+  const stored=sessionStorage.getItem('cp_team_session');
+  if(!stored)return;
   TEAM=JSON.parse(stored);
   if(TEAM.mustSetPin)showSetPin();else enterShell();
 }
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',restoreSession);
+else restoreSession();
 
 /* Auto-refresh queue every 15s — never while Settings or Integration is open,
    so a refresh can't wipe a key the user has just been shown */
