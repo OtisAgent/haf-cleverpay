@@ -87,6 +87,7 @@ function enterShell(){
   document.getElementById('shell').classList.add('show');
   document.getElementById('welcome-name').textContent=TEAM.name;
   showIntegrationTab();
+  showUsersTab();
   loadConfig();
   loadQueue();
 }
@@ -109,6 +110,8 @@ function doSignOut(){
   TEAM=null;QUEUE=[];
   currentTab='pending';
   document.getElementById('tab-integration')?.remove();
+  document.getElementById('tab-users')?.remove();
+  USERS_DATA=null;
   document.getElementById('shell').classList.remove('show');
   document.getElementById('gate').style.display='';
   document.getElementById('setpin-card').style.display='none';
@@ -135,7 +138,7 @@ function refreshQueue(){loadQueue();showToast('Queue refreshed')}
 /* ── TABS ── */
 function setTab(t){
   currentTab=t;
-  ['signedup','pending','reviewing','approved','rejected','all','payments','archived','settings','integration'].forEach(x=>{
+  ['signedup','pending','reviewing','approved','rejected','all','payments','archived','settings','integration','users'].forEach(x=>{
     document.getElementById('tab-'+x)?.classList.toggle('active',x===t);
   });
   renderView();
@@ -145,6 +148,7 @@ function renderView(){
   document.getElementById('main-content')
     .classList.toggle('wide',currentTab==='payments'||(LIST_TABS.includes(currentTab)&&getView(currentTab)==='list'));
   if(currentTab==='settings') renderSettings();
+  else if(currentTab==='users') renderUsers();
   else if(currentTab==='integration') renderIntegration();
   else if(currentTab==='payments') renderPayments();
   else renderQueue();
@@ -1502,4 +1506,4 @@ if(stored){
 
 /* Auto-refresh queue every 15s — never while Settings or Integration is open,
    so a refresh can't wipe a key the user has just been shown */
-setInterval(()=>{if(TEAM&&currentTab!=='settings'&&currentTab!=='integration')loadQueue(true)},15000);
+setInterval(()=>{if(TEAM&&currentTab!=='settings'&&currentTab!=='integration'&&currentTab!=='users')loadQueue(true)},15000);
