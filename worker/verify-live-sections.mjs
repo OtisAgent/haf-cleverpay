@@ -77,9 +77,33 @@ const tile = l => (tiles.find(t => t.label === l) || {}).value;
 ok('signed up is a real number', Number(tile('Signed up')) > 0, tile('Signed up'));
 ok('on a plan is a real number', Number(tile('On a plan')) > 0, tile('On a plan'));
 
-/* the whole point of this run: money instead of dashes */
-const money = ['Paid', 'Awaiting payment', 'Invoiced', 'Outstanding'].map(tile);
-ok('the money totals are figures, not dashes', money.every(v => /£/.test(v || '')), money);
+/* 🔴 This used to assert only "there is a £ sign, not a dash", which passed
+   happily with every total reading £0 — a green check that proved nothing. The
+   real question is whether the tile agrees with the records the portal itself
+   is holding, so compute the answer from the queue in the page and compare. */
+const expected = await page.evaluate(() => {
+  const live = QUEUE.filter(a => !a.archived);
+  const sum = k => live.reduce((n, a) => n + ((a.money || {})[k] || 0), 0);
+  return {
+    'Signed up': String(live.length),
+    'On a plan': String(live.filter(a => (a.money || {}).plan).length),
+    Paid: sum('paid_pence'), 'Awaiting payment': sum('awaiting_pence'),
+    Invoiced: sum('invoiced_pence'), Outstanding: sum('outstanding_pence'),
+    anyMoney: ['paid_pence', 'awaiting_pence', 'invoiced_pence', 'outstanding_pence']
+      .some(k => sum(k) > 0),
+  };
+});
+const asPence = v => Math.round(parseFloat(String(v).replace(/[^0-9.]/g, '') || '0') * 100);
+for (const label of ['Paid', 'Awaiting payment', 'Invoiced', 'Outstanding'])
+  ok(`${label} on screen is what the records add up to`,
+     /£/.test(tile(label) || '') && asPence(tile(label)) === expected[label],
+     { screen: tile(label), records: expected[label] });
+ok('signed up on screen is what the records add up to',
+   tile('Signed up') === expected['Signed up'], { screen: tile('Signed up'), records: expected['Signed up'] });
+
+/* say so out loud rather than letting four £0 tiles read as proof of anything */
+if (!expected.anyMoney) console.log('  NOTE  every money total is £0 — no live account has money '
+  + 'attached right now, so this run proves the screen adds up, not that it can show a figure.');
 
 const rows = await page.$$eval('.crm tr.r, table tr.r', els => els.length);
 ok('the sign-ups are listed', rows > 0, rows);
