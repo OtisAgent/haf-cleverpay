@@ -175,7 +175,7 @@ const DEFAULT_FREIGHT_DOCS = [
 function docSetFor(type){ return type === 'freight' ? 'freight' : 'driver'; }
 const TYPE_LABELS = {
   driver: 'Driver', fleet: 'Fleet / Courier Company',
-  freight: 'Freight Forwarder', business: 'Business',
+  freight: 'Find a Courier', business: 'Business',
 };
 
 async function getDocList(type){
@@ -266,7 +266,7 @@ async function loadPage(){
   document.getElementById('page-kicker').textContent = (TYPE_LABELS[app.type] || 'Driver') + ' Account';
   document.getElementById('page-sub').textContent = isD
     ? 'We need these to verify your eligibility as an HAF driver. All files are held securely.'
-    : 'A few documents to confirm your business before we activate your freight account.';
+    : 'A few documents to confirm your business before we activate your account.';
 
   /* The driving-record check is about one person's own licence, so it belongs to
      an owner driver and nobody else — the same line the API draws when it works

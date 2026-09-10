@@ -45,7 +45,7 @@ function renderSettings(){
   const el=document.getElementById('main-content');
   el.innerHTML=`<div class="settings-panel">
     ${renderDocSection('Driver Accounts','Compliance documents required from courier and delivery drivers before their account is activated. Grounded in UK law — see the legal basis for each.',cfg,'driver')}
-    ${renderDocSection('Freight Forwarder Accounts','Compliance documents required from freight forwarding businesses. Based on UK Companies House, HMRC, and insurance requirements.',cfg,'freight')}
+    ${renderDocSection('Find a Courier Accounts','Compliance documents required from freight forwarding businesses. Based on UK Companies House, HMRC, and insurance requirements.',cfg,'freight')}
     ${renderRebateSection(cfg)}
   </div>`;
 
@@ -82,10 +82,10 @@ function renderDocSection(title,sub,cfg,type){
 function renderRebateSection(cfg){
   const r=cfg.rebate||{standard:'',knect:''};
   return`<div class="set-section">
-    <div class="set-section-head"><div class="set-section-title">Profit pooling shares — Freight Forwarders</div><div class="set-section-sub">Set the profit-pooling percentages shown to freight forwarder applicants after approval. Leave blank to display "TBC" until confirmed.</div></div>
+    <div class="set-section-head"><div class="set-section-title">Profit pooling shares — Find a Courier</div><div class="set-section-sub">Set the profit-pooling percentages shown to freight forwarder applicants after approval. Leave blank to display "TBC" until confirmed.</div></div>
     <div class="rebate-fields">
       <div class="rf-row">
-        <div><div class="rf-label">Standard pooling share</div><div class="rf-sub">Applies to all freight forwarder accounts</div></div>
+        <div><div class="rf-label">Standard pooling share</div><div class="rf-sub">Applies to all accounts that post for clients</div></div>
         <div class="rf-input-wrap"><input class="rf-input" id="rb-standard" type="text" placeholder="e.g. 3" value="${r.standard}"><span class="rf-unit">% per job</span></div>
       </div>
       <div class="rf-row">
