@@ -65,7 +65,7 @@
     <div style="font-size:.68rem;color:var(--mu);margin-top:.35rem">Screenshot or copy this — it'll also be in your approval email. Code is unique to you.</div>
   </div>
 
-  <!-- Driving record check — drivers only, filled in rather than uploaded -->
+  <!-- Driving record check — anyone who drives, filled in rather than uploaded -->
   <div id="rec-check" style="display:none">
     <div class="section-label">Driving record check</div>
     <div class="rc-block" id="rc-block">
@@ -214,7 +214,15 @@ const RC = {
 const rcClean = (k,v) => { const s = String(v||'').replace(/[\s-]/g,''); return RC[k].up ? s.toUpperCase() : s; };
 const rcValue  = k => rcClean(k, (document.getElementById('rc-'+k)||{}).value);
 const rcValid  = k => RC[k].re.test(rcValue(k));
-const isDriver = () => app && app.type === 'driver';
+/* WHO IS ASKED FOR A DRIVING RECORD — Brent, 11 Sep: "We need to allow the
+   owner to have a PLNA but we need to capture the information to continue."
+   The driving record belongs to a PERSON who drives, not to an account type.
+   A fleet's owner drives — that is the whole point of giving them a PLNA — so
+   a fleet is asked for exactly what an owner driver is asked for. It is the
+   same line the document list already draws (a fleet hands over a driver's
+   paperwork), so the two can never disagree about what a fleet owes us.
+   Additional fleet drivers are different people and carry their own records. */
+const needsRecord = () => app && (app.type === 'driver' || app.type === 'fleet');
 
 function rcCheck(k, touched){
   const input = document.getElementById('rc-'+k);
@@ -230,8 +238,8 @@ function rcCheck(k, touched){
   err.classList.toggle('show', bad);
   return good;
 }
-const rcComplete = () => !isDriver() || ['lic','code','ni'].every(rcValid);
-function rcDone(){ return isDriver() ? ['lic','code','ni'].filter(rcValid).length : 0; }
+const rcComplete = () => !needsRecord() || ['lic','code','ni'].every(rcValid);
+function rcDone(){ return needsRecord() ? ['lic','code','ni'].filter(rcValid).length : 0; }
 
 function wireRecordCheck(){
   document.getElementById('rec-check').style.display = '';
@@ -272,7 +280,7 @@ async function loadPage(){
      an owner driver and nobody else — the same line the API draws when it works
      out what is still missing. A fleet gives us the driver paperwork, not a
      check code against the company. */
-  if(app.type === 'driver') wireRecordCheck();
+  if(needsRecord()) wireRecordCheck();
 
   const docs = await getDocList(app.type);
   totalReq = docs.filter(d => d.req).length;
@@ -412,7 +420,7 @@ function updateProgress(){
   const reqUploaded = Object.values(uploaded).filter(u => u.req).length;
   /* the record check is three more things they have to complete, so it counts
      towards the bar — otherwise it reads "all done" with the check still empty */
-  const rcTotal = isDriver() ? 3 : 0;
+  const rcTotal = needsRecord() ? 3 : 0;
   const total = document.querySelectorAll('.doc-card').length + rcTotal;
   const totalUp = Object.keys(uploaded).length + rcDone();
   const allReq = reqUploaded >= totalReq && rcComplete();
@@ -434,7 +442,7 @@ function updateProgress(){
 }
 
 async function submitDocs(){
-  if(isDriver() && !rcComplete()){
+  if(needsRecord() && !rcComplete()){
     ['lic','code','ni'].forEach(k => rcCheck(k, true));
     document.getElementById('rec-check').scrollIntoView({behavior:'smooth', block:'center'});
     return;
@@ -444,7 +452,7 @@ async function submitDocs(){
   const docList = Object.entries(uploaded).filter(([,d]) => !d.existing).map(([id, d]) =>
     ({id, filename: d.name, req: d.req, path: d.path, mime: d.mime, size: d.size}));
   const body = { ref: app.ref, pinHash: app.pinHash, docs: docList };
-  if(isDriver()) body.dvla = { licence: rcValue('lic'), code: rcValue('code'), ni: rcValue('ni') };
+  if(needsRecord()) body.dvla = { licence: rcValue('lic'), code: rcValue('code'), ni: rcValue('ni') };
   const r = await cpApi('/docs', { method: 'POST', body });
   if(!r.ok){ alert(r.body?.error || 'Could not submit — please try again.'); return; }
   localStorage.setItem('cp_application', JSON.stringify({...r.body, pinHash: app.pinHash}));

@@ -885,8 +885,16 @@ function copyVal(v,label){
   else done();
 }
 
+/* Brent, 11 Sep: "We need to allow the owner to have a PLNA but we need to
+   capture the information to continue", and "anyone driving on the app or the
+   PLNA is made for confirm and release access only". A driving record belongs
+   to a person who drives, not to an account type — a fleet's owner drives, so
+   the reviewer sees and confirms their record exactly as they would a lone
+   driver's. Same rule as the applicant's own upload page (docs.html
+   needsRecord), so the two can never disagree about what a fleet owes us. */
+const needsRecord=a=>a&&(a.type==='driver'||a.type==='fleet');
 function recordCheckHtml(a){
-  if(a.type!=='driver')return'';
+  if(!needsRecord(a))return'';
   const lic=a.dvla_licence_no,code=a.dvla_check_code,ni=a.ni_number;
   const age=codeAge(a);
   const on=!!a.dvla_checked_at;

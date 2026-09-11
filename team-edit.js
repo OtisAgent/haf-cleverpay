@@ -160,8 +160,10 @@ function edFormHtml(a){
       edSelect('vtype','Vehicle type',a.vtype,EDIT_VTYPES)+
       edField('vreg','Vehicle reg',a.vreg,'text',' placeholder="AB12 CDE" style="text-transform:uppercase"');
 
-  /* the three codes Brent named — they only exist on a driver's record */
-  const codes=a.type!=='driver'?'':`
+  /* the three codes Brent named — they exist on the record of anyone who
+     drives, which since 11 Sep includes a fleet's owner (see team.js
+     needsRecord). Anything that never gets behind a wheel is never asked. */
+  const codes=!needsRecord(a)?'':`
     <div class="ed-sec">Driving record codes</div>
     <div class="add-grid">
       ${edField('dvla_licence','Driving licence number',a.dvla_licence_no,'text',' maxlength="18" placeholder="16 characters, from the front of the card" style="text-transform:uppercase"')}
@@ -212,7 +214,7 @@ async function saveEdit(){
   if(fields.email==='')return fail('An account needs an email address — it is how they are told anything.');
 
   const body={ref:ref,fields:fields};
-  if(a.type==='driver'){
+  if(needsRecord(a)){
     body.dvla={licence:edVal('dvla_licence')||'',code:edVal('dvla_code')||'',ni:edVal('ni')||''};
   }
 
