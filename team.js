@@ -265,6 +265,16 @@ function signupStage(a){
     return{t:'Blocked',c:'sg-block',ti:'Refused all access. Open the record and press Unblock to put them back on the list.'};
   if(a.status==='rejected')
     return{t:'Not approved',c:'sg-no',ti:a.reject_reason||a.rejectReason||'Not approved'};
+  /* 11 Sep — an application NOBODY HAS SUBMITTED YET. It is not waiting on us and
+     it must not read as though it is: the person is still filling it in, and their
+     documents now land here as they upload them, so the count below is live rather
+     than a guess. It leaves this state the moment they press Submit application. */
+  if(a.status==='draft'){
+    const n=(Array.isArray(a.docs)?a.docs:[]).length;
+    return{t:'Still filling in',c:'sg-wait',
+      ti:'Not submitted yet — '+(n?n+' document'+(n===1?'':'s')+' uploaded so far':'nothing uploaded so far')
+        +'. Nothing for the team to do until they submit it.'};
+  }
   if(a.access_confirmed_at)
     return{t:'In the network',c:'sg-in',ti:'Let in by '+(a.access_confirmed_by||'the team')+' · '+fmtDate(a.access_confirmed_at)};
   if(a.status==='approved')
@@ -827,7 +837,8 @@ function renderPayments(){
       </div>
       <div class="list-count">${shown.length} of ${live.length}</div>
     </div>
-    <div class="pay-synced">${synced?'Money side last refreshed '+fmtDate(synced):'The money side has not been refreshed yet — the sync has not run.'}</div>
+    <div class="pay-synced">${synced?'Money side last refreshed '+fmtDate(synced):'The money side has not been refreshed yet — the sync has not run.'}${
+      feeUnpriced?` &middot; ${feeUnpriced} account${feeUnpriced===1?' is':'s are'} on a type with no CleverPay fee set, so ${feeUnpriced===1?'it is':'they are'} not in that total.`:''}</div>
     ${shown.length
       ? `<div class="crm-wrap"><table class="crm pay"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>`
       : `<div class="empty">Nothing to show here.</div>`}`;
@@ -986,8 +997,11 @@ function displayName(a){
   return n||'Name not given';
 }
 function statusChip(s){
-  const m={pending:'chip-pending',enquiry:'chip-pending',reviewing:'chip-reviewing',approved:'chip-approved',rejected:'chip-rejected',blocked:'chip-rejected'};
-  const l={pending:'Pending',enquiry:'New enquiry',reviewing:'In Review',approved:'Approved',rejected:'Rejected',blocked:'Blocked'};
+  /* 'draft' wears the seen-grey, not the amber of Pending: amber is the colour of
+     something on OUR list, and an application the applicant has not submitted is
+     not on it yet. */
+  const m={draft:'chip-seen',pending:'chip-pending',enquiry:'chip-pending',reviewing:'chip-reviewing',approved:'chip-approved',rejected:'chip-rejected',blocked:'chip-rejected'};
+  const l={draft:'Still filling in',pending:'Pending',enquiry:'New enquiry',reviewing:'In Review',approved:'Approved',rejected:'Rejected',blocked:'Blocked'};
   return`<span class="chip ${m[s]||'chip-pending'}">${l[s]||s}</span>`;
 }
 
