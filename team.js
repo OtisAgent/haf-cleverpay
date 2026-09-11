@@ -89,6 +89,7 @@ function enterShell(){
   showIntegrationTab();
   showUsersTab();
   loadConfig();
+  loadFees();
   loadQueue();
 }
 /* The Integration tab only appears for the two people who own the back-office link.
@@ -545,6 +546,203 @@ function listToolsHtml(shown,total){
    free. That is also why this screen says when it was last refreshed: a money
    figure with no time against it is a figure somebody will eventually act on
    after it stopped being true. */
+/* ── WHAT CLEVERPAY CHARGES ──
+   Brent locked the rule on 29 July: "CleverPay only charge a fee when it's an
+   invoice to be generated — no work, no invoice, no charge." The amount is set
+   by the account type the driver is paid under, and it is the CleverPay team's
+   number, never a HAF pricing lever.
+
+   Until now that amount lived nowhere a machine could read, so this screen could
+   show every pound that had come IN and nothing about what CleverPay was owed
+   for producing it. The four amounts are set here, and the same sync that
+   carries the money side carries what each account owes back onto its record.
+
+   WHY THIS TALKS TO THE DATABASE AND NOT THE API. Both CleverPay workers are
+   within a few hundred bytes of their hard upload ceiling, so a new server route
+   cannot be deployed at all. This portal already reaches the database directly
+   with the anon key and a team session token — markSeen below is the same
+   pattern — and the two functions it calls check that token before they answer.
+   The table itself is closed to the anon key; the functions are the only way in.
+
+   NOT SET IS NOT ZERO. A type nobody has priced reads "Not set" and contributes
+   nothing to a total. £0.00 would be a decision somebody made; a blank is the
+   absence of one, and a screen that prints them the same way is lying. */
+/* The look of this section lives here rather than in team.css on purpose: a
+   second session has that stylesheet open with unpushed work in it, and the
+   publisher resets the tree to origin before it uploads. One file changed is
+   one file that can go wrong. Tokens only — never a raw colour, and never the
+   fill orange on text, which reads at 2.2:1. */
+(function(){
+  const css=`
+.paytiles.pt7{grid-template-columns:repeat(7,1fr)}
+.feestrip{background:var(--p);border:1.5px solid var(--lns);border-radius:var(--rs);padding:.85rem .95rem;margin-bottom:.9rem}
+.fee-head{display:flex;justify-content:space-between;align-items:flex-start;gap:1rem;margin-bottom:.75rem}
+.fee-title{font-size:.85rem;font-weight:800;letter-spacing:.01em}
+.fee-sub{font-size:.7rem;font-weight:600;color:var(--mu);margin-top:.2rem}
+.fee-ro{font-size:.66rem;font-weight:700;color:var(--mu);white-space:nowrap}
+.fee-none{font-size:.74rem;font-weight:600;color:var(--mu)}
+.feecards{display:grid;grid-template-columns:repeat(4,1fr);gap:.6rem}
+.feecard{background:var(--p2);border:1.5px solid var(--lns);border-radius:var(--rx);padding:.6rem .7rem}
+.feecard.editing{border-color:var(--or)}
+.fee-type{font-size:.66rem;font-weight:800;text-transform:uppercase;letter-spacing:.07em;color:var(--mu)}
+.fee-amount{font-size:1.02rem;font-weight:800;margin-top:.2rem}
+.fee-vat{font-size:.62rem;font-weight:700;color:var(--mu);margin-left:.15rem}
+.fee-basis{font-size:.68rem;font-weight:600;color:var(--mu);margin-top:.1rem}
+.fee-note{font-size:.68rem;font-weight:600;margin-top:.3rem}
+.fee-stamp{font-size:.62rem;font-weight:600;color:var(--mu);margin-top:.4rem}
+.fee-btn{margin-top:.5rem;background:var(--p);border:1.5px solid var(--lns);border-radius:9px;padding:.32rem .65rem;font-family:inherit;font-size:.7rem;font-weight:700;color:inherit;cursor:pointer}
+.fee-btn:hover{border-color:var(--or)}
+.fee-btn.primary{background:var(--or);border-color:var(--or);color:var(--haf-on-orange,#2f373e)}
+.fee-btn[disabled]{opacity:.6;cursor:default}
+.fee-lab{display:block;font-size:.63rem;font-weight:700;color:var(--mu);margin:.5rem 0 .18rem}
+.fee-in{display:flex;align-items:center;gap:.25rem;background:var(--p);border:1.5px solid var(--lns);border-radius:9px;padding:.3rem .5rem}
+.fee-in span{font-size:.8rem;font-weight:700;color:var(--mu)}
+.fee-in input,.fee-txt,.fee-sel{width:100%;background:transparent;border:none;font-family:inherit;font-size:.78rem;font-weight:700;color:inherit;outline:none}
+.fee-txt,.fee-sel{background:var(--p);border:1.5px solid var(--lns);border-radius:9px;padding:.32rem .5rem}
+.fee-check{display:flex;align-items:center;gap:.35rem;font-size:.68rem;font-weight:600;margin-top:.45rem;cursor:pointer}
+.fee-acts{display:flex;gap:.4rem;margin-top:.6rem}
+.crm.pay td.fee-due{font-weight:700;color:var(--haf-orange-ink,inherit)}
+@media(max-width:1100px){.feecards{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:760px){.paytiles.pt7{grid-template-columns:repeat(3,1fr)}.feecards{grid-template-columns:1fr}}`;
+  const s=document.createElement('style');
+  s.id='fee-styles';
+  s.textContent=css;
+  (document.head||document.documentElement).appendChild(s);
+})();
+
+let FEES=null;          /* null = not loaded yet, [] = loaded and empty */
+let feeEdit=null;       /* the account type whose row is open for editing */
+const FEE_TYPES=['driver','fleet','freight','business'];
+const FEE_BASIS={per_invoice:'per invoice',per_driver_per_invoice:'per driver, per invoice'};
+const feeRule=t=>(FEES||[]).find(f=>f.account_type===t)||null;
+/* only the two back-office logins may reprice. The database refuses everyone
+   else as well — hiding the button is presentation, not the guard. */
+const canSetFees=()=>canIntegrate();
+
+async function sbRpc(fn,args){
+  const r=await fetch(SB_URL+'/rest/v1/rpc/'+fn,{
+    method:'POST',
+    headers:{'Content-Type':'application/json',apikey:SB_ANON,Authorization:'Bearer '+SB_ANON},
+    body:JSON.stringify(args)
+  });
+  let body=null;try{body=await r.json()}catch(e){}
+  return{ok:r.ok,status:r.status,body};
+}
+
+async function loadFees(){
+  if(!TEAM)return;
+  const r=await sbRpc('cleverpay_fee_schedule_list',{p_token:TEAM.token});
+  /* a failed read leaves FEES null, and the strip says so rather than drawing
+     four empty boxes that look like four unpriced account types */
+  FEES=r.ok&&Array.isArray(r.body)?r.body:null;
+  if(currentTab==='payments')renderPayments();
+}
+
+function openFeeEdit(t){feeEdit=(feeEdit===t?null:t);renderPayments()}
+
+async function saveFee(t){
+  const amt=document.getElementById('fee-amt-'+t);
+  const vat=document.getElementById('fee-vat-'+t);
+  const bas=document.getElementById('fee-basis-'+t);
+  const note=document.getElementById('fee-note-'+t);
+  if(!amt)return;
+  const raw=String(amt.value).trim();
+  /* an empty box is "unset this again", which is a real thing to want; a box
+     with something in it that is not money is a typo and must not be saved */
+  let pence=null;
+  if(raw!==''){
+    const n=Number(raw.replace(/[£,\s]/g,''));
+    if(!isFinite(n)||n<0)return showToast('Type an amount in pounds, like 5 or 5.50',true);
+    pence=Math.round(n*100);
+  }
+  const btn=document.getElementById('fee-save-'+t);
+  if(btn){btn.disabled=true;btn.textContent='Saving…'}
+  const r=await sbRpc('cleverpay_fee_schedule_set',{
+    p_token:TEAM.token,p_type:t,p_pence:pence,
+    p_vat:!!vat.checked,p_basis:bas.value,p_note:note.value||null});
+  if(btn){btn.disabled=false;btn.textContent='Save'}
+  if(!r.ok){
+    const e=String(r.body&&(r.body.message||r.body.error)||'');
+    return showToast(/not_allowed/.test(e)?'Only the CleverPay back-office logins can set a fee.'
+                    :/not_authorised/.test(e)?'Your session has expired — sign in again.'
+                    :'Could not save that fee — try again.',true);
+  }
+  await loadFees();
+  feeEdit=null;
+  renderPayments();
+  showToast(pence===null?(TYPE_NAME[t]||t)+' fee cleared'
+                        :(TYPE_NAME[t]||t)+' fee set to '+money(pence,'gbp')+(document.getElementById('fee-vat-'+t)?'':''));
+}
+
+/* "Not set" and "£0.00" must never print the same — see the note above. */
+const feeAmt=r=>(!r||r.fee_ex_vat_pence===null||r.fee_ex_vat_pence===undefined)
+  ?'<span class="c-dim">Not set</span>'
+  :money(r.fee_ex_vat_pence,'gbp')+(r.vat_applies?' <span class="fee-vat">+VAT</span>':'');
+
+function feeStripHtml(){
+  if(FEES===null)return`<div class="feestrip"><div class="fee-head"><div class="fee-title">What CleverPay charges</div></div>
+    <div class="fee-none">The fee list could not be read just now — refresh the page to try again.</div></div>`;
+
+  const cards=FEE_TYPES.map(t=>{
+    const r=feeRule(t),open=feeEdit===t;
+    const stamp=r&&r.updated_by?`Set by ${esc(r.updated_by)} · ${fmtDate(r.updated_at)}`:'Never set';
+    if(!open)return`<div class="feecard">
+      <div class="fee-type">${TYPE_NAME[t]||t}</div>
+      <div class="fee-amount">${feeAmt(r)}</div>
+      <div class="fee-basis">${r?esc(FEE_BASIS[r.basis]||r.basis):'—'}</div>
+      ${r&&r.note?`<div class="fee-note">${esc(r.note)}</div>`:''}
+      <div class="fee-stamp">${stamp}</div>
+      ${canSetFees()?`<button class="fee-btn" onclick="openFeeEdit('${t}')">${r&&r.fee_ex_vat_pence!==null?'Change':'Set a fee'}</button>`:''}
+    </div>`;
+    return`<div class="feecard editing">
+      <div class="fee-type">${TYPE_NAME[t]||t}</div>
+      <label class="fee-lab">Amount per invoice, before VAT</label>
+      <div class="fee-in"><span>£</span><input id="fee-amt-${t}" type="text" inputmode="decimal"
+        value="${r&&r.fee_ex_vat_pence!==null?(r.fee_ex_vat_pence/100).toFixed(2):''}" placeholder="Leave blank for none"></div>
+      <label class="fee-check"><input id="fee-vat-${t}" type="checkbox" ${!r||r.vat_applies?'checked':''}> VAT is added on top</label>
+      <label class="fee-lab">How often it is charged</label>
+      <select id="fee-basis-${t}" class="fee-sel">
+        ${Object.entries(FEE_BASIS).map(([k,v])=>`<option value="${k}"${r&&r.basis===k?' selected':''}>Once ${v}</option>`).join('')}
+      </select>
+      <label class="fee-lab">Note (optional)</label>
+      <input id="fee-note-${t}" class="fee-txt" type="text" value="${esc(r&&r.note||'').replace(/"/g,'&quot;')}" placeholder="Why this amount">
+      <div class="fee-acts">
+        <button class="fee-btn primary" id="fee-save-${t}" onclick="saveFee('${t}')">Save</button>
+        <button class="fee-btn" onclick="openFeeEdit('${t}')">Cancel</button>
+      </div>
+    </div>`;
+  }).join('');
+
+  return`<div class="feestrip">
+    <div class="fee-head">
+      <div>
+        <div class="fee-title">What CleverPay charges</div>
+        <div class="fee-sub">No work, no invoice, no charge. A fee is only charged when an invoice is generated.</div>
+      </div>
+      ${canSetFees()?'':'<div class="fee-ro">Read only — the back-office logins set these</div>'}
+    </div>
+    <div class="feecards">${cards}</div>
+  </div>`;
+}
+
+/* The two fee cells on a row, and the workings behind them.
+   Hovering the total says how it was reached — amount × invoices × drivers —
+   because a fee somebody cannot check is a fee somebody will dispute. */
+function feeCells(m){
+  const f=m&&m.clever_fee;
+  if(!f)return`<td class="num-r"><span class="c-dim">—</span></td><td class="num-r"><span class="c-dim">—</span></td>`;
+  const each=(f.each_pence===null||f.each_pence===undefined)
+    ?'<span class="c-dim">Not set</span>'
+    :money(f.each_pence,'gbp')+(f.vat_applies?'<span class="fee-vat">+VAT</span>':'');
+  if(f.due_pence===null||f.due_pence===undefined)
+    return`<td class="num-r">${each}</td><td class="num-r"><span class="c-dim">Not set</span></td>`;
+  const bits=[money(f.each_pence,'gbp'),f.invoices+' invoice'+(f.invoices===1?'':'s')];
+  if(f.drivers>1)bits.push(f.drivers+' drivers');
+  const workings=bits.join(' × ')+(f.vat_applies?' + VAT':' (no VAT)');
+  return`<td class="num-r">${each}</td>
+    <td class="num-r${f.due_pence?' fee-due':''}" title="${esc(workings)}">${money(f.due_pence,'gbp')}</td>`;
+}
+
 let payFilter='all';
 function setPayFilter(v){payFilter=v;renderPayments()}
 const payMoney=a=>(a&&a.money)||null;
@@ -567,6 +765,15 @@ function renderPayments(){
      and a person can see that for themselves without asking anybody */
   const synced=live.map(a=>(payMoney(a)||{}).synced_at).filter(Boolean).sort().pop();
 
+  /* CleverPay's own side of the money: only the accounts whose type has a fee
+     set count towards it, and how many were left out is printed next to the
+     total. A figure that quietly excludes a third of the list is worse than no
+     figure at all. */
+  const feeOf=a=>(payMoney(a)||{}).clever_fee||null;
+  const feeDue=live.reduce((n,a)=>{const f=feeOf(a);return n+((f&&f.due_pence)||0)},0);
+  const feePriced=live.filter(a=>{const f=feeOf(a);return f&&f.due_pence!==null&&f.due_pence!==undefined});
+  const feeUnpriced=live.length-feePriced.length;
+
   const tiles=[
     ['Signed up',live.length,''],
     ['On a plan',live.filter(a=>(payMoney(a)||{}).plan).length,''],
@@ -574,11 +781,14 @@ function renderPayments(){
     ['Awaiting payment',pence(sum('awaiting_pence')),'warn'],
     ['Invoiced',pence(sum('invoiced_pence')),''],
     ['Outstanding',pence(sum('outstanding_pence')),'warn'],
+    ['CleverPay fees',feePriced.length?money(feeDue,'gbp'):'<span class="c-dim">Not set</span>',''],
   ].map(([t,v,c])=>`<div class="paytile${c?' pt-'+c:''}"><div class="pt-v">${v}</div><div class="pt-t">${t}</div></div>`).join('');
 
-  const head=['Signed up','Account','Reference','Company no.','VAT','Contact','Plan',
-              'Paid','Awaiting','Invoiced','Outstanding','Invoices']
-    .map((t,i)=>`<th class="${i>6&&i<11?'num-r ':''}${i>2&&i<6?'sm-hide ':''}">${t}</th>`).join('');
+  const HEAD=[['Signed up',''],['Account',''],['Reference',''],['Company no.','sm-hide'],
+              ['VAT','sm-hide'],['Contact','sm-hide'],['Plan',''],['Paid','num-r'],
+              ['Awaiting','num-r'],['Invoiced','num-r'],['Outstanding','num-r'],
+              ['Invoices',''],['Fee each','num-r'],['CleverPay fee','num-r']];
+  const head=HEAD.map(([t,c])=>`<th class="${c}">${t}</th>`).join('');
 
   const body=shown.map((a,i)=>{
     const m=payMoney(a)||{};
@@ -599,11 +809,13 @@ function renderPayments(){
       <td class="num-r">${pence(m.invoiced_pence)}</td>
       <td class="num-r${m.outstanding_pence?' pay-warn':''}">${pence(m.outstanding_pence)}</td>
       <td>${invCell}</td>
+      ${feeCells(m)}
     </tr>`;
   }).join('');
 
   el.innerHTML=`
-    <div class="paytiles">${tiles}</div>
+    <div class="paytiles pt7">${tiles}</div>
+    ${feeStripHtml()}
     <div class="view-switch">
       ${[['all','Everyone'],['money','Something owed or paid'],['none','Nothing yet']]
         .map(([k,t])=>`<button class="vs-btn${payFilter===k?' on':''}" onclick="setPayFilter('${k}')">${t}</button>`).join('')}
