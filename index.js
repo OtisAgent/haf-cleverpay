@@ -139,7 +139,14 @@ function applyJoinChoice(){
   }
   selectType(JOIN.type);
 }
-document.addEventListener('DOMContentLoaded', applyJoinChoice);
+document.addEventListener('DOMContentLoaded', () => {
+  applyJoinChoice();
+  /* Somebody adding driving to an account they already hold, or arriving with a
+     HAF account Join HAF has already opened, is on the SIGN-IN route. They have
+     no form to half-finish, so a leftover draft must not drag them into one. */
+  if(ADD || (JOIN && JOIN.user)) return;
+  restoreDraft();
+});
 
 function backToType(){
   document.querySelectorAll('.form-section').forEach(s => s.classList.remove('visible'));
@@ -236,6 +243,73 @@ function toggleKnectDriver(){
     : 'Tap to confirm — members get priority access to work on the network. You can also join after you\'re approved.';
   sub.classList.toggle('highlight', knectDriverOn);
 }
+
+/* ── WHAT THEY TYPED IS KEPT, SO NOBODY STARTS AFRESH ───────────────────────
+   Brent, 11 Sep: "people are having to start a fresh". The account form is the
+   longest screen in the journey, and until today it held nothing at all until
+   the Continue button was pressed — one closed tab, one flat battery, one "I'll
+   go and find that number", and every answer was gone.
+
+   It is kept ON THEIR OWN DEVICE and not sent to us, because at this point
+   there is no account to hang it on: the account is not created until Continue.
+   The PIN is deliberately never part of it. It is the key to the account, and a
+   key does not belong in browser storage on a machine somebody else may use. */
+const DRAFT_KEY = 'cp_signup_draft';
+const DRAFT_DAYS = 14;
+/* Matched on the id as well as the type, so a PIN box added here later is left
+   out by default rather than let in by default. */
+const isPinField = el => el.type === 'password' || /pin/i.test(el.id || '');
+
+function draftFields(){
+  return [...document.querySelectorAll(
+    '#driver-form input, #driver-form select, #freight-form input, #freight-form select')]
+    .filter(el => el.id && !isPinField(el));
+}
+
+function saveDraft(){
+  if(!selectedType) return;
+  const vals = {};
+  draftFields().forEach(el => { if(el.value) vals[el.id] = el.value; });
+  try {
+    localStorage.setItem(DRAFT_KEY, JSON.stringify({
+      t: Date.now(), type: selectedType, vals, fleetOn, knectOn, knectDriverOn }));
+  } catch(e){ /* a full or blocked store must never break the form itself */ }
+}
+
+function clearDraft(reload){
+  localStorage.removeItem(DRAFT_KEY);
+  if(reload) location.href = location.pathname;
+}
+
+function restoreDraft(){
+  let d = null;
+  try { d = JSON.parse(localStorage.getItem(DRAFT_KEY) || 'null'); } catch(e){}
+  if(!d || !ALL_CARDS.includes(d.type)) return false;
+  /* An abandoned form is not kept for ever. Two weeks is long enough to go and
+     find a licence number, short enough that a borrowed laptop does not hand
+     the next person somebody else's details. */
+  if(!d.t || Date.now() - d.t > DRAFT_DAYS * 864e5){ clearDraft(); return false; }
+  selectType(d.type);
+  /* selectType reveals the form on a short timer, so fill in behind it */
+  setTimeout(() => {
+    Object.entries(d.vals || {}).forEach(([id, v]) => {
+      const el = document.getElementById(id);
+      if(el) el.value = v;
+    });
+    if(d.fleetOn && !fleetOn) toggleFleet();
+    if(d.knectOn && !knectOn) toggleKnect();
+    if(d.knectDriverOn && !knectDriverOn) toggleKnectDriver();
+    const note = document.getElementById('draft-note');
+    if(note) note.style.display = '';
+  }, 160);
+  return true;
+}
+
+/* Delegated, so a field added to either form later is saved without anybody
+   having to remember to wire it up. */
+['input','change'].forEach(ev => document.addEventListener(ev, e => {
+  if(e.target && e.target.closest && e.target.closest('#driver-form, #freight-form')) saveDraft();
+}));
 
 /* Generate HAF username: 2 initials + last 4 digits of phone + last 2 of birth year */
 function genDriverUsername(fname, lname, phone, dob){
@@ -356,6 +430,9 @@ async function submitDriver(e){
   }});
   if(!r.ok){ alert(r.body?.error || 'Something went wrong — please try again.'); return; }
 
+  /* The account now exists and holds these answers, so the local copy has done
+     its job. Leaving it behind would re-open a stale form for the next person. */
+  clearDraft();
   localStorage.setItem('cp_application', JSON.stringify({...r.body, pinHash}));
   window.location.href = 'docs.html';
 }
@@ -389,6 +466,9 @@ async function submitFreight(e){
   }});
   if(!r.ok){ alert(r.body?.error || 'Something went wrong — please try again.'); return; }
 
+  /* The account now exists and holds these answers, so the local copy has done
+     its job. Leaving it behind would re-open a stale form for the next person. */
+  clearDraft();
   localStorage.setItem('cp_application', JSON.stringify({...r.body, pinHash}));
   window.location.href = 'docs.html';
 }
@@ -419,8 +499,14 @@ async function doLogin(){
   /* keep the PIN hash locally so the docs/status pages can authenticate */
   app.pinHash = app.username && pin ? await hashPin(app.username, pin) : null;
   localStorage.setItem('cp_application', JSON.stringify(app));
-  if(!app.docs || !app.docs.length) window.location.href = 'docs.html';
-  else window.location.href = 'status.html';
+  /* ── LAND THEM WHERE THEY ACTUALLY STOPPED ──
+     Until 11 Sep a single document on the record sent them to the status page,
+     so somebody two files into a six-file list had no way back to finish it and
+     no sign their uploads had survived. Unfinished means the documents page:
+     either the application has never been submitted, or nothing is on it yet.
+     The second half carries the older crowd, whose records pre-date 'draft'. */
+  const unfinished = app.status === 'draft' || !app.docs || !app.docs.length;
+  window.location.href = unfinished ? 'docs.html' : 'status.html';
 }
 ['login-id','login-pin'].forEach(id => {
   document.getElementById(id).addEventListener('input', () => {

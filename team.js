@@ -275,6 +275,16 @@ function signupStage(a){
       ti:'Not submitted yet — '+(n?n+' document'+(n===1?'':'s')+' uploaded so far':'nothing uploaded so far')
         +'. Nothing for the team to do until they submit it.'};
   }
+  /* 11 Sep — an application NOBODY HAS SUBMITTED YET. It is not waiting on us and
+     it must not read as though it is: the person is still filling it in, and their
+     documents now land here as they upload them, so the count below is live rather
+     than a guess. It leaves this state the moment they press Submit application. */
+  if(a.status==='draft'){
+    const n=(Array.isArray(a.docs)?a.docs:[]).length;
+    return{t:'Still filling in',c:'sg-wait',
+      ti:'Not submitted yet — '+(n?n+' document'+(n===1?'':'s')+' uploaded so far':'nothing uploaded so far')
+        +'. Nothing for the team to do until they submit it.'};
+  }
   if(a.access_confirmed_at)
     return{t:'In the network',c:'sg-in',ti:'Let in by '+(a.access_confirmed_by||'the team')+' · '+fmtDate(a.access_confirmed_at)};
   if(a.status==='approved')

@@ -115,6 +115,13 @@
     <span>Optional documents can be uploaded later via your CleverPay account. Required documents must be in place before activation.</span>
   </div>
 
+  <!-- The single most useful sentence on this page: it is what stops somebody
+       who has run out of time from feeling they have to do it all again. -->
+  <div class="info-box">
+    <svg viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+    <span>Every document is saved the moment you upload it. You can close this page and log back in with your HAF username and PIN to carry on where you left off.</span>
+  </div>
+
   <div class="btn-row">
     <button class="btn btn-gh" onclick="history.back()">
       <svg viewBox="0 0 24 24"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
@@ -408,6 +415,15 @@ async function handleUpload(id, name, req, input, card){
 
   uploaded[id] = { name: file.name, req: req, path: data.path, mime: data.mime, size: data.size };
 
+  /* The upload now writes the document onto the record, and the reply carries the
+     record back. Keeping it means a refresh of THIS page shows the tick too, not
+     only a fresh log-in — the two used to disagree, which is exactly the moment
+     somebody decides their upload did not work and does it all again. */
+  if(data.app){
+    app = { ...data.app, pinHash: app.pinHash };
+    localStorage.setItem('cp_application', JSON.stringify(app));
+  }
+
   card.classList.remove('uploading');
   card.classList.add('uploaded');
   document.getElementById('fname-' + id).textContent = file.name;
@@ -438,6 +454,15 @@ function updateProgress(){
   if(allReq){
     btn.textContent = '';
     btn.innerHTML = 'Submit application <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>';
+  } else {
+    /* A greyed-out button that only ever says "Submit application" tells somebody
+       they are not finished without telling them what is left, which is the point
+       people give up and send us an email instead. Name the gap. */
+    const docsLeft = Math.max(0, totalReq - reqUploaded);
+    const bits = [];
+    if(docsLeft) bits.push(docsLeft + (docsLeft === 1 ? ' document' : ' documents') + ' still needed');
+    if(needsRecord() && !rcComplete()) bits.push('driving record check to complete');
+    btn.textContent = bits.length ? bits.join(' \u00b7 ') : 'Submit application';
   }
 }
 

@@ -38,6 +38,16 @@
   <p id="join-carry" style="display:none;margin:0 0 1rem;padding:.85rem 1rem;border-radius:12px;
      background:rgba(241,142,0,.12);border:1px solid rgba(241,142,0,.35);font-size:.92rem;line-height:1.5"></p>
 
+  <!-- Shown when we put back what somebody typed here before and did not finish.
+       The "start again" link matters as much as the restore: a shared laptop, or
+       a person filling this in for somebody else, must have a way to empty it. -->
+  <p id="draft-note" style="display:none;margin:0 0 1rem;padding:.85rem 1rem;border-radius:12px;
+     background:rgba(241,142,0,.12);border:1px solid rgba(241,142,0,.35);font-size:.92rem;line-height:1.5">
+    We kept what you typed last time on this device, so you can carry on where you left off.
+    Your security PIN is never saved, so you will need to choose it again.
+    <a href="#" onclick="clearDraft(true);return false" style="color:var(--haf-orange-ink);font-weight:700">Start again with a blank form</a>
+  </p>
+
   <!-- STEP A: Log in or sign up -->
   <div id="view-type">
     <div class="page-head">

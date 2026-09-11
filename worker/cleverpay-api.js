@@ -791,7 +791,17 @@ export default {
         const dupe = await findApp(env, b.username);
         if (dupe) return bad('An application already exists for this username. Log in instead, or contact the HAF team.', 409);
         const row = pickFields(b);
-        row.ref = newRef(); row.status = 'pending'; row.docs = b.docs || [];
+        /* ── 'draft' means THEY ARE STILL FILLING IT IN ──
+           Brent, 11 Sep: "when the application is fully complete they can then
+           submit for us to approve". An account is created the second step one
+           is done, which is right — it is what lets them log back in — but it is
+           not an application anybody has finished. So it is born a draft and
+           POST /docs, the Submit button and nothing else, turns it into the
+           'pending' the team's Waiting tab works from. A draft is never hidden:
+           the arrivals board shows every account whatever its status.
+           An account the office adds by hand skips this, in cleverpay-admin —
+           the team adding somebody IS the submission. */
+        row.ref = newRef(); row.status = 'draft'; row.docs = b.docs || [];
         row.submitted = nowIso();
         /* ── the journey stamp ──
            Brent, 13 Aug: everyone starts at join.usehaf.co.uk, and nobody
@@ -921,6 +931,10 @@ export default {
         const docs = (Array.isArray(app.docs) ? app.docs : []).filter(d => !ids.includes(d.id));
         docs.push(...incoming);
         const patch = { docs, updated_at: nowIso() };
+        /* THIS is the submission. Only a draft is promoted: a returning applicant
+           replacing one document the team asked them to correct must not drag an
+           approved or in-review account backwards into the Waiting queue. */
+        if (app.status === 'draft') patch.status = 'pending';
         if (b.dvla) {
           const v = readDvla(b.dvla, app);
           if (v.error) return bad(v.error, 400);
@@ -956,14 +970,26 @@ export default {
         const up = await store(env, path, { method: 'POST', body: bytes,
           headers: { [CT]: mime, 'x-upsert': 'true' } });
         if (!up.ok) return bad('Could not store that file — please try again.', 502);
-        if (!team) return J({ ok: true, path, size: bytes.byteLength, mime }, 200, cors);
+        /* 11 Sep — THE FILE NOW REACHES THE RECORD THE MOMENT IT IS UPLOADED.
+           Until today the applicant branch returned here, and only the page's
+           later POST /docs — which runs on Submit and nowhere else — wrote the
+           document list. So somebody who uploaded four things and closed the tab
+           had four files sitting in storage against a record that said it had
+           none: invisible to the team portal, and invisible to THEM when they
+           came back, which is why people were starting the whole thing again.
+           Storing a file and not recording it are now one step, for both doors. */
         /* one row per document type: a replacement supersedes what was there, and it
            arrives unticked because nobody has read the new file yet */
         const docs = (Array.isArray(app.docs) ? app.docs : []).filter(d => d.id !== id);
-        docs.push({ id, filename: St(q.get('filename') || id).slice(0, 120), path, mime,
-          size: bytes.byteLength, added_by: team, added_at: nowIso(), by_team: true });
+        const row = { id, filename: St(q.get('filename') || id).slice(0, 120), path, mime,
+          size: bytes.byteLength, added_at: nowIso() };
+        /* a file the office put on says so — it is not the same evidence as one
+           the applicant sent, and the row must never pretend otherwise */
+        if (team) { row.added_by = team; row.by_team = true; }
+        docs.push(row);
         const r = await patchApp(env, app.ref, { docs, updated_at: nowIso() });
-        return r.ok && r.body[0] ? J({ ok: true, app: strip(r.body[0]) }, 200, cors)
+        /* the applicant's page reads path/size/mime off this reply to draw its tick */
+        return r.ok && r.body[0] ? J({ ok: true, path, size: bytes.byteLength, mime, app: strip(r.body[0]) }, 200, cors)
           : bad('The file was stored but the record did not update — please try again.', 500);
       }
 
